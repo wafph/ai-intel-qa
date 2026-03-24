@@ -167,7 +167,7 @@ onMounted(() => {
   }
   
   .input-container {
-    max-width: 800px;
+    max-width: 850px;
     margin: 0 auto 40px;
     position: relative;
     
@@ -209,7 +209,7 @@ onMounted(() => {
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
-    max-width: 800px;
+    max-width: 850px;
     margin: 0 auto;
     
     .suggestion-btn {
@@ -246,7 +246,7 @@ onMounted(() => {
   }
   
   .result-container {
-    max-width: 800px;
+    max-width: 850px;
     margin: 40px auto 0;
     padding: 24px;
     background-color: @bg-color-light;

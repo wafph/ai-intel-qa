@@ -163,7 +163,7 @@ const handleRetrieval = () => {
   }
   
   .input-container {
-    max-width: 800px;
+    max-width: 850px;
     margin: 0 auto 40px;
     position: relative;
     
@@ -205,7 +205,7 @@ const handleRetrieval = () => {
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
-    max-width: 800px;
+    max-width: 850px;
     margin: 0 auto 30px;
     
     .retrieval-tag {
@@ -239,7 +239,7 @@ const handleRetrieval = () => {
   }
   
   .retrieval-result {
-    max-width: 800px;
+    max-width: 850px;
     margin: 30px auto 0;
     
     .result-item {

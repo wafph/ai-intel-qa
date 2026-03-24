@@ -12,7 +12,7 @@
       </div>
       <div class="collapse-btn" @click="toggleSidebar">
         <el-icon>
-          <component :is="sidebarCollapsed ? 'ArrowRight' : 'ArrowLeft'" />
+          <component :is="sidebarCollapsed ? 'Expand' : 'Fold'" />
         </el-icon>
       </div>
     </div>
@@ -53,23 +53,25 @@
 import { computed } from 'vue'
 import { useAppStore } from '../stores/app'
 import { useRouter } from 'vue-router'
-import { Platform, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { storeToRefs } from 'pinia'  // 添加这行
+import { Platform, Fold, Expand } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const appStore = useAppStore()
+
+// 使用 storeToRefs 来保持响应性
+const { sidebarCollapsed, activeMenu, menuItems, historyItems } = storeToRefs(appStore)
 
 const emit = defineEmits<{
   (e: 'history-click', query: string): void
 }>()
 
-// 从store获取状态
-const { sidebarCollapsed, activeMenu, menuItems, historyItems } = appStore
-
 // 按日期分组的历史记录
 const groupedHistory = computed(() => {
   const groups: Record<string, any[]> = {}
   
-  historyItems.forEach(item => {
+  // 注意：historyItems 现在是 ref，需要使用 .value
+  historyItems.value.forEach(item => {
     if (!groups[item.date]) {
       groups[item.date] = []
     }
@@ -161,6 +163,11 @@ const handleMenuClick = (menuId: string) => {
         background-color: #f0f7ff;
         color: @primary-color;
         font-weight: 500;
+        box-shadow: 0 2px 4px rgba(24, 144, 255, 0.1);
+        
+        .el-icon {
+          color: @primary-color;
+        }
       }
       
       .el-icon {
@@ -168,11 +175,14 @@ const handleMenuClick = (menuId: string) => {
         margin-right: 12px;
         width: 24px;
         text-align: center;
+        color: @text-color-secondary;
+        transition: color 0.2s;
       }
       
       span {
         overflow: hidden;
         text-overflow: ellipsis;
+        transition: color 0.2s;
       }
     }
   }

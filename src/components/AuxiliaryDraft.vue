@@ -2,7 +2,7 @@
   <div class="auxiliary-draft">
     <div class="draft-header">
       <h1>我是制度起草助手，很高兴见到你</h1>
-      <p>请描述你的制度要求，包括使用范围、核心条款、特殊要求等</p>
+      <p>帮助您快速生成合规、专业的制度文档，降低起草难度，节约时间成本</p>
     </div>
     
     <div class="input-container">
@@ -112,7 +112,7 @@ const handleDraft = () => {
   }
   
   .input-container {
-    max-width: 800px;
+    max-width: 850px;
     margin: 0 auto 40px;
     position: relative;
     
@@ -150,7 +150,7 @@ const handleDraft = () => {
   }
   
   .recommend-questions {
-    max-width: 800px;
+    max-width: 850px;
     margin: 40px auto 0;
     
     .recommend-title {
