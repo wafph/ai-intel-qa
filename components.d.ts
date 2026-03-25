@@ -15,6 +15,7 @@ declare module 'vue' {
     ComplianceReview: typeof import('./src/components/ComplianceReview.vue')['default']
     ContentArea: typeof import('./src/components/ContentArea.vue')['default']
     ElButton: typeof import('element-plus/es')['ElButton']
+    ElCard: typeof import('element-plus/es')['ElCard']
     ElCheckbox: typeof import('element-plus/es')['ElCheckbox']
     ElIcon: typeof import('element-plus/es')['ElIcon']
     ElInput: typeof import('element-plus/es')['ElInput']

@@ -22,4 +22,10 @@ export default defineConfig({
       },
     },
   },
+  server: {
+    port: 5100, // 设置默认端口为3001
+    strictPort: true, // 如果端口被占用，直接退出而不是尝试下一个可用端口
+    host: '0.0.0.0',
+    open: true,
+  },
 });

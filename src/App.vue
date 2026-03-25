@@ -3,6 +3,7 @@
     <div class="main-container">
       <Sidebar @history-click="handleHistoryClick" />
       <div class="content-area">
+        <div class="header"></div>
         <div class="content-card">
           <RouterView />
         </div>
@@ -42,14 +43,13 @@ const handleHistoryClick = (query: string) => {
 
 .content-area {
   flex: 1;
-  padding: 24px;
   overflow-y: auto;
   background-color: @bg-color;
   
   .content-card {
-    background-color: @white;
+    // background-color: @white;
     border-radius: 8px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+    // box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
     padding: 24px;
     min-height: 100%;
   }
