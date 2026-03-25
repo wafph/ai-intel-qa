@@ -27,5 +27,13 @@ export default defineConfig({
     strictPort: true, // 如果端口被占用，直接退出而不是尝试下一个可用端口
     host: '0.0.0.0',
     open: true,
+    proxy: {
+      '/rest/api4': {
+        target: 'https://123.249.99.67', // 软通后端服务器地址
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/rest\/api4/, ''), // 移除前缀
+      },
+    },
   },
 });

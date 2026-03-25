@@ -40,6 +40,8 @@
       <div class="text-center">
         <p>正在智能分析中...</p>
         <p>系统正在分析您的问题并整理对应答复</p>
+        <h3>推理内容：</h3>
+        <div class="reasoning-content">{{ reasoningContent }}</div>
       </div>
     </div>
 
@@ -48,9 +50,8 @@
       <div class="result-header">
         <div class="result-title">回复</div>
       </div>
-      <!-- <div class="result-content" v-html="answerContent"></div> -->
-      <div class="result-content" v-if="showAnswer">
-        {{ accumulatedContent }}
+      <div class="result-content" v-if="!isStreaming">
+        {{ finalContent }}
       </div>
       <div style="display: flex; align-items: center; margin-top: 20px">
         <div class="source-tag">3个来源</div>
@@ -74,12 +75,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useAppStore } from '../stores/app';
 import { Promotion, Download, Refresh } from '@element-plus/icons-vue';
 
 const appStore = useAppStore();
+const isStreaming = ref(false);
+const finalContent = ref('');
+const reasoningContent = ref('');
+const events = ref([]);
 
+// 用于存储读取器和取消标志
+let reader = null;
+let abortController = null;
+let isCancelled = false;
 // 问题输入
 const questionInput = ref('');
 const questionPlaceholder = '你好，请输入你的问题，比如：湖北交投的核心业务板块有哪些？';
@@ -93,10 +102,6 @@ const suggestions = [
 // 回答状态
 const loadingAnswer = ref(false);
 const showAnswer = ref(false);
-// const answerContent = ref('');
-const accumulatedContent = ref('');
-const answerContent = ref(false);
-
 // 设置问题
 const setQuestion = (question: string) => {
   questionInput.value = question;
@@ -108,148 +113,143 @@ const handleSendQuestion = () => {
   if (!questionInput.value.trim()) return;
   loadingAnswer.value = true;
   showAnswer.value = false;
-
-  // 模拟API请求延迟
-  // setTimeout(() => {
-  //   loadingAnswer.value = false;
-  //   showAnswer.value = true;
-
-  //   // 根据问题内容返回不同答案
-  //   if (
-  //     questionInput.value.includes('湖北交投') ||
-  //     questionInput.value.includes('核心业务板块')
-  //   ) {
-  //     answerContent.value = `
-  //       <p>湖北交投核心业务板块围绕"交通规划、设计、建设、管理全生命周期运营商"定位展开，共7大核心板块，结合其业务实际及公开信息，具体如下：</p>
-  //       <ol>
-  //         <li><strong>规划设计</strong>：涵盖交通行业规划、工程设计、工程勘察等，依托旗下中南勘察设计院集团、省交规院等主体，拥有齐全甲级资质，打造交通科技型综合服务体系。</li>
-  //         <li><strong>工程建设</strong>：包含工程施工、工程管理、养护服务、工程总承包等，旗下建设集团具备公路、市政总承包"双壹级资质"，业务覆盖省内、全国及海外，承建多个重点交通项目。</li>
-  //         <li><strong>现代物流</strong>：涉及物流基础设施运营、智慧物流、供应链金融、物资贸易等，旗下物流集团为5A级物流企业，拥有华中地区大型沥青产销基地，实现大宗物资"买全球，卖全国"。</li>
-  //         <li><strong>区域开发</strong>：秉持"建设一条高速，开发一片区域、服务一方经济"理念，深耕三大都市圈，打造武汉长江国际绿创中心等标杆项目，助力城市发展。</li>
-  //         <li><strong>交通服务</strong>：涵盖服务区运营、交通能源、交通商贸等，运营大量高速公路服务区及自营加油站，独家运营"荆楚优品"公共品牌，拓展通道经济功能。</li>
-  //         <li><strong>交通科技</strong>：聚焦智慧交通设施建设、数据开发应用、智能检测及技术研发，成立智慧交通研究院，建设智慧高速试点，旗下多家企业入选"科改示范企业""专精特新小巨人"。</li>
-  //         <li><strong>交通金融</strong>：包含金融服务、资本运作、投资运营等，拥有省属国企首家财务公司，参股多家金融机构及基金，推出"楚道云链"供应链金融平台，助力产业发展。</li>
-  //       </ol>
-  //       <p>以上板块贴合湖北交投主责主业，也是当前项目（规章制度、知识库、会议助手等）需重点适配的业务场景</p>
-  //     `;
-  //   } else {
-  //     answerContent.value = `
-  //       <p>根据查询"${questionInput.value}"，以下是相关制度规定：</p>
-  //       <p>1. 员工报销需在费用发生后15个工作日内提交报销申请。</p>
-  //       <p>2. 报销审批流程：员工提交 → 直接主管审批 → 部门负责人审批 → 财务审核 → 出纳支付。</p>
-  //       <p>3. 单笔报销金额超过5000元需额外增加一级审批。</p>
-  //       <p>4. 所有报销需附上合规发票及相关证明材料。</p>
-  //       <p>5. 差旅费报销需在返回后7个工作日内提交。</p>
-  //     `;
-  //   }
-
-  //   // 添加到历史记录
-  //   appStore.addHistory(questionInput.value);
-  // }, 1500);
-  //
-  // fetch('http://218.106.157.54:11305/v1/chat/completions', {
-  //   method: 'post', // 显示请求方式为post
-  //   headers: {
-  //     'Content-Type': 'application/json',
-  //   },
-  // }).then((res) => {
-  //   console.log(res);
-  // });
-  fetchData().catch(console.error);
+  startStream();
 };
-const data = ref({});
-async function fetchData() {
-  const params = {
-    model: 'Qwen3-30B-A3B-Instruct',
-    stream: 'true',
-    messages: [
-      { role: 'user', content: 'Give me a short introduction to large language models.' },
-    ],
-    temperature: 0.7,
-    top_p: 0.8,
-    top_k: 20,
-    min_p: 0,
-    max_completion_tokens: 4096,
-  };
+
+// 开始流式请求
+const startStream = async () => {
   try {
-    const response = await fetch('http://218.106.157.54:11305/v1/chat/completions', {
-      method: 'post',
-      headers: {
-        Authorization:
-          'Bearer ' +
-          'sk-Qwen3-30B-A3B-Instruct-qenMb-piJgoWSqIfg~29Xw2H6ILO4NGu2EEKNqMSVT.ViIoD',
-        'Content-Type': 'application/json',
+    // 重置状态
+    isStreaming.value = true;
+    finalContent.value = '';
+    reasoningContent.value = '';
+    events.value = [];
+    isCancelled = false;
+    const params = {
+      inputs: {
+        query: '你好',
       },
-      body: JSON.stringify(params),
-    });
+    };
+    // 创建AbortController用于取消请求
+    abortController = new AbortController();
+
+    // 使用Fetch API发起请求
+    const response = await fetch(
+      '/rest/api4/v1/1725c43e3fa54828a078fce60f5a3773/agents/52512531-0a97-480f-bd5c-5f4fd0df61c4/conversations/58f7d2f6-8054-4fdd-82a8-ebe918c2545d?version=1774407434420',
+      {
+        method: 'post',
+        headers: {
+          'X-Auth-Token':
+            'MIIPpQYJKoZIhvcNAQcCoIIPljCCD5ICAQExDTALBglghkgBZQMEAgEwgg23BgkqhkiG9w0BBwGggg2oBIINpHsidG9rZW4iOnsiZXhwaXJlc19hdCI6IjIwMjYtMDMtMjVUMDk6NTc6NTcuNDA4MDAwWiIsInNpZ25hdHVyZSI6IkVBcGpiaTF1YjNKMGFDMDBBQUFBQUFBQUJMSkFWRktxMFRJc3N4d08rZ25kM1pRMDNTYkJjVThMcVg3MVN6bm1vZUhRN0R5azNqZG9LVGVmMlVOVDlZZ0tiaTBIU2NrU3Q0UXgrVWFKcHl1Z1hxaURUUHBqYlpoK2VEcUloL0lOMWhsc0tnYmZCNHVaWjJ0ZWRqYmVnZW9zRVhrRHVROS9ZdzZ0WVFEZjFpV3MyaHdSL29aTU45Sk1SdWs0VDlvQm1MRktRcVpGNFpsenlwelo1SWJCN3NndmtVYjdhRjBKc3NrZ2syUmZMMkZIUEFjSGsrY1F0KzdnbXIrRnd4ZXFmbTBhMkVPOENNR2FaUThVTTltTzVZcVVwYzZCd3JRNTY5VDREMGJidC9GRXVHN3N5dVNXbFNzM3JmV0NpM0lpZi9WR1BhKzhGcWxkckZYaTFmamNGMldLdFVIQ3NGNEE1MFpnVWxvVFNyYXNvUGJyIiwibWV0aG9kcyI6WyJwYXNzd29yZCJdLCJjYXRhbG9nIjpbXSwicm9sZXMiOlt7Im5hbWUiOiJhcGlnX2FkbSIsImlkIjoiMCJ9LHsibmFtZSI6ImFwbV9hZG0iLCJpZCI6IjAifSx7Im5hbWUiOiJhcGlnd19hZG0iLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9jc2JzX3JlcF9hY2NlbGVyYXRpb24iLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9lY3NfZGlza0FjYyIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2Rzc19tb250aCIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX29ic19kZWVwX2FyY2hpdmUiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9hX2NuLXNvdXRoLTRjIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfZGVjX21vbnRoX3VzZXIiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9jYnJfc2VsbG91dCIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2Vjc19vbGRfcmVvdXJjZSIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2V2c19Sb3lhbHR5IiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfd2VsaW5rYnJpZGdlX2VuZHBvaW50X2J1eSIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2Nicl9maWxlIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfZG1zLXJvY2tldG1xNS1iYXNpYyIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2V2c19FU2luZ2xlX2NvcHlTU0QiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9kbXMta2Fma2EzIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfb2JzX2RlY19tb250aCIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2NzYnNfcmVzdG9yZSIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2Nicl92bXdhcmUiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9pZG1lX21ibV9mb3VuZGF0aW9uIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfcGNfdmVuZG9yX3N1YnVzZXIiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9tdWx0aV9iaW5kIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfZXZzX3NzZF9lbnRyeSIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX3Ntbl9jYWxsbm90aWZ5IiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfYV9hcC1zb3V0aGVhc3QtM2QiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9jc2JzX3Byb2dyZXNzYmFyIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfY2VzX3Jlc291cmNlZ3JvdXBfdGFnIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfZXZzX3JldHlwZSIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2tvb21hcCIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2Rtcy1hbXFwLWJhc2ljIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfZXZzX3Bvb2xfY2EiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9hX2NuLXNvdXRod2VzdC0yYiIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2h3Y3BoIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfZWNzX29mZmxpbmVfZGlza180IiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfc21uX3dlbGlua3JlZCIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2h2X3ZlbmRvciIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2FfY24tbm9ydGgtNGUiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9hX2NuLW5vcnRoLTRkIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfZWNzX2hlY3NfeCIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2Nicl9maWxlc19iYWNrdXAiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9lY3NfYWM3IiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfY3Nic19yZXN0b3JlX2FsbCIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2FfY24tbm9ydGgtNGYiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9vcF9nYXRlZF9yb3VuZHRhYmxlIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfZXZzX2V4dCIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX3Bmc19kZWVwX2FyY2hpdmUiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9hX2FwLXNvdXRoZWFzdC0xZSIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2FfcnUtbW9zY293LTFiIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfYV9hcC1zb3V0aGVhc3QtMWQiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9hX2FwLXNvdXRoZWFzdC0xZiIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX3Ntbl9hcHBsaWNhdGlvbiIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2V2c19jb2xkIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfZWNzX2dwdV9nNXIiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9vcF9nYXRlZF9tZXNzYWdlb3ZlcjVnIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfZWNzX3JpIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfYV9ydS1ub3J0aHdlc3QtMmMiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9pZWZfcGxhdGludW0iLCJpZCI6IjAifSx7Im5hbWUiOiIyNTksMjksMzYsMjU3LDMwLDI1Niw3MiwyNjAsNDk0LDY1LDQ5MywyMjksMTExLDI1OCwxMTAiLCJpZCI6IjgifSx7Im5hbWUiOiI0LDExLDAsMTMsMiwxLDMsMTUsMTQsMTIiLCJpZCI6IjkifSx7Im5hbWUiOiJvcF9maW5lX2dyYWluZWQiLCJpZCI6IjcifV0sInByb2plY3QiOnsiZG9tYWluIjp7Im5hbWUiOiJoaWRfYjVodHJpZzF4LWpjbGpuIiwiaWQiOiI4MzdjN2M3YWJlN2Y0MWJmOTM1NjliODJkNzE0MGE3YSJ9LCJuYW1lIjoiY24tbm9ydGgtNCIsImlkIjoiMTcyNWM0M2UzZmE1NDgyOGEwNzhmY2U2MGY1YTM3NzMifSwiaXNzdWVkX2F0IjoiMjAyNi0wMy0yNFQwOTo1Nzo1Ny40MDgwMDBaIiwidXNlciI6eyJkb21haW4iOnsibmFtZSI6ImhpZF9iNWh0cmlnMXgtamNsam4iLCJpZCI6IjgzN2M3YzdhYmU3ZjQxYmY5MzU2OWI4MmQ3MTQwYTdhIn0sIm5hbWUiOiJhZ2VudC1kZXYwNSIsInBhc3N3b3JkX2V4cGlyZXNfYXQiOiIiLCJpZCI6IjkyMzk2YWIyN2U3NTQ4MmNhMmI5YzI5ODM3MWY5YjJkIn19fTGCAcEwggG9AgEBMIGXMIGJMQswCQYDVQQGEwJDTjESMBAGA1UECAwJR3VhbmdEb25nMREwDwYDVQQHDAhTaGVuWmhlbjEuMCwGA1UECgwlSHVhd2VpIFNvZnR3YXJlIFRlY2hub2xvZ2llcyBDby4sIEx0ZDEOMAwGA1UECwwFQ2xvdWQxEzARBgNVBAMMCmNhLmlhbS5wa2kCCQDcsytdEGFqEDALBglghkgBZQMEAgEwDQYJKoZIhvcNAQEBBQAEggEAdq6Vklebr3Ku-mq01b+q8lf8e0ggAc13JrMoAqPXVRmFb8PV7CZ9MUnxg7Mq2Apan-KLW7xvlAJoabe+cF9oeb8u2DMCAx7FqnDtOysyzmObKG5bnUIskxFOo2BYJh+NA1oG-1HphRUt8wFasjXnMaeLzkvLQ1qLNYv6v8Any3VV9pToHn-JXz5k+jVMuAJ2iebyfpx-RizxvQq76Zz0JZQ3463b1nrSoqP1fdIoG-M0SWOkHvaHo+ATGIRC7i7S0vguGpN1p4vTxKusGOYlAnc4byAJQ78Kmg8KPOtFzKiNnWvcs6+8vmYZGnFwMgGuKf5gvv23AF04HyJYNEHofQ==',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(params),
+      },
+    );
     if (!response.ok || !response.body) {
       throw new Error(`网络响应异常: ${response.status}`);
     }
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
 
-    // 3. 获取可读流
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    // let accumulatedContent = '';
+    if (!response.body) {
+      throw new Error('响应体不可用');
+    }
 
-    try {
-      // 4. 循环读取流数据
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          console.log('流读取完毕');
-          break;
-        }
+    // 获取可读流
+    reader = response.body.getReader();
+    const decoder = new TextDecoder();
 
-        // 5. 将二进制数据块解码为文本
-        const chunk = decoder.decode(value, { stream: true });
+    // 处理流数据
+    while (true) {
+      if (isCancelled) {
+        break;
+      }
 
-        // 6. 按行分割（SSE 数据以 "data: " 和两个换行符为分隔）
-        const lines = chunk.split('\n\n').filter((line) => line.trim());
+      const { done, value } = await reader.read();
 
-        for (const line of lines) {
-          // 7. 找到以 "data: " 开头的有效行
-          if (line.startsWith('data: ')) {
-            const dataStr = line.slice(6); // 去掉 "data: " 前缀
+      if (done) {
+        console.log('流读取完成');
+        loadingAnswer.value = false;
+        showAnswer.value = true;
+        break;
+      }
+      // 解码数据块
+      const chunk = decoder.decode(value, { stream: true });
+      processChunk(chunk);
+    }
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      console.error('获取流数据时出错:', error);
+    }
+  } finally {
+    isStreaming.value = false;
+    reader = null;
+  }
+};
 
-            // 跳过 "[DONE]" 等非JSON结束标记
-            if (dataStr === '[DONE]') {
-              console.log('流正常结束');
-              break;
-            }
+// 处理数据块
+const processChunk = (chunk) => {
+  // 按行分割
+  const lines = chunk.split('\n');
 
-            try {
-              // 8. 解析 JSON
-              const data = JSON.parse(dataStr);
-              // 9. 提取 content 字段
-              const contentChunk = data.choices?.[0]?.delta?.content || '';
+  lines.forEach((line) => {
+    if (line.startsWith('data:')) {
+      const dataLine = line.substring(5).trim(); // 移除"data:"前缀
 
-              if (contentChunk) {
-                // 10. 处理内容块
-                accumulatedContent.value += contentChunk;
-                console.log('当前内容块:', contentChunk);
-                console.log('已累积全部内容:', accumulatedContent.value);
-                // 在这里可以更新 UI 状态（如在 Vue 的 ref 变量中）
-              }
-            } catch (e) {
-              console.error('解析行数据失败:', e, '原始行:', line);
-            }
-          }
+      if (dataLine) {
+        try {
+          const parsedData = JSON.parse(dataLine);
+          handleEvent(parsedData);
+        } catch (error) {
+          console.error('解析JSON失败:', error, '原始数据:', dataLine);
         }
       }
-    } finally {
-      // 11. 释放读取器
-      reader.releaseLock();
     }
-    answerContent.value = true;
-    loadingAnswer.value = false;
-    showAnswer.value = true;
-    // const json = await response.text();
-    // data.value = json;
-    // console.log(data.value);
-  } catch (error) {
-    console.error('There was a problem with the fetch operation:', error);
+  });
+};
+
+// 处理事件
+const handleEvent = (data) => {
+  // 记录事件
+  events.value.push(`${data.event} - ${new Date(data.createdTime).toLocaleTimeString()}`);
+
+  switch (data.event) {
+    case 'start':
+      console.log('流开始');
+      break;
+
+    case 'message':
+      if (data.reasoning_content) {
+        reasoningContent.value += data.reasoning_content;
+      }
+      if (data.content) {
+        finalContent.value += data.content;
+      }
+      break;
+
+    case 'done':
+      console.log('流结束');
+      isStreaming.value = false;
+      break;
+
+    default:
+      console.log('未知事件:', data.event);
   }
-}
+};
+
+// 停止流
+const stopStream = () => {
+  if (abortController) {
+    abortController.abort();
+  }
+  if (reader) {
+    reader.cancel();
+  }
+  isCancelled = true;
+  isStreaming.value = false;
+};
 
 // 重置答案
 const resetAnswer = () => {
@@ -259,6 +259,11 @@ const resetAnswer = () => {
 
 onMounted(() => {
   // 初始化
+});
+
+// 组件卸载时清理
+onUnmounted(() => {
+  stopStream();
 });
 </script>
 
@@ -361,6 +366,16 @@ onMounted(() => {
     filter: drop-shadow(0px 5px 5px rgba(0, 0, 0, 0.19215686274509805));
     background-color: @white;
     border-radius: 8px;
+
+    .reasoning-content {
+      min-height: 50px;
+      padding: 10px;
+      margin: 10px 0;
+      background-color: white;
+      border: 1px solid #eee;
+      border-radius: 4px;
+      white-space: pre-wrap;
+    }
 
     .result-header {
       display: flex;
