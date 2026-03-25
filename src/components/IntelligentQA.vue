@@ -40,7 +40,6 @@
       <div class="text-center">
         <p>正在智能分析中...</p>
         <p>系统正在分析您的问题并整理对应答复</p>
-        <h3>推理内容：</h3>
         <div class="reasoning-content">{{ reasoningContent }}</div>
       </div>
     </div>
@@ -369,10 +368,12 @@ onUnmounted(() => {
 
     .reasoning-content {
       min-height: 50px;
-      padding: 10px;
+      padding: 0 10px 10px 10px;
       margin: 10px 0;
+      text-align: left;
+      color:gray;
       background-color: white;
-      border: 1px solid #eee;
+      border-left: 1px solid #eee;
       border-radius: 4px;
       white-space: pre-wrap;
     }
