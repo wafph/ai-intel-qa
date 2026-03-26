@@ -11,7 +11,7 @@
           <UploadFilled />
         </el-icon>
       </div>
-      <p>请上传您的文档，选择审核维度</p>
+      <p>请上传您的文档</p>
       <p class="upload-tip">支持 .doc, .docx, .pdf 格式文件</p>
       <input 
         type="file" 
@@ -23,23 +23,21 @@
     </div>
     
     <div class="check-options">
-      <div class="check-title">检查选项</div>
+      <div class="check-title">选择审核维度</div>
       <div class="check-option">
+        <el-checkbox v-model="checkOptions.all">全选</el-checkbox>
         <el-checkbox v-model="checkOptions.compliance">合规性审查</el-checkbox>
-      </div>
-      <div class="check-option">
         <el-checkbox v-model="checkOptions.conflict">冲突性审查</el-checkbox>
+        <el-checkbox v-model="checkOptions.standard">规范性审查</el-checkbox>
       </div>
       <div class="check-option">
-        <el-checkbox v-model="checkOptions.standard">规范性审查</el-checkbox>
+      </div>
+      <div class="check-option">
       </div>
     </div>
     
     <div class="action-container">
       <button class="send-btn" @click="handleReview">
-        <el-icon class="mr-8">
-          <Checked />
-        </el-icon>
         开始审核
       </button>
     </div>
@@ -52,6 +50,7 @@ import { UploadFilled, Checked } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
 interface CheckOptions {
+  all: boolean
   compliance: boolean
   conflict: boolean
   standard: boolean
@@ -59,6 +58,7 @@ interface CheckOptions {
 
 const fileInput = ref<HTMLInputElement>()
 const checkOptions = ref<CheckOptions>({
+  all: true,
   compliance: true,
   conflict: true,
   standard: true
