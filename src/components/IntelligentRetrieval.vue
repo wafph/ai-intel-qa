@@ -192,7 +192,7 @@ const handleRetrieval = () => {
 .intelligent-retrieval {
   .retrieval-header {
     text-align: center;
-    margin-bottom: 40px;
+    margin-bottom: 20px;
 
     h1 {
       font-size: 28px;
@@ -251,6 +251,7 @@ const handleRetrieval = () => {
       }
     }
   }
+  
   .send-btn {
     position: absolute;
     right: 12px;
