@@ -18,9 +18,8 @@ export const useAppStore = defineStore('app', () => {
   
   // 历史记录
   const historyItems = ref([
-    { id: 1, query: '查询员工报销规定', date: '今天(02-01)' },
-    { id: 2, query: '湖北交投的核心业务板块有哪些？', date: '今天(02-01)' },
-    { id: 3, query: '员工绩效等级制度有哪些？', date: '今天(02-01)' },
+    { id: 1, query: '查询员工报销规定', date: '2026-02-01' },
+    { id: 2, query: '湖北交投的核心业务板块有哪些？', date: '2026-02-01' },
     { id: 4, query: '考勤相关的制度？', date: '2026-01-31' }
   ])
   
@@ -43,7 +42,7 @@ export const useAppStore = defineStore('app', () => {
     historyItems.value.unshift({
       id: Date.now(),
       query,
-      date: `今天(${today})`
+      date: `(${today})`
     })
     
     // 保持最多10条历史记录

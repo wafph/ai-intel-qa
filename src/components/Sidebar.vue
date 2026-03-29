@@ -51,7 +51,7 @@ import { computed } from 'vue';
 import { useAppStore } from '../stores/app';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia'; // 添加这行
-import { Platform, Fold, Expand } from '@element-plus/icons-vue';
+import { Platform,  } from '@element-plus/icons-vue';
 
 const router = useRouter();
 const appStore = useAppStore();

@@ -21,7 +21,7 @@ const router = useRouter();
 const appStore = useAppStore();
 
 // 处理历史记录点击
-const handleHistoryClick = (query: string) => {
+const handleHistoryClick = () => {
   // 切换到智能问答页面
   appStore.switchMenu('qa');
   router.push('/qa');

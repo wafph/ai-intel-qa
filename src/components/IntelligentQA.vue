@@ -101,18 +101,15 @@ const pdfFunc = () => {
   // 定时器模拟按钮loading动画的时间
   setTimeout(() => {
     loading.value = false;
-    ElMessage.success('打印成功!');
   }, 1000);
 };
 const appStore = useAppStore();
 const isStreaming = ref(false);
 const finalContent = ref('');
 const reasoningContent = ref('');
-const events = ref([]);
-
-// 用于存储读取器和取消标志
-let reader = null;
-let abortController = null;
+const events = ref<Array<string>>([]);
+const reader = ref<ReadableStreamDefaultReader<Uint8Array> | null>(null);
+const abortController = ref<AbortController | null>(null);
 let isCancelled = false;
 // 问题输入
 const questionInput = ref('');
@@ -138,6 +135,7 @@ const handleSendQuestion = () => {
   if (!questionInput.value.trim()) return;
   loadingAnswer.value = true;
   showAnswer.value = false;
+  appStore.addHistory(questionInput.value);
   startStream();
 };
 
@@ -156,7 +154,7 @@ const startStream = async () => {
       },
     };
     // 创建AbortController用于取消请求
-    abortController = new AbortController();
+    abortController.value = new AbortController();
 
     // 使用Fetch API发起请求
     const response = await fetch(
@@ -183,7 +181,7 @@ const startStream = async () => {
     }
 
     // 获取可读流
-    reader = response.body.getReader();
+    reader.value = response.body.getReader();
     const decoder = new TextDecoder();
 
     // 处理流数据
@@ -192,8 +190,8 @@ const startStream = async () => {
         break;
       }
 
-      const { done, value } = await reader.read();
-
+      const { done, value } =
+        (await reader.value.read()) as ReadableStreamReadResult<Uint8Array>;
       if (done) {
         console.log('流读取完成');
         loadingAnswer.value = false;
@@ -204,22 +202,22 @@ const startStream = async () => {
       const chunk = decoder.decode(value, { stream: true });
       processChunk(chunk);
     }
-  } catch (error) {
-    if (error.name !== 'AbortError') {
+  } catch (error: any) {
+    if (error?.name !== 'AbortError') {
       console.error('获取流数据时出错:', error);
     }
   } finally {
     isStreaming.value = false;
-    reader = null;
+    reader.value = null;
   }
 };
 
 // 处理数据块
-const processChunk = (chunk) => {
+const processChunk = (chunk: any) => {
   // 按行分割
   const lines = chunk.split('\n');
 
-  lines.forEach((line) => {
+  lines.forEach((line: any) => {
     if (line.startsWith('data:')) {
       const dataLine = line.substring(5).trim(); // 移除"data:"前缀
 
@@ -236,9 +234,9 @@ const processChunk = (chunk) => {
 };
 
 // 处理事件
-const handleEvent = (data) => {
+const handleEvent = (data: any) => {
   // 记录事件
-  events.value.push(`${data.event} - ${new Date(data.createdTime).toLocaleTimeString()}`);
+  // events.value.push(`${data.event} - ${new Date(data.createdTime).toLocaleTimeString()}`);
 
   switch (data.event) {
     case 'start':
@@ -268,11 +266,11 @@ const renderedMarkdown = computed(() => md.render(finalContent.value));
 
 // 停止流
 const stopStream = () => {
-  if (abortController) {
-    abortController.abort();
+  if (abortController.value) {
+    abortController.value?.abort();
   }
-  if (reader) {
-    reader.cancel();
+  if (reader.value) {
+    reader.value.cancel();
   }
   isCancelled = true;
   isStreaming.value = false;

@@ -95,7 +95,6 @@
 import { ref } from 'vue';
 import { useAppStore } from '../stores/app';
 import { Search, Download, View } from '@element-plus/icons-vue';
-import MarkdownIt from 'markdown-it';
 
 interface RetrievalResult {
   title: string;
