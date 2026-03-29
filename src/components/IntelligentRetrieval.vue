@@ -41,7 +41,7 @@
     <!-- 检索加载中 -->
     <div v-if="loadingRetrieval" class="retrieval-result">
       <div class="result-header">
-        <div class="result-title">检索结果</div>
+        <div class="result-title">思考中</div>
       </div>
       <div class="loading-spinner"></div>
       <div class="text-center">
@@ -50,10 +50,10 @@
       </div>
     </div>
 
-    <!-- 检索结果 -->
+    <!-- 思考中 -->
     <div v-if="showRetrievalResult" class="retrieval-result">
       <div class="result-header">
-        <div class="result-title">检索结果</div>
+        <div class="result-title">思考中</div>
       </div>
       <div v-for="(result, index) in retrievalResults" :key="index" class="result-item">
         <div class="result-item-header">

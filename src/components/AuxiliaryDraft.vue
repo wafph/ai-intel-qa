@@ -1,11 +1,11 @@
 <template>
   <div class="auxiliary-draft">
-    <div class="draft-header" v-if="!showAnswer">
+    <div class="draft-header" v-if="!showAnswer && !loadingAnswer">
       <h1>我是制度起草助手，很高兴见到你</h1>
       <p>帮助您快速生成合规、专业的制度文档，降低起草难度，节约时间成本</p>
     </div>
 
-    <el-card class="cards" v-if="!showAnswer">
+    <el-card class="cards" v-if="!showAnswer && !loadingAnswer">
       <div class="input-container">
         <el-input
           v-model="draftInput"
@@ -46,10 +46,16 @@
         </div>
       </div>
     </el-card>
+    <el-card class="res-container" v-if="loadingAnswer || showAnswer">
+      <div class="anser-input">
+        <div class="right-input">{{ draftInput }}</div>
+        <img src="../../public/user.svg" alt="" />
+      </div>
+    </el-card>
     <!-- 回答加载中 -->
     <div v-if="loadingAnswer" class="result-container">
       <div class="result-header">
-        <div class="result-title">检索结果</div>
+        <div class="result-title">思考中</div>
       </div>
       <div class="loading-spinner"></div>
       <div class="text-center">
@@ -58,19 +64,17 @@
         <div class="reasoning-content">{{ reasoningContent }}</div>
       </div>
     </div>
-    <el-card class="res-container" v-if="showAnswer">
-      <div class="anser-input">
-        <div class="right-input">{{ draftInput }}</div>
-        <img src="../../public/user.svg" alt="" />
-      </div>
-    </el-card>
     <!-- 回答结果 -->
     <div v-if="showAnswer" class="result-container">
       <div class="result-header">
-        <div class="result-title">生成结果</div>
+        <div class="result-title">回复</div>
       </div>
-      <div class="result-content" id="pdfDom" v-html="renderefinalContentdMarkdown" v-if="!isStreaming">
-      </div>
+      <div
+        class="result-content"
+        id="pdfDom"
+        v-html="renderefinalContentdMarkdown"
+        v-if="!isStreaming"
+      ></div>
       <div style="display: flex; align-items: center; margin-top: 20px">
         <div class="action-buttons">
           <el-button size="small" @click="resetAnswer">
@@ -364,7 +368,7 @@ const pdfFunc = () => {
     .send-btn {
       position: absolute;
       right: 12px;
-      bottom: 92px;
+      bottom: 60px;
       background-color: @primary-color;
       color: @white;
       border: none;

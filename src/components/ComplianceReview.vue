@@ -1,17 +1,21 @@
 <template>
   <!-- 模板部分保持不变 -->
   <div class="audit-container">
-    <div class="review-header" v-show="!showAuditResult">
+    <div class="review-header" v-show="!showAnswer && !loadingAnswer">
       <h1>智能合规审核，守护业务合规底线</h1>
       <p>以科技赋能合规管理，自动校验，高效守护业务规范</p>
     </div>
-    <div class="input-container" v-if="!showAnswer">
+    <div class="input-container" v-if="!showAnswer && !loadingAnswer">
       <el-input
         v-model="questionInput"
+        type="textarea"
         :placeholder="questionPlaceholder"
-        style="height: 60px; border-radius: 20px"
+        :rows="isExpanded ? 13: 5"
         @keydown.enter.exact.prevent="handleSendQuestion"
       />
+      <el-button class="btnp" plain type="primary" @click="toggleExpand">
+        {{ isExpanded ? '收缩' : '展开' }}
+      </el-button>
       <button class="send-btn" @click="handleSendQuestion">
         <el-icon class="mr-8">
           <Promotion />
@@ -19,16 +23,17 @@
         发送
       </button>
     </div>
-    <el-card class="res-container" v-if="showAnswer">
+    <el-card class="res-container" v-if="loadingAnswer || showAnswer">
       <div class="anser-input">
         <div class="right-input">{{ questionInput }}</div>
         <img src="../../public/user.svg" alt="" />
       </div>
     </el-card>
     <!-- 回答加载中 -->
-    <div v-if="loadingAnswer" class="result-container">
+    <!-- {{ isStreaming }} {{ loadingAnswer }} -->
+    <div v-if="loadingAnswer && isStreaming" class="result-container">
       <div class="result-header">
-        <div class="result-title">检索结果</div>
+        <div class="result-title">思考中</div>
       </div>
       <div class="loading-spinner"></div>
       <div class="text-center">
@@ -81,6 +86,7 @@ import MarkdownIt from 'markdown-it';
 import { Promotion, Download, Refresh } from '@element-plus/icons-vue';
 import htmlToPdf from '../utils/htmlToPdf';
 const loading = ref(false);
+const isExpanded = ref(false);
 const pdfFunc = () => {
   loading.value = true;
   // 调用htmlToPdf工具函数
@@ -102,7 +108,7 @@ let abortController = null;
 let isCancelled = false;
 // 问题输入
 const questionInput = ref('');
-const questionPlaceholder = '你好，请输入你的问题，比如：科技公司财务管理制度';
+const questionPlaceholder = '你好，请输入待审核内容。';
 // 回答状态
 const loadingAnswer = ref(false);
 const showAnswer = ref(false);
@@ -120,6 +126,9 @@ const handleSendQuestion = () => {
   startStream();
 };
 
+const toggleExpand = () => {
+  isExpanded.value = !isExpanded.value;
+};
 // 开始流式请求
 const startStream = async () => {
   try {
@@ -260,7 +269,7 @@ const stopStream = () => {
 // 重置答案
 const resetAnswer = () => {
   showAnswer.value = false;
-  questionInput.value = '';
+  handleSendQuestion();
 };
 
 onMounted(() => {
@@ -293,12 +302,7 @@ onUnmounted(() => {
 
   .input-container {
     max-width: 850px;
-    height: 105px;
-    margin: auto;
-    padding: 24px;
-    filter: drop-shadow(0px 5px 5px rgba(0, 0, 0, 0.19215686274509805));
-    background-color: @white;
-    border-radius: 8px;
+    margin: 0 auto;
     position: relative;
 
     .el-textarea__inner {
@@ -307,14 +311,13 @@ onUnmounted(() => {
       border-radius: 8px;
       border: 1px solid @border-color;
       resize: none;
-      min-height: 120px;
 
       &:focus {
         border-color: @primary-color;
       }
     }
 
-    :deep(.el-input__wrapper) {
+    :deep(.el-textarea__inner) {
       border-radius: 10px;
     }
   }
@@ -341,11 +344,15 @@ onUnmounted(() => {
       }
     }
   }
+  .btnp{
+    padding: 5px 10px;
+    margin-top: 10px;
+  }
 
   .send-btn {
     position: absolute;
-    right: 35px;
-    bottom: 30px;
+    right: 15px;
+    bottom: 50px;
     background-color: @primary-color;
     color: @white;
     border: none;

@@ -1,11 +1,11 @@
 <template>
   <div class="intelligent-qa">
-    <div class="qa-header" v-if="!showAnswer">
+    <div class="qa-header" v-if="!showAnswer && !loadingAnswer">
       <h1>我是问答助手，很高兴见到你</h1>
       <p>你可以使用自然语言提问，我来精准回答</p>
     </div>
 
-    <div class="input-container" v-if="!showAnswer">
+    <div class="input-container" v-if="!showAnswer && !loadingAnswer">
       <el-input
         v-model="questionInput"
         :placeholder="questionPlaceholder"
@@ -19,13 +19,7 @@
         发送
       </button>
     </div>
-    <el-card class="res-container" v-if="showAnswer">
-      <div class="anser-input">
-        <div class="right-input">{{ questionInput }}</div>
-        <img src="../../public/user.svg" alt="" />
-      </div>
-    </el-card>
-    <div v-if="!showAnswer" class="suggestions">
+    <div v-if="!showAnswer && !loadingAnswer" class="suggestions">
       <el-button
         v-for="(suggestion, index) in suggestions"
         :key="index"
@@ -35,11 +29,17 @@
         {{ suggestion }}
       </el-button>
     </div>
-
+    <!-- {{ isStreaming }} {{ loadingAnswer }} {{ isStreaming }} -->
+    <el-card class="res-container" v-if="loadingAnswer || showAnswer">
+      <div class="anser-input">
+        <div class="right-input">{{ questionInput }}</div>
+        <img src="../../public/user.svg" alt="" />
+      </div>
+    </el-card>
     <!-- 回答加载中 -->
-    <div v-if="loadingAnswer" class="result-container">
+    <div v-if="loadingAnswer && isStreaming" class="result-container">
       <div class="result-header">
-        <div class="result-title">检索结果</div>
+        <div class="result-title">思考中</div>
       </div>
       <div class="loading-spinner"></div>
       <div class="text-center">
@@ -59,8 +59,7 @@
         id="pdfDom"
         v-if="!isStreaming"
         v-html="renderedMarkdown"
-      >
-      </div>
+      ></div>
       <div style="display: flex; align-items: center; margin-top: 20px">
         <div class="source-tag">3个来源</div>
         <div class="action-buttons">
@@ -120,9 +119,9 @@ const questionInput = ref('');
 const questionPlaceholder = '你好，请输入你的问题，比如：湖北交投的核心业务板块有哪些？';
 const suggestions = [
   '湖北交投的核心业务板块有哪些？',
-  '查询员工报销规定',
-  '员工绩效等级制度有哪些？',
-  '考勤相关的制度？',
+  '投资管理文件规定的制定依据是什么？',
+  // '项目立项阶段的项目建议书应包含哪些核心内容？',
+  '项目实施完成后，后评价工作如何开展？',
 ];
 
 // 回答状态
@@ -282,7 +281,7 @@ const stopStream = () => {
 // 重置答案
 const resetAnswer = () => {
   showAnswer.value = false;
-  questionInput.value = '';
+  handleSendQuestion();
 };
 
 onMounted(() => {
@@ -387,7 +386,6 @@ onUnmounted(() => {
   .suggestions {
     display: flex;
     flex-wrap: wrap;
-    gap: 12px;
     max-width: 850px;
     margin: 20px auto;
 
