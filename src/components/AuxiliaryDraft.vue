@@ -232,7 +232,6 @@ const startStream = async () => {
         (await reader.value.read()) as ReadableStreamReadResult<Uint8Array>;
 
       if (done) {
-        console.log('流读取完成');
         loadingAnswer.value = false;
         showAnswer.value = true;
         break;
@@ -279,7 +278,6 @@ const handleEvent = (data: any) => {
 
   switch (data.event) {
     case 'start':
-      console.log('流开始');
       break;
 
     case 'message':
@@ -292,7 +290,6 @@ const handleEvent = (data: any) => {
       break;
 
     case 'done':
-      console.log('流结束');
       isStreaming.value = false;
       break;
 
