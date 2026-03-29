@@ -69,8 +69,7 @@
       <div class="result-header">
         <div class="result-title">生成结果</div>
       </div>
-      <div class="result-content" id="pdfDom" v-if="!isStreaming">
-        {{ finalContent }}
+      <div class="result-content" id="pdfDom" v-html="renderefinalContentdMarkdown" v-if="!isStreaming">
       </div>
       <div style="display: flex; align-items: center; margin-top: 20px">
         <div class="action-buttons">
@@ -105,10 +104,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useAppStore } from '../stores/app';
 import { Star, ArrowRight } from '@element-plus/icons-vue';
 import htmlToPdf from '../utils/htmlToPdf';
+import MarkdownIt from 'markdown-it';
 const appStore = useAppStore();
 const finalContent = ref('');
 const showAnswer = ref(false);
@@ -169,6 +169,8 @@ const handleDraft = () => {
   appStore.addHistory(draftInput.value);
 };
 
+const md = new MarkdownIt();
+const renderefinalContentdMarkdown = computed(() => md.render(finalContent.value));
 // 开始流式请求
 const startStream = async () => {
   try {

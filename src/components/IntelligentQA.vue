@@ -54,8 +54,12 @@
       <div class="result-header">
         <div class="result-title">回复</div>
       </div>
-      <div class="result-content" id="pdfDom" v-if="!isStreaming">
-        {{ finalContent }}
+      <div
+        class="result-content"
+        id="pdfDom"
+        v-if="!isStreaming"
+        v-html="renderedMarkdown"
+      >
       </div>
       <div style="display: flex; align-items: center; margin-top: 20px">
         <div class="source-tag">3个来源</div>
@@ -85,7 +89,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, computed, onUnmounted } from 'vue';
+import MarkdownIt from 'markdown-it';
 import { useAppStore } from '../stores/app';
 import { Promotion, Download, Refresh } from '@element-plus/icons-vue';
 import htmlToPdf from '../utils/htmlToPdf';
@@ -259,6 +264,8 @@ const handleEvent = (data) => {
       console.log('未知事件:', data.event);
   }
 };
+const md = new MarkdownIt();
+const renderedMarkdown = computed(() => md.render(finalContent.value));
 
 // 停止流
 const stopStream = () => {
@@ -309,7 +316,7 @@ onUnmounted(() => {
   .input-container {
     max-width: 850px;
     height: 105px;
-    margin: auto ;
+    margin: auto;
     padding: 24px;
     filter: drop-shadow(0px 5px 5px rgba(0, 0, 0, 0.19215686274509805));
     background-color: @white;
