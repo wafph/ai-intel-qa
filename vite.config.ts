@@ -28,11 +28,11 @@ export default defineConfig({
     host: '0.0.0.0',
     open: true,
     proxy: {
-      '/rest/api4': {
+      '/api': {
         target: 'https://123.249.99.67', // 软通后端服务器地址
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/rest\/api4/, ''), // 移除前缀
+        rewrite: (path) => path.replace(/^\/api/, ''), // 移除前缀
       },
     },
   },
