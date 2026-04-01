@@ -28,11 +28,17 @@ export default defineConfig({
     host: '0.0.0.0',
     open: true,
     proxy: {
-      '/api': {
+      '/api1': {
         target: 'https://123.249.99.67', // 软通后端服务器地址
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/api/, ''), // 移除前缀
+        rewrite: (path) => path.replace(/^\/api1/, ''), // 移除前缀
+      },
+      '/api2': {
+        target: 'https://iam.cn-north-4.myhuaweicloud.com', // 软通后端服务器地址
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api2/, ''), // 移除前缀
       },
     },
   },
