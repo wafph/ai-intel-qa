@@ -150,7 +150,7 @@ const startStream = async () => {
 
     // 使用Fetch API发起请求
     const response = await fetch(
-      'api1/v1/1725c43e3fa54828a078fce60f5a3773/agents/820722c8-4ef6-4de9-8596-e1ab56b4946c/conversations/2a6b412a-1494-4a37-aa93-d09506827a94?version=1774592746670',
+      'api/v1/1725c43e3fa54828a078fce60f5a3773/agents/820722c8-4ef6-4de9-8596-e1ab56b4946c/conversations/2a6b412a-1494-4a37-aa93-d09506827a94?version=1774592746670',
       {
         method: 'post',
         headers: {
@@ -185,7 +185,6 @@ const startStream = async () => {
         (await reader.value.read()) as ReadableStreamReadResult<Uint8Array>;
 
       if (done) {
-        console.log('流读取完成');
         loadingAnswer.value = false;
         showAnswer.value = true;
         break;
@@ -232,7 +231,6 @@ const handleEvent = (data: any) => {
 
   switch (data.event) {
     case 'start':
-      console.log('流开始');
       break;
 
     case 'message':
@@ -245,7 +243,7 @@ const handleEvent = (data: any) => {
       break;
 
     case 'done':
-      console.log('流结束');
+
       isStreaming.value = false;
       break;
 

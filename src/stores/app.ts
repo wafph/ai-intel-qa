@@ -75,7 +75,6 @@ export const useAppStore = defineStore('app', () => {
       const data = await response.json();
       if (data?.token) {
         sharedDataToken.value = response.headers.get('X-Subject-Token');
-        console.log(sharedDataToken.value);
       }
       return sharedDataToken.value;
     } finally {
