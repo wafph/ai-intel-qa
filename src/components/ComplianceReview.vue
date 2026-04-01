@@ -23,6 +23,9 @@
         发送
       </button>
     </div>
+    <el-icon v-if="loadingAnswer" class="lefticon">
+      <ArrowLeftBold @click="goback" />
+    </el-icon>
     <el-card class="res-container" v-if="loadingAnswer || showAnswer">
       <div class="anser-input">
         <div class="right-input">{{ questionInput }}</div>
@@ -30,15 +33,12 @@
       </div>
     </el-card>
     <!-- 回答加载中 -->
-    <!-- {{ isStreaming }} {{ loadingAnswer }} -->
-    <div v-if="loadingAnswer && isStreaming" class="result-container">
+    <div v-if="!showAnswer && loadingAnswer" class="result-container">
       <div class="result-header">
         <div class="result-title">思考中</div>
       </div>
       <div class="loading-spinner"></div>
       <div class="text-center">
-        <p>正在智能分析中...</p>
-        <p>系统正在分析您的问题并整理对应答复</p>
         <div class="reasoning-content">{{ reasoningContent }}</div>
       </div>
     </div>
@@ -48,12 +48,7 @@
       <div class="result-header">
         <div class="result-title">回复</div>
       </div>
-      <div
-        class="result-content"
-        id="pdfDom"
-        v-if="!isStreaming"
-        v-html="renderedMarkdown"
-      ></div>
+      <div class="result-content" id="pdfDom" v-html="renderedMarkdown"></div>
       <div style="display: flex; align-items: center; margin-top: 20px">
         <div class="source-tag">3个来源</div>
         <div class="action-buttons">
@@ -150,11 +145,11 @@ const startStream = async () => {
 
     // 使用Fetch API发起请求
     const response = await fetch(
-      'api/v1/1725c43e3fa54828a078fce60f5a3773/agents/820722c8-4ef6-4de9-8596-e1ab56b4946c/conversations/2a6b412a-1494-4a37-aa93-d09506827a94?version=1774592746670',
+      'api1/v1/1725c43e3fa54828a078fce60f5a3773/agents/820722c8-4ef6-4de9-8596-e1ab56b4946c/conversations/2a6b412a-1494-4a37-aa93-d09506827a94?version=1774592746670',
       {
         method: 'post',
         headers: {
-          'X-Auth-Token':appStore.sharedDataToken!,
+          'X-Auth-Token': appStore.sharedDataToken!,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(params),
@@ -215,6 +210,9 @@ const processChunk = (chunk: any) => {
       if (dataLine) {
         try {
           const parsedData = JSON.parse(dataLine);
+          if (parsedData.content) {
+            showAnswer.value = true;
+          }
           handleEvent(parsedData);
         } catch (error) {
           console.error('解析JSON失败:', error, '原始数据:', dataLine);
@@ -243,7 +241,6 @@ const handleEvent = (data: any) => {
       break;
 
     case 'done':
-
       isStreaming.value = false;
       break;
 
@@ -264,6 +261,10 @@ const stopStream = () => {
   }
   isCancelled = true;
   isStreaming.value = false;
+};
+
+const goback = () => {
+  loadingAnswer.value = false;
 };
 
 // 重置答案
@@ -320,6 +321,14 @@ onUnmounted(() => {
     :deep(.el-textarea__inner) {
       border-radius: 10px;
     }
+  }
+
+  .lefticon {
+    position: absolute;
+    left: 300px;
+    top: 110px;
+    font-size: 23px;
+    color: #4285f4;
   }
 
   .res-container {

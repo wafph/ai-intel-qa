@@ -46,6 +46,9 @@
         </div>
       </div>
     </el-card>
+    <el-icon v-if="loadingAnswer" class="lefticon">
+      <ArrowLeftBold @click="goback" />
+    </el-icon>
     <el-card class="res-container" v-if="loadingAnswer || showAnswer">
       <div class="anser-input">
         <div class="right-input">{{ draftInput }}</div>
@@ -53,14 +56,12 @@
       </div>
     </el-card>
     <!-- 回答加载中 -->
-    <div v-if="loadingAnswer" class="result-container">
+    <div v-if="!showAnswer && loadingAnswer" class="result-container">
       <div class="result-header">
         <div class="result-title">思考中</div>
       </div>
       <div class="loading-spinner"></div>
       <div class="text-center">
-        <p>正在智能分析中...</p>
-        <p>系统正在分析您的问题并整理对应答复</p>
         <div class="reasoning-content">{{ reasoningContent }}</div>
       </div>
     </div>
@@ -69,12 +70,7 @@
       <div class="result-header">
         <div class="result-title">回复</div>
       </div>
-      <div
-        class="result-content"
-        id="pdfDom"
-        v-html="renderefinalContentdMarkdown"
-        v-if="!isStreaming"
-      ></div>
+      <div class="result-content" id="pdfDom" v-html="renderefinalContentdMarkdown"></div>
       <div style="display: flex; align-items: center; margin-top: 20px">
         <div class="action-buttons">
           <el-button size="small" @click="resetAnswer">
@@ -261,6 +257,9 @@ const processChunk = (chunk: any) => {
       if (dataLine) {
         try {
           const parsedData = JSON.parse(dataLine);
+          if (parsedData.content) {
+            showAnswer.value = true;
+          }
           handleEvent(parsedData);
         } catch (error) {
           console.error('解析JSON失败:', error, '原始数据:', dataLine);
@@ -307,6 +306,10 @@ const stopStream = () => {
   }
   isCancelled = true;
   isStreaming.value = false;
+};
+
+const goback = () => {
+  loadingAnswer.value = false;
 };
 
 const pdfFunc = () => {
@@ -421,6 +424,14 @@ onUnmounted(() => {
         }
       }
     }
+  }
+
+  .lefticon {
+    position: absolute;
+    left: 300px;
+    top: 110px;
+    font-size: 23px;
+    color: #4285f4;
   }
 
   .res-container {
