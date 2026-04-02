@@ -67,7 +67,7 @@ export const useAppStore = defineStore('app', () => {
 
     try {
       // 1. 使用 fetch API
-      const response = await fetch('/api2/v3/auth/tokens', {
+      const response = await fetch('/v3/auth/tokens', {
         method: 'post',
         body: JSON.stringify(params),
       });
@@ -82,7 +82,7 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  fetchTokenFromBackend();
+  // fetchTokenFromBackend();
   const addHistory = (query: string) => {
     const today = new Date().toLocaleDateString('zh-CN', {
       month: '2-digit',

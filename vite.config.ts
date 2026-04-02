@@ -29,7 +29,7 @@ export default defineConfig({
     open: true,
     proxy: {
       '/api1': {
-        target: 'https://123.249.99.67', // 软通后端服务器地址
+        target: 'https://837c7c7abe7f41bf93569b82d7140a7a.studio.agentarts.cn-north-4.huaweiapaas.com', // 软通后端服务器地址
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/api1/, ''), // 移除前缀
