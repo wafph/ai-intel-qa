@@ -87,7 +87,7 @@
         v-model="newQuestionInput"
         placeholder="您好，请输入你的问题"
         style="height: 60px; border-radius: 20px"
-        @keydown.enter.exact.prevent="handleSendQuestion" 
+        @keydown.enter.exact.prevent="handleSendQuestion"
       />
       <button class="send-btn" @click="handleSendQuestion">
         <el-icon class="mr-8">
@@ -129,9 +129,9 @@ const lastSentQuestion = ref('');
 
 const questionPlaceholder = '您好，请输入你的问题';
 const suggestions = [
-  '湖北交投的核心业务板块有哪些？',
-  '投资管理文件规定的制定依据是什么？',
-  '项目实施完成后，后评价工作如何开展？',
+  '规章制度各层级审批主体是什么？',
+  '规章制度起草程序及起草说明核心内容有哪些？',
+  '规章制度需修订或废止的情形及程序区别是什么？',
 ];
 
 // 回答状态
@@ -239,7 +239,8 @@ const startStream = async (queryText: string) => {
 
     while (true) {
       if (isCancelled) break;
-      const { done, value } = (await reader.value!.read()) as ReadableStreamReadResult<Uint8Array>;
+      const { done, value } =
+        (await reader.value!.read()) as ReadableStreamReadResult<Uint8Array>;
       if (done) {
         loadingAnswer.value = false;
         break;
@@ -317,7 +318,7 @@ const resetAnswer = () => {
     }
     lastSentQuestion.value = currentDisplayQuestion.value;
   }
-  
+
   // 重新回答上一次发送的问题
   // 清除当前答案
   finalContent.value = '';
@@ -496,7 +497,7 @@ onUnmounted(() => {
       display: flex;
       gap: 12px;
       margin-left: 30px;
-      
+
       :deep(.el-button--small) {
         padding: 5px 10px;
       }
