@@ -7,7 +7,7 @@ export const useAppStore = defineStore('app', () => {
 
   // 当前激活的菜单
   const activeMenu = ref('qa');
-  const sharedDataToken = ref<string | null>();
+  const sharedDataToken = ref<string | undefined>();
   const loading = ref(false);
   const error = ref(null);
   // 菜单项
@@ -67,22 +67,20 @@ export const useAppStore = defineStore('app', () => {
 
     try {
       // 1. 使用 fetch API
-      const response = await fetch('/v3/auth/tokens', {
+      const response = await fetch('/api2/v1/x-subject-token', {
         method: 'post',
         body: JSON.stringify(params),
       });
       if (!response.ok) throw new Error('网络请求失败');
       const data = await response.json();
-      if (data?.token) {
-        sharedDataToken.value = response.headers.get('X-Subject-Token');
-      }
+      sharedDataToken.value = data['X-Subject-Token'];
       return sharedDataToken.value;
     } finally {
       loading.value = false;
     }
   }
 
-  // fetchTokenFromBackend();
+  fetchTokenFromBackend();
   const addHistory = (query: string) => {
     const today = new Date().toLocaleDateString('zh-CN', {
       month: '2-digit',

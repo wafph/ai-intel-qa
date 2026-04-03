@@ -35,7 +35,7 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api1/, ''), // 移除前缀
       },
       '/api2': {
-        target: 'https://iam.cn-north-4.myhuaweicloud.com', // 软通后端服务器地址
+        target: 'http://1.94.244.72:8000', //token获取服务器地址
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/api2/, ''), // 移除前缀

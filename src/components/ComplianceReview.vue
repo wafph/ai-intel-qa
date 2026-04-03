@@ -10,12 +10,9 @@
         v-model="questionInput"
         type="textarea"
         :placeholder="questionPlaceholder"
-        :rows="isExpanded ? 13 : 5"
+        :rows="8"
         @keydown.enter.exact.prevent="handleSendQuestion"
       />
-      <el-button class="btnp" plain type="primary" @click="toggleExpand">
-        {{ isExpanded ? '收缩' : '展开' }}
-      </el-button>
       <button class="send-btn" @click="handleSendQuestion">
         <el-icon class="mr-8">
           <Promotion />
@@ -27,17 +24,20 @@
       <ArrowLeftBold @click="goback" />
     </el-icon>
     <el-card class="res-container" v-if="loadingAnswer || showAnswer">
-      <div class="anser-input">
-        <div class="right-input">{{ questionInput }}</div>
-        <img src="../../public/user.svg" alt="" />
-      </div>
+      <el-collapse v-model="activeNames">
+        <el-collapse-item name="1">
+          <div class="anser-input">
+            <div class="right-input">{{ currentDisplayQuestion }}</div>
+            <img src="../../public/user.svg" alt="" />
+          </div>
+        </el-collapse-item>
+      </el-collapse>
     </el-card>
     <!-- 回答加载中 -->
     <div v-if="!showAnswer && loadingAnswer" class="result-container">
       <div class="result-header">
-        <div class="result-title">思考中</div>
+        <div class="result-title">思考中...</div>
       </div>
-      <div class="loading-spinner"></div>
       <div class="text-center">
         <div class="reasoning-content">{{ reasoningContent }}</div>
       </div>
@@ -50,7 +50,6 @@
       </div>
       <div class="result-content" id="pdfDom" v-html="renderedMarkdown"></div>
       <div style="display: flex; align-items: center; margin-top: 20px">
-        <div class="source-tag">3个来源</div>
         <div class="action-buttons">
           <el-button
             size="small"
@@ -68,10 +67,26 @@
             <el-icon>
               <Refresh />
             </el-icon>
-            重新回答
+            重新审核
           </el-button>
         </div>
       </div>
+    </div>
+
+    <!-- 修改：回答显示后的独立输入框 -->
+    <div v-if="showAnswer" class="input-container as">
+      <el-input
+        v-model="otherInput"
+        placeholder="您好，请输入待审核内容"
+        style="height: 60px; border-radius: 20px"
+        @keydown.enter.exact.prevent="handleSendOtherQuestion"
+      />
+      <button class="send-btn bottom" @click="handleSendOtherQuestion">
+        <el-icon class="mr-8">
+          <Promotion />
+        </el-icon>
+        发送
+      </button>
     </div>
   </div>
 </template>
@@ -82,8 +97,10 @@ import { useAppStore } from '../stores/app';
 import { ElMessage } from 'element-plus';
 import { Promotion, Download, Refresh } from '@element-plus/icons-vue';
 import htmlToPdf from '../utils/htmlToPdf.js';
+
 const loading = ref(false);
-const isExpanded = ref(false);
+const activeNames = ref(['1']);
+
 const pdfFunc = () => {
   loading.value = true;
   // 调用htmlToPdf工具函数
@@ -94,6 +111,7 @@ const pdfFunc = () => {
     ElMessage.success('打印成功!');
   }, 1000);
 };
+
 const appStore = useAppStore();
 const isStreaming = ref(false);
 const finalContent = ref('');
@@ -102,32 +120,60 @@ const events = ref<Array<string>>([]);
 const reader = ref<ReadableStreamDefaultReader<Uint8Array> | null>(null);
 const abortController = ref<AbortController | null>(null);
 let isCancelled = false;
-// 问题输入
+
+// --- 输入框变量定义 ---
+// 主输入框绑定
 const questionInput = ref('');
-const questionPlaceholder = '你好，请输入待审核内容。';
+// 回答后输入框绑定
+const otherInput = ref('');
+// 用于显示在回答区域的用户问题
+const currentDisplayQuestion = ref('');
+// 新增：保存上一次发送的问题，用于重新回答
+const lastSentQuestion = ref('');
+// --- 输入框变量定义结束 ---
+
+const questionPlaceholder = '您好，请输入待审核内容。';
+
 // 回答状态
 const loadingAnswer = ref(false);
 const showAnswer = ref(false);
-// 设置问题
-// const setQuestion = (question: string) => {
-//   questionInput.value = question;
-//   handleSendQuestion();
-// };
 
-// 发送问题
+// 优化后的发送问题函数
 const handleSendQuestion = () => {
   if (!questionInput.value.trim()) return;
+
+  // 保存当前显示的问题
+  currentDisplayQuestion.value = questionInput.value;
+  // 保存上一次发送的问题
+  lastSentQuestion.value = questionInput.value;
+  // 清空主输入框
+  questionInput.value = '';
+
   loadingAnswer.value = true;
   showAnswer.value = false;
-  appStore.addHistory(questionInput.value);
-  startStream();
+  appStore.addHistory(currentDisplayQuestion.value);
+  startStream(currentDisplayQuestion.value);
 };
 
-const toggleExpand = () => {
-  isExpanded.value = !isExpanded.value;
+// 新增：处理回答后输入框的问题发送
+const handleSendOtherQuestion = () => {
+  if (!otherInput.value.trim()) return;
+
+  // 保存当前显示的问题
+  currentDisplayQuestion.value = otherInput.value;
+  // 保存上一次发送的问题
+  lastSentQuestion.value = otherInput.value;
+  // 清空回答后输入框
+  otherInput.value = '';
+
+  loadingAnswer.value = true;
+  showAnswer.value = false;
+  appStore.addHistory(currentDisplayQuestion.value);
+  startStream(currentDisplayQuestion.value);
 };
-// 开始流式请求
-const startStream = async () => {
+
+// 优化后的开始流式请求函数
+const startStream = async (queryText: string) => {
   try {
     // 重置状态
     isStreaming.value = true;
@@ -135,11 +181,13 @@ const startStream = async () => {
     reasoningContent.value = '';
     events.value = [];
     isCancelled = false;
+
     const params = {
       inputs: {
-        query: questionInput.value,
+        query: queryText, // 使用传入的问题文本
       },
     };
+
     // 创建AbortController用于取消请求
     abortController.value = new AbortController();
 
@@ -149,12 +197,13 @@ const startStream = async () => {
       {
         method: 'post',
         headers: {
-          'X-Auth-Token': 'MIIPsAYJKoZIhvcNAQcCoIIPoTCCD50CAQExDTALBglghkgBZQMEAgEwgg3CBgkqhkiG9w0BBwGggg2zBIINr3sidG9rZW4iOnsiZXhwaXJlc19hdCI6IjIwMjYtMDQtMDNUMDA6MjI6MjAuMzQzMDAwWiIsInNpZ25hdHVyZSI6IkVBcGpiaTF1YjNKMGFDMDBBQUFBQUFBQUJMc2t0UXBUTmV0cnlqQUN0SmVkRnJFbmV2VXJGOUdxUk1TQSttKzhJb2JITWlSanlkYlgxWXVuYVJuc2VzVkZPdDRaYVNXY2NQY3MvMWQzbTFOaVBndnUzVEV4RmhrY2I1ZTlsSDBKaGIzajhGK2hSZG1xS2NRNXpOL2doSWQ2aFVLdVo0TVk5bTl1OUdPYW1EdThkVE9LNFBzYW43QzBPb2xHcXFucm1ybnJhQ1lFQmNCRFdERHFjMXlUVVlKZVRzNnZwQnZZOU81RWlid2NFK09wQkpGZlY2alFldmFzWUFyZnhSWUNudXNaUWRodXdWengzd2dPOXFiMmVwUUorVlpNV2NvRTFIV0N6dzV4dnBMQlJUTXB3TktDYURXQzY1QUhUenM5dTA1dFNKNkE3V3pQb1RvK1lWRG9uWktDUm1RaEVuM1RaL0Y5RkV1ZnpnZWUyd2RJIiwibWV0aG9kcyI6WyJwYXNzd29yZCJdLCJjYXRhbG9nIjpbXSwicm9sZXMiOlt7Im5hbWUiOiJhcGlnX2FkbSIsImlkIjoiMCJ9LHsibmFtZSI6ImFwbV9hZG0iLCJpZCI6IjAifSx7Im5hbWUiOiJhcGlnd19hZG0iLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9jc2JzX3JlcF9hY2NlbGVyYXRpb24iLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9lY3NfZGlza0FjYyIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2Rzc19tb250aCIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX29ic19kZWVwX2FyY2hpdmUiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9hX2NuLXNvdXRoLTRjIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfZGVjX21vbnRoX3VzZXIiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9jYnJfc2VsbG91dCIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2Vjc19vbGRfcmVvdXJjZSIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2V2c19Sb3lhbHR5IiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfd2VsaW5rYnJpZGdlX2VuZHBvaW50X2J1eSIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2Nicl9maWxlIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfZG1zLXJvY2tldG1xNS1iYXNpYyIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2V2c19FU2luZ2xlX2NvcHlTU0QiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9kbXMta2Fma2EzIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfb2JzX2RlY19tb250aCIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2NzYnNfcmVzdG9yZSIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2Nicl92bXdhcmUiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9pZG1lX21ibV9mb3VuZGF0aW9uIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfcGNfdmVuZG9yX3N1YnVzZXIiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9tdWx0aV9iaW5kIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfZXZzX3NzZF9lbnRyeSIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX3Ntbl9jYWxsbm90aWZ5IiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfYV9hcC1zb3V0aGVhc3QtM2QiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9jc2JzX3Byb2dyZXNzYmFyIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfY2VzX3Jlc291cmNlZ3JvdXBfdGFnIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfZXZzX3JldHlwZSIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2tvb21hcCIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2Rtcy1hbXFwLWJhc2ljIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfZXZzX3Bvb2xfY2EiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9hX2NuLXNvdXRod2VzdC0yYiIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2h3Y3BoIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfZWNzX29mZmxpbmVfZGlza180IiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfc21uX3dlbGlua3JlZCIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2h2X3ZlbmRvciIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2FfY24tbm9ydGgtNGUiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9hX2NuLW5vcnRoLTRkIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfZWNzX2hlY3NfeCIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2Nicl9maWxlc19iYWNrdXAiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9lY3NfYWM3IiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfY3Nic19yZXN0b3JlX2FsbCIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2FfY24tbm9ydGgtNGYiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9vcF9nYXRlZF9yb3VuZHRhYmxlIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfZXZzX2V4dCIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX3Bmc19kZWVwX2FyY2hpdmUiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9hX2FwLXNvdXRoZWFzdC0xZSIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2FfcnUtbW9zY293LTFiIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfYV9hcC1zb3V0aGVhc3QtMWQiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9hX2FwLXNvdXRoZWFzdC0xZiIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX3Ntbl9hcHBsaWNhdGlvbiIsImlkIjoiMCJ9LHsibmFtZSI6Im9wX2dhdGVkX2V2c19jb2xkIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfZWNzX2dwdV9nNXIiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9vcF9nYXRlZF9tZXNzYWdlb3ZlcjVnIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfZWNzX3JpIiwiaWQiOiIwIn0seyJuYW1lIjoib3BfZ2F0ZWRfYV9ydS1ub3J0aHdlc3QtMmMiLCJpZCI6IjAifSx7Im5hbWUiOiJvcF9nYXRlZF9pZWZfcGxhdGludW0iLCJpZCI6IjAifSx7Im5hbWUiOiIzMTIsMjU5LDE0NCwyOSwzNiwyNTcsMzAsMjU2LDcyLDI2MCw0OTQsNjUsNDkzLDIyOSwxMTEsMjU4LDExMCIsImlkIjoiOCJ9LHsibmFtZSI6IjQsMTEsMCwxMywyLDEsMTgsMywxNSwxNCwxMiIsImlkIjoiOSJ9LHsibmFtZSI6Im9wX2ZpbmVfZ3JhaW5lZCIsImlkIjoiNyJ9XSwicHJvamVjdCI6eyJkb21haW4iOnsibmFtZSI6ImhpZF9iNWh0cmlnMXgtamNsam4iLCJpZCI6IjgzN2M3YzdhYmU3ZjQxYmY5MzU2OWI4MmQ3MTQwYTdhIn0sIm5hbWUiOiJjbi1ub3J0aC00IiwiaWQiOiIxNzI1YzQzZTNmYTU0ODI4YTA3OGZjZTYwZjVhMzc3MyJ9LCJpc3N1ZWRfYXQiOiIyMDI2LTA0LTAyVDAwOjIyOjIwLjM0MzAwMFoiLCJ1c2VyIjp7ImRvbWFpbiI6eyJuYW1lIjoiaGlkX2I1aHRyaWcxeC1qY2xqbiIsImlkIjoiODM3YzdjN2FiZTdmNDFiZjkzNTY5YjgyZDcxNDBhN2EifSwibmFtZSI6ImFnZW50LWRldjA1IiwicGFzc3dvcmRfZXhwaXJlc19hdCI6IiIsImlkIjoiOTIzOTZhYjI3ZTc1NDgyY2EyYjljMjk4MzcxZjliMmQifX19MYIBwTCCAb0CAQEwgZcwgYkxCzAJBgNVBAYTAkNOMRIwEAYDVQQIDAlHdWFuZ0RvbmcxETAPBgNVBAcMCFNoZW5aaGVuMS4wLAYDVQQKDCVIdWF3ZWkgU29mdHdhcmUgVGVjaG5vbG9naWVzIENvLiwgTHRkMQ4wDAYDVQQLDAVDbG91ZDETMBEGA1UEAwwKY2EuaWFtLnBraQIJANyzK10QYWoQMAsGCWCGSAFlAwQCATANBgkqhkiG9w0BAQEFAASCAQA8wazkh4IhBUT54quOVs6cxpNA-cgb2CzItJtq9iqqIIJKrpiXxCCWqfrBqjuCzoP9z4JDpOQ8oQ4q0B9wmOeiLpwbaOtHNE6T8H49c8lfMuShzW1lfBz1jx6+GOSjt8IyuHRMDzfwumgD2x3kjX0utAqX5jSC6BKrIKF0h-4cv9CrdBmVqDk9ewP3tnObww7SuJpI5Bc71cAqYO1PlFYJPP5uliFKHMjk1vevXEq7lE5Lpfyxm354M3B2GrbSqlgjaJEIbpUIQSm0URAqyGTE0e6V7nrbXlSWvhyJ797-gRzQYQASuKh9ieo9NiyCEaP3rDNGT0X8aLzNPwG2ojP8',
+          'X-Auth-Token': appStore.sharedDataToken!,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(params),
       },
     );
+
     if (!response.ok || !response.body) {
       throw new Error(`网络响应异常: ${response.status}`);
     }
@@ -248,8 +297,28 @@ const handleEvent = (data: any) => {
       console.log('未知事件:', data.event);
   }
 };
+
 const md = new MarkdownIt();
 const renderedMarkdown = computed(() => md.render(finalContent.value));
+
+// 优化后的重置答案函数
+const resetAnswer = () => {
+  // 检查是否有上一次发送的问题
+  if (!lastSentQuestion.value.trim()) {
+    // 如果没有上一次的问题，尝试使用当前显示的问题
+    if (!currentDisplayQuestion.value.trim()) {
+      ElMessage.warning('没有找到可以重新回答的问题');
+      return;
+    }
+    lastSentQuestion.value = currentDisplayQuestion.value;
+  }
+
+  // 重新回答上一次发送的问题
+  loadingAnswer.value = true;
+  showAnswer.value = false;
+  // 这里不需要添加到历史记录，因为是重新回答同一个问题
+  startStream(lastSentQuestion.value);
+};
 
 // 停止流
 const stopStream = () => {
@@ -265,12 +334,6 @@ const stopStream = () => {
 
 const goback = () => {
   loadingAnswer.value = false;
-};
-
-// 重置答案
-const resetAnswer = () => {
-  showAnswer.value = false;
-  handleSendQuestion();
 };
 
 onMounted(() => {
@@ -303,7 +366,7 @@ onUnmounted(() => {
 
   .input-container {
     max-width: 850px;
-    margin: 0 auto;
+    margin: 20px auto;
     position: relative;
 
     .el-textarea__inner {
@@ -321,6 +384,13 @@ onUnmounted(() => {
     :deep(.el-textarea__inner) {
       border-radius: 10px;
     }
+  }
+
+  .as {
+    padding: 24px;
+    filter: drop-shadow(0px 5px 5px rgba(0, 0, 0, 0.19215686274509805));
+    background-color: @white;
+    border-radius: 8px;
   }
 
   .lefticon {
@@ -361,7 +431,7 @@ onUnmounted(() => {
   .send-btn {
     position: absolute;
     right: 15px;
-    bottom: 50px;
+    bottom: 13px;
     background-color: @primary-color;
     color: @white;
     border: none;
@@ -376,6 +446,11 @@ onUnmounted(() => {
     &:hover {
       background-color: #40a9ff;
     }
+  }
+
+  .bottom{
+     bottom: 33px;
+     right: 33px
   }
 
   .suggestions {
