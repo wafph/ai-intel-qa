@@ -25,6 +25,8 @@
       <el-button
         v-for="(suggestion, index) in suggestions"
         :key="index"
+        type="primary"
+        plain
         class="suggestion-btn"
         @click="setQuestion(suggestion)"
       >
@@ -420,17 +422,18 @@ onUnmounted(() => {
   }
   .suggestions {
     display: flex;
+    flex-direction: column;
+    align-items: flex-start;
     flex-wrap: wrap;
     max-width: 850px;
+    gap: 20px;
     margin: 20px auto;
     .suggestion-btn {
-      padding: 10px 20px;
-      background-color: @white;
+      padding: 16px 20px;
+      background-color: #f0f7ff;
       border: 1px solid @border-color-light;
       border-radius: 20px;
-      color: @text-color-secondary;
-      font-size: 14px;
-      cursor: pointer;
+      margin-left: 0;
       transition: all 0.2s;
       &:hover {
         background-color: #eef5ff;
