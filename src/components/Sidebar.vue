@@ -2,9 +2,7 @@
   <div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
     <div class="sidebar-header">
       <div class="logo">
-        <el-icon :size="20" color="#1890ff">
-          <Platform />
-        </el-icon>
+        <img src="../../public/logos.png" alt="">
         <span v-if="!sidebarCollapsed">AI+规章制度智能体</span>
       </div>
       <div class="collapse-btn" @click="toggleSidebar">
@@ -51,8 +49,6 @@ import { computed } from 'vue';
 import { useAppStore } from '../stores/app';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia'; // 添加这行
-import { Platform,  } from '@element-plus/icons-vue';
-
 const router = useRouter();
 const appStore = useAppStore();
 
@@ -114,10 +110,14 @@ const handleMenuClick = (menuId: string) => {
     justify-content: space-between;
 
     .logo {
+      img{
+        width: 20px;
+        height: 20px;
+        margin-right: 10px;
+      }
       display: flex;
       align-items: center;
-      color: @primary-color;
-      font-size: 18px;
+      font-size: 20px;
       font-weight: 600;
       white-space: nowrap;
 
@@ -128,6 +128,8 @@ const handleMenuClick = (menuId: string) => {
   }
 
   .collapse-btn {
+    width: 18px;
+    height: 18px;
     cursor: pointer;
     color: @info-color;
     font-size: 18px;

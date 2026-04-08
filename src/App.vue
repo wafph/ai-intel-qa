@@ -43,13 +43,17 @@ const handleHistoryClick = () => {
 
 .content-area {
   flex: 1;
-  overflow-y: auto;
   background-color: @bg-color;
+  .header{
+    position: fixed;
+    width: calc(100% - 260px);
+  }
 
   .content-card {
     border-radius: 8px;
     padding: 24px;
     min-height: calc(100% - 65px);
+    margin-top: 60px;
   }
 }
 

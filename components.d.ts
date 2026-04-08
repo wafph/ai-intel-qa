@@ -19,8 +19,6 @@ declare module 'vue' {
     ElCollapseItem: typeof import('element-plus/es')['ElCollapseItem']
     ElIcon: typeof import('element-plus/es')['ElIcon']
     ElInput: typeof import('element-plus/es')['ElInput']
-    ElOption: typeof import('element-plus/es')['ElOption']
-    ElSelect: typeof import('element-plus/es')['ElSelect']
     IntelligentQA: typeof import('./src/components/IntelligentQA.vue')['default']
     IntelligentRetrieval: typeof import('./src/components/IntelligentRetrieval.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']

@@ -1,27 +1,134 @@
 <template>
   <div class="intelligent-qa">
-    <!-- 模板部分保持不变 -->
-    <div class="qa-header" v-if="!showAnswer && !loadingAnswer">
+    <!-- 头部区域 -->
+    <div class="qa-header" v-if="!loadingAnswer && conversationHistory.length === 0">
       <h1>我是问答助手，很高兴见到你</h1>
       <p>你可以使用自然语言提问，我来精准回答</p>
     </div>
 
-    <div class="input-container" v-if="!showAnswer && !loadingAnswer">
+    <!-- 历史对话列表 -->
+    <div class="conversation-history" v-if="conversationHistory.length > 0">
+      <div
+        v-for="(item, index) in conversationHistory"
+        :key="index"
+        :class="[
+          'history-item',
+          item.role === 'user' ? 'user-message' : 'assistant-message',
+        ]"
+      >
+        <!-- 用户消息 -->
+        <div v-if="item.role === 'user'" class="message-user">
+          <div class="message-header">
+            <div class="avatar user-avatar">
+              <img src="../../public/user.svg" alt="用户" />
+            </div>
+            <div class="message-info">
+              <div class="message-content">{{ item.content }}</div>
+              <div class="message-time">{{ formatTime(item.timestamp) }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI回复消息 -->
+        <div v-else class="message-assistant">
+          <div class="message-header">
+            <div class="avatar ai-avatar">
+              <span>🤖</span>
+            </div>
+            <div class="message-info">
+              回复
+              <div
+                class="message-content pad"
+               :id="'pdf-dom-' + item.id"
+                v-html="renderedMarkdown(item.content)"
+              ></div>
+              <div class="message-time">{{ formatTime(item.timestamp) }}</div>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: flex-end">
+            <div class="action-buttons">
+              <el-button
+                size="small"
+                type="success"
+                plain
+                :loading="loading"
+                @click="pdfFunc"
+              >
+                <el-icon>
+                  <Download />
+                </el-icon>
+                导出
+              </el-button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 当前回答加载中 -->
+      <div
+        v-if="loadingAnswer && currentDisplayQuestion"
+        class="history-item assistant-message"
+      >
+        <div class="message-header">
+          <div class="avatar ai-avatar">
+            <span>🤖</span>
+          </div>
+          <div class="message-info">
+            <div v-if="!showAnswer" class="thinking-indicator">
+              <div class="thinking-dots">
+                <p class="think">思考中</p>
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <div class="reasoning-content" v-if="reasoningContent">
+                {{ reasoningContent }}
+              </div>
+            </div>
+            <div
+              v-else
+              class="message-content pad"
+              v-html="renderedMarkdown(finalContent)"
+            ></div>
+            <div class="message-time">{{ formatTime(new Date()) }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 返回按钮（在对话历史存在时显示） -->
+    <el-icon
+      v-if="conversationHistory.length > 0 && !loadingAnswer"
+      class="back-icon"
+      @click="goback"
+    >
+      <ArrowLeftBold />
+    </el-icon>
+
+    <!-- 输入区域（始终显示） -->
+    <div class="input-container">
       <el-input
-        v-model="questionInput"
+        v-model="currentQuestion"
         :placeholder="questionPlaceholder"
         style="height: 60px; border-radius: 20px"
         @keydown.enter.exact.prevent="handleSendQuestion"
+        clearable
+        :disabled="loadingAnswer"
       />
-      <button class="send-btn" @click="handleSendQuestion">
+      <button
+        class="send-btn"
+        @click="handleSendQuestion"
+        :disabled="!currentQuestion.trim() || loadingAnswer"
+      >
         <el-icon class="mr-8">
           <Promotion />
         </el-icon>
-        发送
+        {{ loadingAnswer ? '发送中...' : '发送' }}
       </button>
     </div>
 
-    <div v-if="!showAnswer && !loadingAnswer" class="suggestions">
+    <!-- 快捷问题建议（仅在无历史对话时显示） -->
+    <div v-if="!loadingAnswer && conversationHistory.length === 0" class="suggestions">
       <el-button
         v-for="(suggestion, index) in suggestions"
         :key="index"
@@ -33,79 +140,14 @@
         {{ suggestion }}
       </el-button>
     </div>
-
-    <el-icon v-if="loadingAnswer" class="lefticon">
-      <ArrowLeftBold @click="goback" />
-    </el-icon>
-
-    <el-card class="res-container" v-if="loadingAnswer || showAnswer">
-      <div class="anser-input">
-        <div class="right-input">{{ currentDisplayQuestion }}</div>
-        <img src="../../public/user.svg" alt="" />
-      </div>
-    </el-card>
-
-    <div v-if="!showAnswer && loadingAnswer" class="result-container">
-      <div class="result-header">
-        <div class="result-title">思考中...</div>
-      </div>
-      <div class="text-center">
-        <div class="reasoning-content">{{ reasoningContent }}</div>
-      </div>
-    </div>
-
-    <div v-if="showAnswer" class="result-container">
-      <div class="result-header">
-        <div class="result-title">回复</div>
-      </div>
-      <div class="result-content" id="pdfDom" v-html="renderedMarkdown"></div>
-      <div style="display: flex; align-items: center; margin-top: 20px">
-        <div class="source-tag">3个来源</div>
-        <div class="action-buttons">
-          <el-button
-            size="small"
-            type="success"
-            plain
-            :loading="loading"
-            @click="pdfFunc"
-          >
-            <el-icon>
-              <Download />
-            </el-icon>
-            导出
-          </el-button>
-          <el-button size="small" @click="resetAnswer">
-            <el-icon>
-              <Refresh />
-            </el-icon>
-            重新回答
-          </el-button>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="showAnswer" class="input-container">
-      <el-input
-        v-model="newQuestionInput"
-        placeholder="您好，请输入你的问题"
-        style="height: 60px; border-radius: 20px"
-        @keydown.enter.exact.prevent="handleSendQuestion"
-      />
-      <button class="send-btn" @click="handleSendQuestion">
-        <el-icon class="mr-8">
-          <Promotion />
-        </el-icon>
-        发送
-      </button>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import MarkdownIt from 'markdown-it';
 import { useAppStore } from '../stores/app';
-import { Promotion, Download, Refresh } from '@element-plus/icons-vue';
+import { Promotion, Download } from '@element-plus/icons-vue';
 import htmlToPdf from '../utils/htmlToPdf';
 
 // 状态变量
@@ -118,27 +160,96 @@ const reader = ref<ReadableStreamDefaultReader<Uint8Array> | null>(null);
 const abortController = ref<AbortController | null>(null);
 let isCancelled = false;
 
-// --- 输入框变量定义 ---
-// 初始状态输入框绑定的变量
-const questionInput = ref('');
-// 新增：回答显示后，下方输入框绑定的独立变量
-const newQuestionInput = ref('');
-// 用于在回答区域显示的问题文本（即实际发送出去的问题）
-const currentDisplayQuestion = ref('');
-// 新增：保存上一次发送的问题，用于重新回答
-const lastSentQuestion = ref('');
-// --- 输入框变量定义结束 ---
-
-const questionPlaceholder = '您好，请输入你的问题';
+// 输入框变量
+const currentQuestion = ref('');
+const questionPlaceholder = '您好，请输入您的问题';
 const suggestions = [
   '规章制度各层级审批主体是什么？',
   '规章制度起草程序及起草说明核心内容有哪些？',
   '规章制度需修订或废止的情形及程序区别是什么？',
 ];
 
+// 对话历史
+interface ConversationItem {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  id: string;
+}
+
+const conversationHistory = ref<ConversationItem[]>([]);
+const currentDisplayQuestion = ref('');
+
 // 回答状态
 const loadingAnswer = ref(false);
 const showAnswer = ref(false);
+
+// 加载历史对话
+const loadConversationHistory = () => {
+  const saved = localStorage.getItem('conversationHistory');
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      conversationHistory.value = parsed.map((item: any) => ({
+        ...item,
+        timestamp: new Date(item.timestamp),
+      }));
+    } catch (e) {
+      console.error('加载历史对话失败:', e);
+    }
+  }
+};
+
+// 保存历史对话
+const saveConversationHistory = () => {
+  try {
+    localStorage.setItem(
+      'conversationHistory',
+      JSON.stringify(conversationHistory.value),
+    );
+  } catch (e) {
+    console.error('保存历史对话失败:', e);
+  }
+};
+
+// 格式化时间
+const formatTime = (date: Date) => {
+  return date.toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+};
+
+// 组件挂载时加载历史记录
+onMounted(() => {
+  loadConversationHistory();
+  // 自动滚动到底部
+  setTimeout(() => {
+    scrollToBottom();
+  }, 100);
+});
+
+// 监听对话历史变化，自动保存
+watch(
+  conversationHistory,
+  () => {
+    saveConversationHistory();
+    // 滚动到底部
+    nextTick(() => {
+      scrollToBottom();
+    });
+  },
+  { deep: true },
+);
+
+// 滚动到底部
+const scrollToBottom = () => {
+  const container = document.querySelector('.conversation-history');
+  if (container) {
+    container.scrollTop = container.scrollHeight;
+  }
+};
 
 // PDF导出功能
 const pdfFunc = () => {
@@ -151,58 +262,43 @@ const pdfFunc = () => {
 
 const appStore = useAppStore();
 const md = new MarkdownIt();
-const renderedMarkdown = computed(() => md.render(finalContent.value));
+const renderedMarkdown = computed(() => (content: string) => md.render(content));
 
 // 设置问题（点击推荐问题）
 const setQuestion = (question: string) => {
-  // 根据当前所在区域，设置到对应的输入框变量
-  if (showAnswer.value) {
-    // 如果在回答页面，就设置到下方独立的输入框
-    newQuestionInput.value = question;
-  } else {
-    // 如果在初始页面，就设置到主输入框
-    questionInput.value = question;
-  }
-  // 自动发送
+  currentQuestion.value = question;
   handleSendQuestion();
 };
 
-// 优化后的发送问题函数
-const handleSendQuestion = () => {
-  let questionToSend = '';
-  let inputFieldToClear = null;
+// 发送问题
+const handleSendQuestion = async () => {
+  const question = currentQuestion.value.trim();
+  if (!question || loadingAnswer.value) return;
 
-  // 决策逻辑：根据当前界面状态，决定使用哪个输入框的内容
-  if (showAnswer.value) {
-    // 场景：在查看回答时，发送下方新输入框的内容
-    questionToSend = newQuestionInput.value.trim();
-    inputFieldToClear = newQuestionInput; // 发送后需要清空这个变量
-  } else {
-    // 场景：在初始页面，发送主输入框的内容
-    questionToSend = questionInput.value.trim();
-    inputFieldToClear = questionInput; // 发送后需要清空这个变量
-  }
+  // 保存用户问题
+  const userMessage: ConversationItem = {
+    id: Date.now().toString(),
+    role: 'user',
+    content: question,
+    timestamp: new Date(),
+  };
 
-  // 输入验证
-  if (!questionToSend) {
-    return; // 如果内容为空，则不执行任何操作
-  }
+  conversationHistory.value.push(userMessage);
+  currentDisplayQuestion.value = question;
+  currentQuestion.value = '';
 
-  // 更新当前显示的问题（用于在回答区域顶部展示）
-  currentDisplayQuestion.value = questionToSend;
-  // 保存上一次发送的问题
-  lastSentQuestion.value = questionToSend;
-  // 清空对应的输入框变量，实现"发送后输入框为空"
-  inputFieldToClear.value = '';
-
-  // 设置状态并开始流式请求
+  // 开始加载
   loadingAnswer.value = true;
   showAnswer.value = false;
-  appStore.addHistory(questionToSend);
-  startStream(questionToSend); // 将问题文本传递给请求函数
+  finalContent.value = '';
+  reasoningContent.value = '';
+  appStore.addHistory(question);
+
+  // 调用API
+  await startStream(question);
 };
 
-// 修改后的流式请求函数，接收问题参数
+// 流式请求
 const startStream = async (queryText: string) => {
   try {
     isStreaming.value = true;
@@ -213,14 +309,14 @@ const startStream = async (queryText: string) => {
 
     const params = {
       inputs: {
-        query: queryText, // 使用传入的问题文本
+        query: queryText,
       },
     };
 
     abortController.value = new AbortController();
 
     const response = await fetch(
-      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/agents/52512531-0a97-480f-bd5c-5f4fd0df61c4/conversations/8c5ea263-0bc2-4caa-921a-ace8de0aeb38?version=1775138708331',
+      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/agents/52512531-0a97-480f-bd5c-5f4fd0df61c4/conversations/a7033bd9-fb91-4d29-848b-8cb85198363d?version=1775547376145',
       {
         method: 'post',
         headers: {
@@ -238,189 +334,394 @@ const startStream = async (queryText: string) => {
 
     reader.value = response.body.getReader();
     const decoder = new TextDecoder();
+    let assistantMessageContent = '';
 
     while (true) {
       if (isCancelled) break;
       const { done, value } =
         (await reader.value!.read()) as ReadableStreamReadResult<Uint8Array>;
       if (done) {
+        // 流式接收完成，保存AI回复到历史
+        if (assistantMessageContent.trim()) {
+          const assistantMessage: ConversationItem = {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: assistantMessageContent,
+            timestamp: new Date(),
+          };
+          conversationHistory.value.push(assistantMessage);
+        }
+
         loadingAnswer.value = false;
         break;
       }
+
       const chunk = decoder.decode(value, { stream: true });
-      processChunk(chunk);
+      const processedContent = processChunk(chunk);
+
+      if (processedContent) {
+        assistantMessageContent += processedContent;
+        finalContent.value = assistantMessageContent;
+        showAnswer.value = true;
+      }
     }
   } catch (error: any) {
     if (error?.name !== 'AbortError') {
       console.error('获取流数据时出错:', error);
+      // 添加错误消息
+      const errorMessage: ConversationItem = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: '抱歉，回答过程中出现错误，请稍后重试。',
+        timestamp: new Date(),
+      };
+      conversationHistory.value.push(errorMessage);
     }
   } finally {
     isStreaming.value = false;
+    loadingAnswer.value = false;
     reader.value = null;
   }
 };
 
 // 处理数据块
-const processChunk = (chunk: any) => {
+const processChunk = (chunk: string) => {
   const lines = chunk.split('\n');
-  lines.forEach((line: any) => {
+  let content = '';
+
+  lines.forEach((line: string) => {
     if (line.startsWith('data:')) {
       const dataLine = line.substring(5).trim();
       if (dataLine) {
         try {
           const parsedData = JSON.parse(dataLine);
-          if (parsedData.content) {
-            showAnswer.value = true;
+          if (parsedData.event === 'message') {
+            if (parsedData.reasoning_content) {
+              reasoningContent.value += parsedData.reasoning_content;
+            } else if (parsedData.content) {
+              content += parsedData.content;
+            }
           }
-          handleEvent(parsedData);
         } catch (error) {
           console.error('解析JSON失败:', error, '原始数据:', dataLine);
         }
       }
     }
   });
+
+  return content;
 };
 
-const handleEvent = (data: any) => {
-  switch (data.event) {
-    case 'message':
-      if (data.reasoning_content) {
-        reasoningContent.value += data.reasoning_content;
-      } else if (data.content) {
-        finalContent.value += data.content;
-      }
-      break;
-    case 'done':
-      isStreaming.value = false;
-      break;
-    default:
-      break;
-  }
-};
-
+// 停止流
 const stopStream = () => {
   abortController.value?.abort();
   reader.value?.cancel();
   isCancelled = true;
   isStreaming.value = false;
-};
-
-const goback = () => {
   loadingAnswer.value = false;
 };
 
-// 优化后的重置答案函数
-const resetAnswer = () => {
-  // 检查是否有上一次发送的问题
-  if (!lastSentQuestion.value.trim()) {
-    // 如果没有上一次的问题，尝试使用当前显示的问题
-    if (!currentDisplayQuestion.value.trim()) {
-      console.warn('没有找到可以重新回答的问题');
-      return;
-    }
-    lastSentQuestion.value = currentDisplayQuestion.value;
-  }
-
-  // 重新回答上一次发送的问题
-  // 清除当前答案
-  finalContent.value = '';
-  // 进入加载状态
-  loadingAnswer.value = true;
-  showAnswer.value = false;
-  // 重新发送相同的问题
-  startStream(lastSentQuestion.value);
+const goback = () => {
+  conversationHistory.value.length = 0;
+  loadingAnswer.value = false;
 };
 
+// 组件卸载时停止流
 onUnmounted(() => {
   stopStream();
 });
 </script>
 
 <style lang="less" scoped>
-/* 样式部分保持不变 */
 .intelligent-qa {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 20px;
+  background-color: #f5f7fa;
+  position: relative;
+
   .qa-header {
     text-align: center;
-    margin-bottom: 20px;
+    margin-bottom: 40px;
+    margin-top: 60px;
+
     h1 {
       font-size: 28px;
-      color: @text-color;
+      color: #303133;
       margin-bottom: 12px;
+      font-weight: 600;
     }
+
     p {
       font-size: 16px;
-      color: @text-color-secondary;
+      color: #606266;
     }
   }
-  .input-container {
-    max-width: 850px;
-    height: 105px;
-    margin: 15px auto;
-    padding: 24px;
-    filter: drop-shadow(0px 5px 5px rgba(0, 0, 0, 0.19215686274509805));
-    background-color: @white;
-    border-radius: 8px;
-    position: relative;
-    .el-textarea__inner {
-      padding: 16px;
-      font-size: 16px;
-      border-radius: 8px;
-      border: 1px solid @border-color;
-      resize: none;
-      min-height: 120px;
-      &:focus {
-        border-color: @primary-color;
+
+  .conversation-history {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+
+    .history-item {
+      max-width: 850px;
+      margin: 0 auto;
+      animation: slideIn 0.3s ease-out;
+
+      &.user-message {
+        align-self: flex-end;
+        width: 100%;
+
+        .message-user {
+          .message-header {
+            flex-direction: row-reverse;
+
+            .avatar {
+              margin-left: 12px;
+              margin-right: 0;
+            }
+
+            .message-info {
+              max-width: 850px;
+              align-items: flex-end;
+
+              .message-content {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border-radius: 12px;
+              }
+
+              .message-time {
+                text-align: right;
+              }
+            }
+          }
+        }
+      }
+
+      &.assistant-message {
+        align-self: flex-start;
+        width: 100%;
+
+        .message-header {
+          .message-info {
+            max-width: 850px; /* 固定AI消息内容区域最大宽度 */
+            width: 100%; /* 确保宽度充满但不超过最大限制 */
+
+            .message-content {
+              width: 100%; /* 固定内容宽度，不随内容撑开 */
+              max-width: 100%; /* 覆盖之前的max-width: 700px */
+              box-sizing: border-box; /* 确保padding和border包含在宽度内 */
+              background: white;
+              color: #303133;
+              border-radius: 12px;
+              box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+
+              :deep(pre) {
+                background-color: #f6f8fa;
+                border-radius: 6px;
+                padding: 12px;
+                overflow-x: auto;
+                margin: 8px 0;
+
+                code {
+                  font-family: 'Consolas', 'Monaco', monospace;
+                }
+              }
+
+              :deep(code) {
+                background-color: #f6f8fa;
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 0.9em;
+              }
+            }
+
+            .pad {
+              padding: 20px 40px;
+            }
+
+            .thinking-indicator {
+              width: 100%; /* 固定思考指示器宽度 */
+              box-sizing: border-box; /* 确保padding和border包含在宽度内 */
+              display: flex;
+              flex-direction: column;
+              gap: 8px;
+              padding: 12px 16px;
+              background: white;
+              border-radius: 12px;
+              box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+
+              .thinking-dots {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+
+                .think {
+                  color: #303133;
+                  font-size: 18px;
+                  font-weight: 600;
+                }
+
+                span {
+                  width: 5px;
+                  height: 5px;
+                  border-radius: 50%;
+                  background-color: #409eff;
+                  animation: blink 1.4s infinite;
+
+                  &:nth-child(2) {
+                    animation-delay: 0.2s;
+                  }
+
+                  &:nth-child(3) {
+                    animation-delay: 0.4s;
+                  }
+                }
+              }
+
+              .reasoning-content {
+                font-size: 15px;
+                color: #909399;
+                width: 100%;
+                word-break: break-word;
+              }
+            }
+          }
+        }
       }
     }
-    :deep(.el-input__wrapper) {
-      border-radius: 10px;
-    }
   }
-  .lefticon {
-    position: absolute;
-    left: 300px;
-    top: 110px;
-    font-size: 23px;
-    color: #4285f4;
-  }
-  .res-container {
-    max-width: 850px;
-    margin: auto;
-    text-align: right;
-    :deep(.el-card__body) {
-      padding: 8px;
-    }
-    .anser-input {
+
+  .message-header {
+    display: flex;
+    align-items: flex-start;
+    max-width: 100%;
+
+    .avatar {
+      flex-shrink: 0;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
       display: flex;
       align-items: center;
-      justify-content: flex-end;
-      .right-input {
-        background: #f2f2f2;
-        padding: 10px;
-        border-radius: 12px;
-        margin-right: 20px;
+      justify-content: center;
+      overflow: hidden;
+      margin-right: 12px;
+
+      &.user-avatar {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+
+        img {
+          width: 24px;
+          height: 24px;
+          filter: brightness(0) invert(1);
+        }
+      }
+
+      &.ai-avatar {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        font-size: 20px;
+        color: white;
+      }
+    }
+
+    .message-info {
+      margin-top: 7px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+
+      .message-content {
+        padding: 10px 20px;
+        line-height: 1.6;
+        word-break: break-word;
+      }
+
+      .message-time {
+        font-size: 15px;
+        color: #909399;
+        padding: 0 4px;
       }
     }
   }
-  .send-btn {
-    position: absolute;
-    right: 35px;
-    bottom: 30px;
-    background-color: @primary-color;
-    color: @white;
-    border: none;
-    border-radius: 6px;
-    padding: 10px 20px;
-    font-size: 14px;
+
+  .back-icon {
+    position: fixed;
+    font-size: 23px;
+    color: #4285f4;
     cursor: pointer;
-    transition: background-color 0.2s;
-    display: flex;
-    align-items: center;
-    &:hover {
-      background-color: #40a9ff;
+  }
+
+  .input-container {
+    max-width: 850px;
+    width: 100%;
+    margin: 0 auto 70px;
+    padding: 20px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    position: relative;
+
+    :deep(.el-input__wrapper) {
+      border-radius: 20px;
+      padding: 0 20px;
+      font-size: 15px;
+      border: 1px solid #e4e7ed;
+      transition: all 0.3s ease;
+
+      &:hover,
+      &:focus,
+      &.is-focus {
+        border-color: #409eff;
+        box-shadow: none;
+      }
+    }
+
+    .send-btn {
+      position: absolute;
+      right: 35px;
+      bottom: 30px;
+      background: #1890ff;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 24px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 80px;
+
+      &:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(64, 158, 255, 0.4);
+      }
+
+      &:disabled {
+        background: #c0c4cc;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+      }
+
+      .mr-8 {
+        margin-right: 8px;
+      }
     }
   }
+
   .suggestions {
+    width: 100%;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -428,83 +729,66 @@ onUnmounted(() => {
     max-width: 850px;
     gap: 20px;
     margin: 20px auto;
+
     .suggestion-btn {
-      padding: 16px 20px;
+      padding: 12px 24px;
       background-color: #f0f7ff;
       border: 1px solid @border-color-light;
       border-radius: 20px;
       margin-left: 0;
       transition: all 0.2s;
+
       &:hover {
-        background-color: #eef5ff;
-        border-color: @primary-color;
-        color: @primary-color;
+        border-color: #409eff;
+        color: #409eff;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(64, 158, 255, 0.1);
       }
     }
   }
-  .result-container {
-    max-width: 850px;
-    min-height: 400px;
-    margin: 40px auto 0;
-    padding: 24px;
-    filter: drop-shadow(0px 5px 5px rgba(0, 0, 0, 0.19215686274509805));
-    background-color: @white;
-    border-radius: 8px;
-    .reasoning-content {
-      min-height: 50px;
-      padding: 0 10px 10px 10px;
-      margin: 10px 0;
-      text-align: left;
-      color: gray;
-      background-color: white;
-      border-left: 1px solid #eee;
-      border-radius: 4px;
-      white-space: pre-wrap;
-    }
-    .result-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 16px;
-      .result-title {
-        font-size: 18px;
-        font-weight: 600;
-        color: @text-color;
-        border-left: 4px solid @primary-color;
-        padding-left: 15px;
-      }
-    }
-    .result-content {
-      line-height: 1.6;
-      color: @text-color-secondary;
-      padding: 15px 10px 10px 35px;
-      border: 1px solid lightgray;
-      border-radius: 7px;
-      ol {
-        padding-left: 20px;
-        margin: 12px 0;
-        li {
-          margin-bottom: 8px;
+
+  .action-buttons {
+    display: flex;
+    padding: 10px;
+    gap: 12px;
+    justify-content: flex-end;
+
+    :deep(.el-button) {
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 500;
+
+      &.el-button--success {
+        background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%);
+        border: none;
+        color: white;
+
+        &:hover {
+          opacity: 0.9;
         }
       }
     }
-    .source-tag {
-      display: flex;
-      padding: 4px 12px;
-      background-color: #e6f7ff;
-      color: @primary-color;
-      border-radius: 4px;
-      font-size: 12px;
-    }
-    .action-buttons {
-      display: flex;
-      gap: 12px;
-      margin-left: 30px;
+  }
+}
 
-      :deep(.el-button--small) {
-        padding: 5px 10px;
-      }
-    }
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
   }
 }
 </style>
