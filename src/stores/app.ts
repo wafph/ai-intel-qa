@@ -97,20 +97,6 @@ export const useAppStore = defineStore('app', () => {
       historyItems.value = historyItems.value.slice(0, 10);
     }
   };
-
-  // 1. 删除单条历史记录
-  const removeHistoryItem = (id) => {
-    const index = historyItems.value.findIndex(item => item.id === id);
-    if (index !== -1) {
-      historyItems.value.splice(index, 1);
-    }
-  };
-
-  // 2. 清空所有历史记录
-  const clearAllHistory = () => {
-    historyItems.value = [];
-  };
-
   return {
     sharedDataToken,
     fetchTokenFromBackend,
@@ -122,7 +108,5 @@ export const useAppStore = defineStore('app', () => {
     toggleSidebar,
     switchMenu,
     addHistory,
-    removeHistoryItem, // 新增
-    clearAllHistory,   // 新增
   };
 });

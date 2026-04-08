@@ -67,6 +67,7 @@
               <div v-else>
                 <div
                   class="message-content pad"
+                  id="pdfDom"
                   v-html="renderedMarkdown(item.content)"
                 ></div>
               </div>
@@ -159,20 +160,6 @@
         {{ loadingAnswer ? '发送中...' : '发送' }}
       </button>
     </div>
-
-    <!-- 快捷问题建议（仅在无历史对话时显示） -->
-    <div v-if="!loadingAnswer && conversationHistory.length === 0" class="suggestions">
-      <el-button
-        v-for="(suggestion, index) in suggestions"
-        :key="index"
-        type="primary"
-        plain
-        class="suggestion-btn"
-        @click="setQuestion(suggestion)"
-      >
-        {{ suggestion }}
-      </el-button>
-    </div>
   </div>
 </template>
 
@@ -196,11 +183,6 @@ let isCancelled = false;
 // 输入框变量
 const currentQuestion = ref('');
 const questionPlaceholder = '您好，请输入您的问题';
-const suggestions = [
-  '规章制度各层级审批主体是什么？',
-  '规章制度起草程序及起草说明核心内容有哪些？',
-  '规章制度需修订或废止的情形及程序区别是什么？',
-];
 
 // 对话历史
 interface ConversationItem {
@@ -346,12 +328,6 @@ const appStore = useAppStore();
 const md = new MarkdownIt();
 const renderedMarkdown = computed(() => (content: string) => md.render(content));
 
-// 设置问题（点击推荐问题）
-const setQuestion = (question: string) => {
-  currentQuestion.value = question;
-  handleSendQuestion();
-};
-
 // 发送问题
 const handleSendQuestion = async () => {
   const question = currentQuestion.value.trim();
@@ -398,7 +374,7 @@ const startStream = async (queryText: string) => {
     abortController.value = new AbortController();
 
     const response = await fetch(
-      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/60a15b33-e781-4d5d-88d3-5ed90054d9b0/conversations/d590539f-528c-4c01-8847-93a9ff5c16be?version=1775619946974',
+      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/60a15b33-e781-4d5d-88d3-5ed90054d9b0/conversations/0bcf02aa-9651-4a9c-a747-09d4a440aec9?version=1775639876207',
       {
         method: 'post',
         headers: {
