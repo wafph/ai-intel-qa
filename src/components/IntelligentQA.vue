@@ -36,30 +36,63 @@
               <span>🤖</span>
             </div>
             <div class="message-info">
-              回复
+              <p class="anser">回复</p>
+              <!-- 双列布局容器 -->
               <div
-                class="message-content pad"
-               :id="'pdf-dom-' + item.id"
-                v-html="renderedMarkdown(item.content)"
-              ></div>
+                class="two-column-layout"
+                v-if="item.showCitation && item.answerContent && item.citationContent"
+              >
+                <!-- 左列：回答内容（65%） -->
+                <div class="answer-column">
+                  <div
+                    class="message-content pad"
+                    v-html="renderedMarkdown(item.answerContent)"
+                  ></div>
+                </div>
+
+                <!-- 右列：引用来源（35%） -->
+                <div class="citation-column">
+                  <div class="citation-header">
+                    <el-icon><Document /></el-icon>
+                    <span>来源</span>
+                  </div>
+                  <div
+                    class="citation-content"
+                    v-html="renderedMarkdown(item.citationContent)"
+                  ></div>
+                </div>
+              </div>
+
+              <!-- 单列布局（默认） -->
+              <div v-else>
+                <div
+                  class="message-content pad"
+                  v-html="renderedMarkdown(item.content)"
+                ></div>
+              </div>
               <div class="message-time">{{ formatTime(item.timestamp) }}</div>
             </div>
           </div>
-          <div style="display: flex; align-items: center; justify-content: flex-end">
-            <div class="action-buttons">
-              <el-button
-                size="small"
-                type="success"
-                plain
-                :loading="loading"
-                @click="pdfFunc"
-              >
-                <el-icon>
-                  <Download />
-                </el-icon>
-                导出
-              </el-button>
-            </div>
+
+          <div class="action-buttons">
+            <el-button size="small" type="primary" plain @click="toggleCitation(item.id)">
+              {{ item.showCitation ? '隐藏来源' : '引用来源' }}
+              <el-icon>
+                <ArrowRightBold />
+              </el-icon>
+            </el-button>
+            <el-button
+              size="small"
+              type="success"
+              plain
+              :loading="loading"
+              @click="pdfFunc"
+            >
+              <el-icon>
+                <Download />
+              </el-icon>
+              导出
+            </el-button>
           </div>
         </div>
       </div>
@@ -147,7 +180,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import MarkdownIt from 'markdown-it';
 import { useAppStore } from '../stores/app';
-import { Promotion, Download } from '@element-plus/icons-vue';
+import { Promotion, Download, Document } from '@element-plus/icons-vue';
 import htmlToPdf from '../utils/htmlToPdf';
 
 // 状态变量
@@ -175,6 +208,9 @@ interface ConversationItem {
   content: string;
   timestamp: Date;
   id: string;
+  showCitation?: boolean; // 是否显示引用来源
+  answerContent?: string; // 分割后的回答内容
+  citationContent?: string; // 分割后的引用来源
 }
 
 const conversationHistory = ref<ConversationItem[]>([]);
@@ -193,6 +229,10 @@ const loadConversationHistory = () => {
       conversationHistory.value = parsed.map((item: any) => ({
         ...item,
         timestamp: new Date(item.timestamp),
+        // 确保有分割内容字段
+        showCitation: item.showCitation || false,
+        answerContent: item.answerContent || '',
+        citationContent: item.citationContent || '',
       }));
     } catch (e) {
       console.error('加载历史对话失败:', e);
@@ -203,6 +243,13 @@ const loadConversationHistory = () => {
 // 保存历史对话
 const saveConversationHistory = () => {
   try {
+    // 保存前确保所有assistant消息都有分割后的内容
+    conversationHistory.value.forEach((item) => {
+      if (item.role === 'assistant' && item.showCitation && !item.answerContent) {
+        splitContentForCitation(item);
+      }
+    });
+
     localStorage.setItem(
       'conversationHistory',
       JSON.stringify(conversationHistory.value),
@@ -219,6 +266,41 @@ const formatTime = (date: Date) => {
     minute: '2-digit',
     second: '2-digit',
   });
+};
+
+// 新增：切换引用来源显示的函数
+const toggleCitation = (messageId: string) => {
+  const message = conversationHistory.value.find((item) => item.id === messageId);
+  if (message && message.role === 'assistant') {
+    // 切换显示状态
+    message.showCitation = !message.showCitation;
+
+    // 如果是第一次点击，分割内容
+    if (message.showCitation && (!message.answerContent || !message.citationContent)) {
+      splitContentForCitation(message);
+    }
+  }
+};
+
+// 新增：分割内容的函数
+const splitContentForCitation = (message: ConversationItem) => {
+  debugger;
+  const content = message.content;
+
+  // 查找"来源："在内容中的位置
+  const sourceIndex = content.indexOf('来源：');
+  debugger;
+
+  if (sourceIndex !== -1) {
+    // 分割内容和来源
+    message.answerContent = content.substring(0, sourceIndex - 2).trim();
+    console.log(message.answerContent);
+    message.citationContent = content.substring(sourceIndex + 3).trim(); // +3 是为了跳过"来源："
+  } else {
+    // 如果没有找到"来源："，将整个内容作为回答，来源为空
+    message.answerContent = content;
+    message.citationContent = '暂无引用来源';
+  }
 };
 
 // 组件挂载时加载历史记录
@@ -316,7 +398,7 @@ const startStream = async (queryText: string) => {
     abortController.value = new AbortController();
 
     const response = await fetch(
-      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/agents/52512531-0a97-480f-bd5c-5f4fd0df61c4/conversations/a7033bd9-fb91-4d29-848b-8cb85198363d?version=1775547376145',
+      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/60a15b33-e781-4d5d-88d3-5ed90054d9b0/conversations/d590539f-528c-4c01-8847-93a9ff5c16be?version=1775619946974',
       {
         method: 'post',
         headers: {
@@ -348,6 +430,9 @@ const startStream = async (queryText: string) => {
             role: 'assistant',
             content: assistantMessageContent,
             timestamp: new Date(),
+            showCitation: false, // 默认不显示引用来源
+            answerContent: '', // 初始化为空
+            citationContent: '', // 初始化为空
           };
           conversationHistory.value.push(assistantMessage);
         }
@@ -374,6 +459,9 @@ const startStream = async (queryText: string) => {
         role: 'assistant',
         content: '抱歉，回答过程中出现错误，请稍后重试。',
         timestamp: new Date(),
+        showCitation: false,
+        answerContent: '',
+        citationContent: '',
       };
       conversationHistory.value.push(errorMessage);
     }
@@ -395,11 +483,12 @@ const processChunk = (chunk: string) => {
       if (dataLine) {
         try {
           const parsedData = JSON.parse(dataLine);
+          console.log(parsedData);
           if (parsedData.event === 'message') {
-            if (parsedData.reasoning_content) {
-              reasoningContent.value += parsedData.reasoning_content;
-            } else if (parsedData.content) {
-              content += parsedData.content;
+            if (parsedData?.data?.reasoning_content) {
+              reasoningContent.value += parsedData?.data?.reasoning_content;
+            } else if (parsedData.data.text) {
+              content += parsedData.data.text;
             }
           }
         } catch (error) {
@@ -513,6 +602,187 @@ onUnmounted(() => {
             max-width: 850px; /* 固定AI消息内容区域最大宽度 */
             width: 100%; /* 确保宽度充满但不超过最大限制 */
 
+            .anser {
+              margin-top: 5px;
+            }
+
+            /* 双列布局样式 */
+            .two-column-layout {
+              display: flex;
+              gap: 20px;
+              width: 100%;
+              max-width: 100%;
+              margin: 10px 0;
+
+              /* 左列：回答内容（65%） */
+              .answer-column {
+                flex: 0 0 65%; /* 占据65%宽度 */
+                max-width: 65%;
+                overflow: hidden;
+
+                .message-content {
+                  width: 100%;
+                  max-width: 100%;
+                  box-sizing: border-box;
+                  background: white;
+                  color: #303133;
+                  border-radius: 12px;
+                  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+                  padding: 20px;
+
+                  /* Markdown 内容样式 */
+                  :deep(pre) {
+                    background-color: #f6f8fa;
+                    border-radius: 6px;
+                    padding: 12px;
+                    overflow-x: auto;
+                    margin: 8px 0;
+
+                    code {
+                      font-family: 'Consolas', 'Monaco', monospace;
+                    }
+                  }
+
+                  :deep(code) {
+                    background-color: #f6f8fa;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    font-size: 0.9em;
+                  }
+
+                  :deep(p) {
+                    margin: 0 0 10px 0;
+                    line-height: 1.6;
+                  }
+
+                  :deep(ul),
+                  :deep(ol) {
+                    margin: 10px 0;
+                    padding-left: 20px;
+                  }
+
+                  :deep(blockquote) {
+                    border-left: 4px solid #409eff;
+                    margin: 10px 0;
+                    padding-left: 12px;
+                    color: #666;
+                  }
+                }
+              }
+
+              /* 右列：引用来源（35%） */
+              .citation-column {
+                flex: 0 0 35%; /* 占据35%宽度 */
+                max-width: 35%;
+                background-color: @white;
+                border-radius: 12px;
+                border: 1px solid #e9ecef;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+
+                /* 引用来源头部 */
+                .citation-header {
+                  border-left: 2px solid red;
+                  padding: 12px 20px;
+                  font-weight: 600;
+                  font-size: 16px;
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+
+                  .el-icon {
+                    font-size: 18px;
+                  }
+                }
+
+                /* 引用来源内容 */
+                .citation-content {
+                  flex: 1;
+                  padding: 20px;
+                  overflow-y: auto;
+                  max-height: 400px;
+                  color: #495057;
+                  font-size: 14px;
+                  line-height: 1.5;
+
+                  /* Markdown 内容样式 */
+                  :deep(pre) {
+                    background-color: #e9ecef;
+                    border-radius: 4px;
+                    padding: 8px 12px;
+                    overflow-x: auto;
+                    margin: 8px 0;
+                    font-size: 12px;
+
+                    code {
+                      font-family: 'Consolas', 'Monaco', monospace;
+                      background: none;
+                      padding: 0;
+                    }
+                  }
+
+                  :deep(code) {
+                    background-color: #e9ecef;
+                    padding: 2px 4px;
+                    border-radius: 3px;
+                    font-size: 12px;
+                    color: #e83e8c;
+                  }
+
+                  :deep(p) {
+                    margin: 0 0 8px 0;
+                    line-height: 1.4;
+                  }
+
+                  :deep(ul),
+                  :deep(ol) {
+                    margin: 8px 0;
+                    padding-left: 18px;
+                  }
+
+                  :deep(li) {
+                    margin-bottom: 4px;
+                  }
+
+                  :deep(a) {
+                    color: #409eff;
+                    text-decoration: none;
+
+                    &:hover {
+                      text-decoration: underline;
+                    }
+                  }
+
+                  :deep(strong) {
+                    color: #212529;
+                  }
+
+                  :deep(blockquote) {
+                    border-left: 3px solid #adb5bd;
+                    margin: 8px 0;
+                    padding-left: 10px;
+                    color: #6c757d;
+                    font-style: italic;
+                  }
+                }
+              }
+            }
+
+            /* 响应式设计：在小屏幕上改为单列 */
+            @media (max-width: 768px) {
+              .two-column-layout {
+                flex-direction: column;
+
+                .answer-column,
+                .citation-column {
+                  flex: 0 0 100%;
+                  max-width: 100%;
+                }
+              }
+            }
+
+            /* 单列布局样式 */
             .message-content {
               width: 100%; /* 固定内容宽度，不随内容撑开 */
               max-width: 100%; /* 覆盖之前的max-width: 700px */
@@ -632,7 +902,6 @@ onUnmounted(() => {
     }
 
     .message-info {
-      margin-top: 7px;
       flex: 1;
       display: flex;
       flex-direction: column;
@@ -657,6 +926,7 @@ onUnmounted(() => {
     font-size: 23px;
     color: #4285f4;
     cursor: pointer;
+    z-index: 1000;
   }
 
   .input-container {
@@ -687,7 +957,8 @@ onUnmounted(() => {
     .send-btn {
       position: absolute;
       right: 35px;
-      bottom: 30px;
+      top: 50%;
+      transform: translateY(-50%);
       background: #1890ff;
       color: white;
       border: none;
@@ -703,14 +974,14 @@ onUnmounted(() => {
       min-width: 80px;
 
       &:hover:not(:disabled) {
-        transform: translateY(-2px);
+        transform: translateY(-50%) scale(1.05);
         box-shadow: 0 4px 12px rgba(64, 158, 255, 0.4);
       }
 
       &:disabled {
         background: #c0c4cc;
         cursor: not-allowed;
-        transform: none;
+        transform: translateY(-50%);
         box-shadow: none;
       }
 
@@ -733,7 +1004,7 @@ onUnmounted(() => {
     .suggestion-btn {
       padding: 12px 24px;
       background-color: #f0f7ff;
-      border: 1px solid @border-color-light;
+      border: 1px solid #e4e7ed;
       border-radius: 20px;
       margin-left: 0;
       transition: all 0.2s;
@@ -751,22 +1022,12 @@ onUnmounted(() => {
     display: flex;
     padding: 10px;
     gap: 12px;
-    justify-content: flex-end;
+    margin-left: 45px;
 
     :deep(.el-button) {
       padding: 8px 16px;
       border-radius: 6px;
       font-weight: 500;
-
-      &.el-button--success {
-        background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%);
-        border: none;
-        color: white;
-
-        &:hover {
-          opacity: 0.9;
-        }
-      }
     }
   }
 }
@@ -788,6 +1049,20 @@ onUnmounted(() => {
     opacity: 0.2;
   }
   50% {
+    opacity: 1;
+  }
+}
+
+/* 引用来源区域的进入动画 */
+.citation-column {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
     opacity: 1;
   }
 }

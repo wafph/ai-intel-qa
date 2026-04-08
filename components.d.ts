@@ -15,14 +15,14 @@ declare module 'vue' {
     ComplianceReview: typeof import('./src/components/ComplianceReview.vue')['default']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElCard: typeof import('element-plus/es')['ElCard']
-    ElCollapse: typeof import('element-plus/es')['ElCollapse']
-    ElCollapseItem: typeof import('element-plus/es')['ElCollapseItem']
     ElIcon: typeof import('element-plus/es')['ElIcon']
     ElInput: typeof import('element-plus/es')['ElInput']
+    Header: typeof import('./src/components/Header.vue')['default']
     IntelligentQA: typeof import('./src/components/IntelligentQA.vue')['default']
     IntelligentRetrieval: typeof import('./src/components/IntelligentRetrieval.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     Sidebar: typeof import('./src/components/Sidebar.vue')['default']
+    SideBar: typeof import('./src/components/SideBar.vue')['default']
   }
 }
