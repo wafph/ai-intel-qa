@@ -9,7 +9,7 @@ const routes = [
   {
     path: '/qa',
     name: '智能问答',
-    component: () => import('../components/IntelligentQA.vue'),
+    component: () => import('../views/IntelligentQA.vue'),
   },
   {
     path: '/retrieval',
@@ -19,7 +19,7 @@ const routes = [
   {
     path: '/drafting',
     name: '辅助起草',
-    component: () => import('../components/AuxiliaryDraft.vue'),
+    component: () => import('../views/AuxiliaryDraft.vue'),
   },
   {
     path: '/review',
