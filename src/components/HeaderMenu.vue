@@ -84,6 +84,10 @@ const handleTabClick = (tabName: string) => {
   font-size: 20px;
   font-weight: 600;
   text-decoration: none;
+  
+  span {
+    margin-right: 20px;
+  }
 }
 
 .logo img {
@@ -99,16 +103,16 @@ const handleTabClick = (tabName: string) => {
   display: flex;
   flex: 1;
   gap: 4px;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .tab-btn {
-  width: 24%;
-  padding: 0 24px;
+  /* width: 15%; */
+  width: 75px;
+  margin-right: 40px;
   height: 40px;
   background: rgba(255, 255, 255, 0.1);
   border: none;
-  border-radius: 8px;
   font-size: 14px;
   color: rgba(255, 255, 255, 0.8);
   cursor: pointer;
@@ -128,10 +132,8 @@ const handleTabClick = (tabName: string) => {
 }
 
 .tab-btn.active {
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid #b6bfdc;
+  border-bottom: 3px solid #b6bfdc;
   color: white;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .tab-btn.active::before {

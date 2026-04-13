@@ -19,7 +19,7 @@
         <div v-if="item.role === 'user'" class="message-user">
           <div class="message-header">
             <div class="avatar user-avatar">
-              <div>我</div>
+              <div><img src="../../public/user.svg" alt=""></div>
             </div>
             <div class="message-info">
               <div class="message-content">{{ item.content }}</div>
@@ -380,6 +380,11 @@ onUnmounted(() => {
             .avatar {
               margin-left: 12px;
               margin-right: 0;
+
+              img {
+                width: 80%;
+                height: 80%;
+              };
             }
 
             .message-info {

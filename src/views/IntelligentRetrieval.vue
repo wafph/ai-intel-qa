@@ -22,7 +22,7 @@
         <div v-if="item.role === 'user'" class="message-user">
           <div class="message-header">
             <div class="avatar user-avatar">
-              <div>我</div>
+              <div><img src="../../public/user.svg" alt=""></div>
             </div>
             <div class="message-info">
               <div class="message-content">{{ item.content }}</div>
@@ -367,7 +367,7 @@ onUnmounted(() => {
   .conversation-history {
     flex: 1;
     overflow-y: auto;
-    // padding: 20px;
+    padding: 20px;
     margin-bottom: 20px;
     display: flex;
     flex-direction: column;
@@ -389,6 +389,11 @@ onUnmounted(() => {
             .avatar {
               margin-left: 12px;
               margin-right: 0;
+
+               img {
+                width: 80%;
+                height: 80%;
+              };
             }
 
             .message-info {
@@ -658,6 +663,12 @@ onUnmounted(() => {
 
       &.user-avatar {
         background: #d7e6fe;
+
+        img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
       }
 
       &.ai-avatar {
