@@ -11,21 +11,21 @@ const routes = [
     name: '智能问答',
     component: () => import('../views/IntelligentQA.vue'),
   },
-  {
-    path: '/retrieval',
-    name: '智能检索',
-    component: () => import('../components/IntelligentRetrieval.vue'),
-  },
-  {
-    path: '/drafting',
-    name: '辅助起草',
-    component: () => import('../views/AuxiliaryDraft.vue'),
-  },
-  {
-    path: '/review',
-    name: '合规审核',
-    component: () => import('../components/ComplianceReview.vue'),
-  },
+  // {
+  //   path: '/retrieval',
+  //   name: '智能检索',
+  //   component: () => import('../views/IntelligentRetrieval.vue'),
+  // },
+  // {
+  //   path: '/drafting',
+  //   name: '辅助起草',
+  //   component: () => import('../views/AuxiliaryDraft.vue'),
+  // },
+  // {
+  //   path: '/review',
+  //   name: '合规审核',
+  //   component: () => import('../views/ComplianceReview.vue'),
+  // },
 ];
 
 const router = createRouter({

@@ -2,11 +2,11 @@
   <header class="header-menu">
     <div class="header-left">
       <div class="logo">
-        <img src="/logos.png" alt="Logo">
+        <img src="/logos.png" alt="Logo" />
         <span>AI+规章制度智能体</span>
       </div>
     </div>
-    
+
     <nav class="nav-tabs">
       <button
         v-for="tab in tabs"
@@ -14,11 +14,10 @@
         :class="['tab-btn', { active: activeTab === tab.value }]"
         @click="handleTabClick(tab.value)"
       >
-        <span class="tab-icon">{{ tab.icon }}</span>
         <span class="tab-label">{{ tab.label }}</span>
       </button>
     </nav>
-    
+
     <div class="header-right">
       <button class="user-btn">
         <span class="user-avatar">👤</span>
@@ -28,37 +27,36 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed } from 'vue';
 
 interface Props {
-  activeTab: string
+  activeTab: string;
 }
 
 interface TabItem {
-  value: string
-  label: string
-  icon: string
+  value: string;
+  label: string;
 }
 
-const props = defineProps<Props>()
+const props = defineProps<Props>();
 const emit = defineEmits<{
-  'tab-change': [tabName: string]
-}>()
+  'tab-change': [tabName: string];
+}>();
 
 // 标签数据
 const tabs = computed<TabItem[]>(() => [
-  { value: '智能问答', label: '智能问答', icon: '💬' },
-  { value: '智能检索', label: '智能检索', icon: '🔍' },
-  { value: '辅助起草', label: '辅助起草', icon: '✍️' },
-  { value: '合规审核', label: '合规审核', icon: '📋' }
-])
+  { value: '智能问答', label: '智能问答' },
+  { value: '智能检索', label: '智能检索' },
+  { value: '辅助起草', label: '辅助起草' },
+  { value: '合规审核', label: '合规审核' },
+]);
 
 // 方法
 const handleTabClick = (tabName: string) => {
   if (props.activeTab !== tabName) {
-    emit('tab-change', tabName)
+    emit('tab-change', tabName);
   }
-}
+};
 </script>
 
 <style scoped>
@@ -83,7 +81,7 @@ const handleTabClick = (tabName: string) => {
   align-items: center;
   gap: 12px;
   color: black;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
   text-decoration: none;
 }
@@ -105,6 +103,7 @@ const handleTabClick = (tabName: string) => {
 }
 
 .tab-btn {
+  width: 24%;
   padding: 0 24px;
   height: 40px;
   background: rgba(255, 255, 255, 0.1);
@@ -116,6 +115,7 @@ const handleTabClick = (tabName: string) => {
   transition: all 0.3s;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   position: relative;
   overflow: hidden;
@@ -129,6 +129,7 @@ const handleTabClick = (tabName: string) => {
 
 .tab-btn.active {
   background: rgba(255, 255, 255, 0.2);
+  border: 1px solid #b6bfdc;
   color: white;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
@@ -145,12 +146,9 @@ const handleTabClick = (tabName: string) => {
   border-radius: 2px 2px 0 0;
 }
 
-.tab-icon {
-  font-size: 18px;
-}
-
 .tab-label {
-  font-weight: 500;
+  font-size: 18px;
+  font-weight: 600;
   color: black;
 }
 

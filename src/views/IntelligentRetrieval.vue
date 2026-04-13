@@ -2,13 +2,16 @@
   <div class="intelligent-qa">
     <!-- 头部区域 -->
     <div class="qa-header" v-if="!loading && chatData?.messages?.length === 0">
-      <h1>我是问答助手，很高兴见到你</h1>
+      <h1>我是智能检索助手，很高兴见到你</h1>
       <p>你可以使用自然语言提问，我来精准回答</p>
     </div>
     <!-- 历史对话列表 -->
-    <div class="conversation-history" v-if="chatData?.messages && chatData?.messages?.length > 0">
+    <div
+      class="conversation-history"
+      v-if="chatData?.messages && chatData?.messages?.length > 0"
+    >
       <div
-        v-for="item in (chatData.messages || [])"
+        v-for="item in chatData.messages || []"
         :key="item.id"
         :class="[
           'history-item',
@@ -35,7 +38,7 @@
               <div>AI</div>
             </div>
             <div class="message-info">
-              <!-- 【核心修改点】始终显示“思考过程”部分，只要消息中存在 reasoning 内容 -->
+              <!-- 【核心修改】始终显示消息的思考过程 -->
               <div
                 v-if="item.reasoning && item.reasoning.trim() !== ''"
                 class="thinking-process"
@@ -50,7 +53,7 @@
 
               <!-- 当前流式消息 -->
               <div v-if="item.streaming && item.id === currentStreamingMessageId">
-                <!-- 🚨 删除原“思考中...”的动态显示块，因为已由上方永久块显示 -->
+                <!-- 删除原"思考中..."的动态显示块，已由上方永久块显示 -->
 
                 <!-- 回复内容（打字机效果） -->
                 <div
@@ -65,10 +68,7 @@
 
                 <!-- 加载指示器（当没有任何内容时） -->
                 <div
-                  v-if="
-                    streaming &&
-                    (!currentAnswer || currentAnswer.trim() === '')
-                  "
+                  v-if="streaming && (!currentAnswer || currentAnswer.trim() === '')"
                   class="thinking-indicator"
                 >
                   <div class="thinking-dots">
@@ -122,26 +122,27 @@ const isTyping = ref(false);
 interface Props {
   chatData: ChatSession | null;
   streaming?: boolean;
-  currentReasoning?: string; // 此prop可能不再需要，或仅用于流式时的临时UI反馈
+  currentReasoning?: string;
   currentAnswer?: string;
   currentStreamingMessageId?: string | null;
 }
 
-// 更新 ChatMessage 接口以匹配 App.vue
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  reasoning?: string; // 与 App.vue 保持一致
-  timestamp: Date;
-  streaming?: boolean;
-}
 interface ChatSession {
   id: string;
   title: string;
   time: string;
   type: string;
   messages: ChatMessage[];
+}
+
+// 【核心修改】在ChatMessage接口中添加reasoning字段
+interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  reasoning?: string; // 新增：持久化存储思考过程
+  timestamp: Date;
+  streaming?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -194,6 +195,7 @@ const startTypingEffect = (targetText: string) => {
       displayAnswer.value += targetText.charAt(currentTypingIndex);
       currentTypingIndex++;
 
+      // 【核心修改】打字过程中触发滚动
       nextTick(() => {
         scrollToBottom();
       });
@@ -240,6 +242,8 @@ const scrollToBottom = () => {
     }
   });
 };
+
+// 🚨 关键修改：优化回复内容监听逻辑
 // 监听回复内容变化
 watch(
   () => props.currentAnswer,
@@ -252,15 +256,18 @@ watch(
       newAnswer?.length,
     );
     if (newAnswer && newAnswer !== oldAnswer) {
+      // 计算新增的文本部分
       const newText = newAnswer.substring(oldAnswer.length);
       if (newText) {
+        // 将新增文本加入打字队列
         appendToTypingQueue(newText);
       } else if (newAnswer === '') {
+        // 如果内容被清空（如新对话），则重置显示
         displayAnswer.value = '';
         stopTypingEffect();
       }
     }
-    // 回复内容变化时，确保滚动
+    // 【核心修改】回复内容变化时，无论是否新增，都触发滚动
     scrollToBottom();
   },
   { immediate: true },
@@ -278,7 +285,7 @@ watch(
   { immediate: true },
 );
 
-// 【可选】可以保留对 currentReasoning 的监听，用于调试，但不再用于触发滚动（因为内容已从 item.reasoning 读取）
+// 监听推理过程变化
 watch(
   () => props.currentReasoning,
   (newReasoning) => {
@@ -289,8 +296,10 @@ watch(
       '长度:',
       newReasoning?.length,
     );
-    // 注意：此处不再需要触发滚动，因为思考内容已持久化到消息对象并由模板直接渲染
-    // 滚动将由 currentAnswer 的变化或聊天数据变化触发
+    // 【核心修改】推理过程（思考中）内容更新时，触发滚动到底部
+    if (newReasoning && newReasoning.trim() !== '') {
+      scrollToBottom();
+    }
   },
 );
 
@@ -330,12 +339,12 @@ onUnmounted(() => {
 .intelligent-qa {
   display: flex;
   flex-direction: column;
+  align-items: center;
   height: 100%;
   padding: 0;
   background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
   position: relative;
   overflow-y: auto;
-  align-items: center;
 
   .qa-header {
     text-align: center;
@@ -358,7 +367,7 @@ onUnmounted(() => {
   .conversation-history {
     flex: 1;
     overflow-y: auto;
-    padding: 20px;
+    // padding: 20px;
     margin-bottom: 20px;
     display: flex;
     flex-direction: column;
@@ -390,7 +399,7 @@ onUnmounted(() => {
                 color: black;
                 font-weight: 600;
                 border-radius: 12px;
-                padding: 12px 36px;
+                padding: 12px 20px;
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
               }
 
@@ -450,7 +459,6 @@ onUnmounted(() => {
               padding: 12px;
               border-radius: 6px;
               border-left: 3px solid #fa8c16;
-              // overflow-y: auto;
             }
 
             .thinking-placeholder {
@@ -465,7 +473,7 @@ onUnmounted(() => {
               background: #f6ffed;
               border: 1px solid #b7eb8f;
               border-radius: 8px;
-              padding: 16px 35px;
+               padding: 16px 35px;
               animation: fadeIn 0.5s ease;
               margin-top: 8px;
             }

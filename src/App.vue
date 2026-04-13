@@ -1,14 +1,11 @@
 <template>
   <div class="app-container">
     <!-- 顶部菜单 -->
-    <HeaderMenu 
-      :active-tab="activeTab"
-      @tab-change="handleTabChange"
-    />
-    
+    <HeaderMenu :active-tab="activeTab" @tab-change="handleTabChange" />
+
     <div class="main-layout">
       <!-- 左侧历史对话面板 -->
-      <HistoryPanel 
+      <HistoryPanel
         :history-list="historyList"
         :active-chat-id="activeChatId"
         @select-chat="handleSelectChat"
@@ -16,14 +13,14 @@
         @delete-chat="handleDeleteChat"
         @clear-history="handleClearHistory"
       />
-      
+
       <!-- 右侧主内容区域 -->
       <div class="content-area">
         <!-- 动态组件区域 -->
         <div class="dynamic-content">
           <KeepAlive>
-            <component 
-              :is="activeComponent" 
+            <component
+              :is="activeComponent"
               :key="activeChatId"
               :chat-data="currentChatData"
               :streaming="isStreaming"
@@ -34,21 +31,26 @@
             />
           </KeepAlive>
         </div>
-        
+
         <!-- 底部固定输入框 -->
         <div class="input-container">
-          <ChatInput 
+          <ChatInput
             :placeholder="inputPlaceholder"
             :disabled="isStreaming"
             @send="handleSendMessage"
           />
-          
+
           <!-- 流式传输控制 -->
           <div v-if="isStreaming" class="stream-controls">
-            <button class="stop-btn" @click="stopStream">
+            <el-button
+              style="padding: 10px 20px"
+              type="warning"
+              plain
+              @click="stopStream"
+            >
               <span class="stop-icon">■</span>
               停止生成
-            </button>
+            </el-button>
             <div class="stream-status">
               <span class="streaming-indicator"></span>
               生成中...
@@ -61,487 +63,531 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, onUnmounted } from 'vue'
-import HeaderMenu from './components/HeaderMenu.vue'
-import HistoryPanel from './components/HistoryPanel.vue'
-import ChatInput from './components/ChatInput.vue'
-import IntelligentQA from './views/IntelligentQA.vue'
-import AuxiliaryDraft from './views/AuxiliaryDraft.vue'
+import { ref, computed, onMounted, nextTick, onUnmounted } from 'vue';
+import HeaderMenu from './components/HeaderMenu.vue';
+import HistoryPanel from './components/HistoryPanel.vue';
+import ChatInput from './components/ChatInput.vue';
+import IntelligentQA from './views/IntelligentQA.vue';
+import AuxiliaryDraft from './views/AuxiliaryDraft.vue';
+import IntelligentRetrieval from './views/IntelligentRetrieval.vue';
+import ComplianceReview from './views/ComplianceReview.vue';
 import { useAppStore } from './stores/app';
 const appStore = useAppStore();
+
 // 定义类型接口
 interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  reasoning?: string
-  timestamp: Date
-  streaming?: boolean
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  reasoning?: string;
+  timestamp: Date;
+  streaming?: boolean;
+  metadata?: {
+    type?: string;
+    wordCount?: number;
+  };
 }
 
 interface ChatSession {
-  id: string
-  title: string
-  time: string
-  type: string
-  messages: ChatMessage[]
+  id: string;
+  title: string;
+  time: string;
+  type: string;
+  messages: ChatMessage[];
 }
 
 interface HistoryItem {
-  id: string
-  title: string
-  time: string
-  type: string
-  preview: string
+  id: string;
+  title: string;
+  time: string;
+  type: string;
+  preview: string;
 }
 
 interface StreamChunk {
-  event: string
+  event: string;
+  reasoning_content?: string;
+  content?: string;
   data?: {
-    text?: string
-    reasoning_content?: string
-    index?: number
-    node_id?: string
-    node_type?: string
-    node_name?: string
-    workflow_id?: string
-    workflow_name?: string
-    createdTime?: number
-  }
-  createdTime?: number
+    text?: string;
+    reasoning_content?: string;
+    content?: string;
+    index?: number;
+    node_id?: string;
+    node_type?: string;
+    node_name?: string;
+    workflow_id?: string;
+    workflow_name?: string;
+    createdTime?: number;
+  };
+  createdTime?: number;
 }
 
 // 状态管理
- // 示例token
-const activeTab = ref<string>('智能问答')
-const activeChatId = ref<string | null>(null)
-const chatSessions = ref<Record<string, ChatSession>>({})
+const activeTab = ref<string>('智能问答');
+const activeChatId = ref<string | null>(null);
+const chatSessions = ref<Record<string, ChatSession>>({});
 
 // 流式相关状态
-const isStreaming = ref<boolean>(false)
-const currentReasoning = ref<string>('')
-const currentAnswer = ref<string>('')
-let abortController: AbortController | null = null
-let currentStreamingMessageId: string | null = null
+const isStreaming = ref<boolean>(false);
+const currentReasoning = ref<string>('');
+const currentAnswer = ref<string>('');
+let abortController: AbortController | null = null;
+let currentStreamingMessageId: string | null = null;
 
 // 历史记录数据
 const historyList = ref<HistoryItem[]>([
-  { 
-    id: '1', 
+  {
+    id: '1',
     title: '查询员工报销规定',
     time: '今天 10:30',
     type: '智能问答',
-    preview: '请问公司的员工报销有什么规定？'
+    preview: '请问公司的员工报销有什么规定？',
   },
-  { 
-    id: '2', 
+  {
+    id: '2',
     title: '党委会议事规则',
     time: '今天 09:15',
     type: '辅助起草',
-    preview: '请帮我起草党委会议事规则...'
-  }
-])
+    preview: '请帮我起草党委会议事规则...',
+  },
+]);
 
 // 计算属性
 const currentChatData = computed(() => {
-  if (!activeChatId.value) return null
-  return chatSessions.value[activeChatId.value] || null
-})
+  if (!activeChatId.value) return null;
+  return chatSessions.value[activeChatId.value] || null;
+});
 
 const activeComponent = computed(() => {
   const componentMap: Record<string, any> = {
-    '智能问答': IntelligentQA,
-    '智能检索': IntelligentQA,
-    '辅助起草': AuxiliaryDraft,
-    '合规审核': AuxiliaryDraft
-  }
-  return componentMap[activeTab.value] || IntelligentQA
-})
+    智能问答: IntelligentQA,
+    智能检索: IntelligentRetrieval,
+    辅助起草: AuxiliaryDraft,
+    合规审核: ComplianceReview,
+  };
+  return componentMap[activeTab.value] || IntelligentQA;
+});
 
 const inputPlaceholder = computed(() => {
-  if (activeTab.value === '辅助起草') {
-    return '请输入起草内容或要求...'
+  if (activeTab.value === '智能问答') {
+    return '请输入你的问题';
+  } else if (activeTab.value === '辅助起草') {
+    return '您好，请描述你的制度要求，包括使用范围、核心条款、特殊要求等...';
+  } else if (activeTab.value === '合规审核') {
+    return '您好，请输入待审核的内容';
+  } else {
+    return '您好，请输出待检索内容';
   }
-  return '你好，请输入你的问题'
-})
+});
 
 // 方法
 const handleTabChange = (tabName: string) => {
-  activeTab.value = tabName
-  handleNewChat()
-}
+  activeTab.value = tabName;
+  handleNewChat();
+};
 
 const handleNewChat = () => {
-  const newChatId = Date.now().toString()
-  activeChatId.value = newChatId
-  
-  const chatTitle = `${activeTab.value} - ${new Date().toLocaleTimeString()}`
-  
+  const newChatId = Date.now().toString();
+  activeChatId.value = newChatId;
+  const chatTitle = `${activeTab.value} - ${new Date().toLocaleTimeString()}`;
+
   chatSessions.value[newChatId] = {
     id: newChatId,
     title: chatTitle,
     time: '刚刚',
     type: activeTab.value,
-    messages: []
-  }
-  
+    messages: [],
+  };
+
   historyList.value.unshift({
     id: newChatId,
     title: chatTitle,
     time: '刚刚',
     type: activeTab.value,
-    preview: '新对话'
-  })
-  
+    preview: '新对话',
+  });
+
   if (historyList.value.length > 50) {
-    historyList.value = historyList.value.slice(0, 50)
+    historyList.value = historyList.value.slice(0, 50);
   }
-  
-  saveToLocalStorage()
-  scrollToBottom()
-}
+
+  saveToLocalStorage();
+  scrollToBottom();
+};
 
 const handleSelectChat = (chatId: string) => {
   if (isStreaming.value) {
-    stopStream()
+    stopStream();
   }
-  
-  activeChatId.value = chatId
+
+  activeChatId.value = chatId;
   if (!chatSessions.value[chatId]) {
-    loadFromLocalStorage(chatId)
+    loadFromLocalStorage(chatId);
   }
-  
-  resetStreamState()
-  scrollToBottom()
-}
+
+  resetStreamState();
+  scrollToBottom();
+};
 
 const handleDeleteChat = (chatId: string) => {
-  delete chatSessions.value[chatId]
-  const index = historyList.value.findIndex(h => h.id === chatId)
+  delete chatSessions.value[chatId];
+  const index = historyList.value.findIndex((h) => h.id === chatId);
   if (index !== -1) {
-    historyList.value.splice(index, 1)
+    historyList.value.splice(index, 1);
   }
-  
+
   if (activeChatId.value === chatId) {
     if (historyList.value.length > 0) {
-      activeChatId.value = historyList.value[0].id
+      activeChatId.value = historyList.value[0].id;
     } else {
-      handleNewChat()
+      handleNewChat();
     }
   }
-  
-  saveToLocalStorage()
-}
+
+  saveToLocalStorage();
+};
 
 const handleClearHistory = () => {
-  historyList.value = []
-  chatSessions.value = {}
-  handleNewChat()
-  saveToLocalStorage()
-}
+  historyList.value = [];
+  chatSessions.value = {};
+  handleNewChat();
+  saveToLocalStorage();
+};
 
 const handleSendMessage = async (content: string) => {
-  if (!content.trim() || isStreaming.value) return
-  
+  if (!content.trim() || isStreaming.value) return;
+
   if (!activeChatId.value) {
-    handleNewChat()
+    handleNewChat();
   }
-  
-  const chat = chatSessions.value[activeChatId.value!]
-  if (!chat) return
-  
+
+  const chat = chatSessions.value[activeChatId.value!];
+  if (!chat) return;
+
   // 添加用户消息
   const userMessage: ChatMessage = {
     id: Date.now().toString(),
     role: 'user',
     content: content.trim(),
-    timestamp: new Date()
-  }
-  
-  chat.messages.push(userMessage)
-  
+    timestamp: new Date(),
+  };
+
+  chat.messages.push(userMessage);
+
   // 如果是第一条消息，更新标题
   if (chat.messages.length === 1) {
-    const newTitle = content.length > 20 
-      ? content.substring(0, 20) + '...' 
-      : content
-    
-    chat.title = newTitle
-    
-    const historyItem = historyList.value.find(h => h.id === chat.id)
+    const newTitle = content.length > 20 ? content.substring(0, 20) + '...' : content;
+    chat.title = newTitle;
+
+    const historyItem = historyList.value.find((h) => h.id === chat.id);
     if (historyItem) {
-      historyItem.title = newTitle
-      historyItem.preview = content
+      historyItem.title = newTitle;
+      historyItem.preview = content;
     }
   }
-  
+
   // 添加AI消息占位符
-  const aiMessageId = (Date.now() + 1).toString()
+  const aiMessageId = (Date.now() + 1).toString();
   const aiMessage: ChatMessage = {
     id: aiMessageId,
     role: 'assistant',
     content: '',
+    reasoning: '', // 初始化 reasoning 字段为空字符串
     timestamp: new Date(),
-    streaming: true
-  }
-  
-  chat.messages.push(aiMessage)
-  currentStreamingMessageId = aiMessageId
-  
+    streaming: true,
+  };
+  chat.messages.push(aiMessage);
+  currentStreamingMessageId = aiMessageId;
+
   // 重置流式状态
-  resetStreamState()
-  
+  resetStreamState();
+
   // 开始流式输出
-  await startStream(content, aiMessageId)
-  
+  await startStream(content, aiMessageId);
+
   // 保存历史
-  saveToLocalStorage()
-  scrollToBottom()
-}
+  saveToLocalStorage();
+  scrollToBottom();
+};
 
 // 流式请求
 const startStream = async (queryText: string, messageId: string) => {
-  isStreaming.value = true
-  currentReasoning.value = ''
-  currentAnswer.value = ''
-  
+  isStreaming.value = true;
+  currentReasoning.value = '';
+  currentAnswer.value = '';
+
   try {
-    abortController = new AbortController()
-    
+    abortController = new AbortController();
+
     const params = {
       inputs: {
-        query: queryText
-      }
-    }
-    
-    const token = appStore.sharedDataToken
+        query: queryText,
+      },
+    };
+
+    const token = appStore.sharedDataToken;
     if (!token) {
-      throw new Error('未找到认证token，请先登录')
+      throw new Error('未找到认证token，请先登录');
     }
-    const response = await fetch(
-      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/60a15b33-e781-4d5d-88d3-5ed90054d9b0/conversations/0bcf02aa-9651-4a9c-a747-09d4a440aec9?version=1775639876207',
-      {
-        method: 'POST',
-        headers: {
-          'X-Auth-Token': token,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(params),
-        signal: abortController.signal,
-      }
-    )
-    
+
+    // 根据当前选项卡选择不同的API接口
+    const urlqa =
+      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/60a15b33-e781-4d5d-88d3-5ed90054d9b0/conversations/068fa9f6-a615-42d9-b78a-514a1760cb06?version=1776045391962';
+    const urlDraf =
+      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/agents/fe7b5350-c3ee-41d4-b5d5-ecc6c26d33b3/conversations/d758b3f4-5d04-47a3-94a4-104406de1a12?version=1775627259180';
+    const urlreview =
+      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/32dd3ef3-2bfb-4ad7-a448-811ddd37924a/conversations/57859d42-70e7-4998-9998-184832f8d6fb?version=1776051927454';
+    var apiUrl =
+      activeTab.value === '智能问答'
+        ? urlqa
+        : activeTab.value === '辅助起草'
+          ? urlDraf
+          : activeTab.value === '合规审核'
+            ? urlreview
+            : '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/c206107e-ec31-47d8-9aaf-5c1262931168/conversations/9a98d317-ba33-435a-bfe0-8b8c4cbed470?version=1776045456703';
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'X-Auth-Token': token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params),
+      signal: abortController.signal,
+    });
+
     if (!response.ok || !response.body) {
-      throw new Error(`网络响应异常: ${response.status}`)
+      throw new Error(`网络响应异常: ${response.status}`);
     }
-    
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder('utf-8')
-    let buffer = ''
-    
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
     while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-      
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
       for (const line of lines) {
-        if (line.trim() === '') continue
-        if (line.startsWith('data: ')) {
-          const data = line.substring(5).trim()
-          if (data === '[DONE]') continue
-          
+        if (line.trim() === '') continue;
+        if (line.startsWith('data:')) {
+          const data = line.substring(5).trim();
+          if (data === '[DONE]') continue;
+
           try {
-            const parsed: StreamChunk = JSON.parse(data)
-            await processStreamChunk(parsed, messageId)
+            const parsed: StreamChunk = JSON.parse(data);
+            await processStreamChunk(parsed, messageId);
           } catch (error) {
-            console.error('解析流数据失败:', error, '原始数据:', data)
+            console.error('解析流数据失败:', error, '原始数据:', data);
           }
         }
       }
     }
-    
   } catch (error: any) {
     if (error.name === 'AbortError') {
-      console.log('流式请求被取消')
+      console.log('流式请求被取消');
     } else {
-      console.error('流式请求失败:', error)
-      handleStreamError(messageId, error.message)
+      console.error('流式请求失败:', error);
+      handleStreamError(messageId, error.message);
     }
   } finally {
-    finishStream(messageId)
+    finishStream(messageId);
   }
-}
+};
 
-// 🚨 关键修改：正确处理流式数据，确保累加 reasoning_content 和 text
 const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
-  console.log('收到流式数据块:', chunk)
-  
+  console.log('收到流式数据块:', chunk);
+  var dataReasion;
+  if (activeTab.value === '智能问答' || activeTab.value === '合规审核') {
+    dataReasion = chunk.data?.reasoning_content;
+  } else {
+    dataReasion = chunk.reasoning_content;
+  }
+
   if (chunk.event === 'message') {
-    // 处理推理过程 - 确保累加
-    if (chunk.data?.reasoning_content !== undefined) {
-      const reasoning = chunk.data.reasoning_content
-      // 🚨 关键：必须用 .value 进行累加
-      debugger
-      currentReasoning.value += reasoning
-      console.log('更新推理内容:', currentReasoning.value)
-    }
-    
-    // 处理回复内容 - 确保累加
-    if (chunk.data?.text !== undefined) {
-      const text = chunk.data.text
-      // 🚨 关键：必须用 .value 进行累加
-      currentAnswer.value += text
-      console.log('更新回复内容:', currentAnswer.value)
-      
-      // 更新对应的AI消息内容
-      const chat = chatSessions.value[activeChatId.value!]
+    // 处理推理过程
+    if (dataReasion !== undefined) {
+      const reasoning = dataReasion;
+      // 3.1 更新临时状态（用于UI即时响应）
+      currentReasoning.value += reasoning;
+
+      // 3.2 【关键修改】将推理内容持久化到当前消息对象
+      const chat = chatSessions.value[activeChatId.value!];
       if (chat) {
-        const message = chat.messages.find(m => m.id === messageId)
+        const message = chat.messages.find((m) => m.id === messageId);
         if (message) {
-          message.content = currentAnswer.value
+          // 累加 reasoning 内容到消息对象本身
+          message.reasoning = (message.reasoning || '') + reasoning;
+        }
+      }
+      console.log('更新推理内容:', currentReasoning.value);
+    }
+
+    // 处理回复内容 - 根据接口类型选择字段
+    let replyContent: string | undefined;
+    if (activeTab.value === '智能问答' || activeTab.value === '合规审核') {
+      replyContent = chunk.data?.text;
+    } else {
+      replyContent = chunk?.content;
+    }
+    if (replyContent !== undefined) {
+      currentAnswer.value += replyContent;
+      console.log('更新回复内容:', currentAnswer.value);
+
+      // 更新对应的AI消息内容
+      const chat = chatSessions.value[activeChatId.value!];
+      if (chat) {
+        const message = chat.messages.find((m) => m.id === messageId);
+        if (message) {
+          message.content = currentAnswer.value;
+          // ... 元数据逻辑保持不变 ...
         }
       }
     }
-    
     // 触发视图更新
-    await nextTick()
-    scrollToBottom()
+    await nextTick();
+    scrollToBottom();
   }
-}
+};
 
 // 完成流式输出
 const finishStream = (messageId: string) => {
-  isStreaming.value = false
-  currentStreamingMessageId = null
-  
-  const chat = chatSessions.value[activeChatId.value!]
+  isStreaming.value = false;
+  currentStreamingMessageId = null;
+  currentReasoning.value = '';
+  currentAnswer.value = '';
+
+  const chat = chatSessions.value[activeChatId.value!];
   if (chat) {
-    const message = chat.messages.find(m => m.id === messageId)
+    const message = chat.messages.find((m) => m.id === messageId);
     if (message) {
-      message.streaming = false
-      
+      message.streaming = false;
+
       // 更新历史记录预览
-      const historyItem = historyList.value.find(h => h.id === activeChatId.value)
+      const historyItem = historyList.value.find((h) => h.id === activeChatId.value);
       if (historyItem && chat.messages.length === 2) {
-        const firstQuestion = chat.messages[0].content
-        historyItem.preview = firstQuestion.length > 50 
-          ? firstQuestion.substring(0, 50) + '...' 
-          : firstQuestion
+        const firstQuestion = chat.messages[0].content;
+        historyItem.preview =
+          firstQuestion.length > 50
+            ? firstQuestion.substring(0, 50) + '...'
+            : firstQuestion;
       }
     }
   }
-  
+
   // 重置流式状态
-  resetStreamState()
-  saveToLocalStorage()
-  scrollToBottom()
-}
+  resetStreamState();
+  saveToLocalStorage();
+  scrollToBottom();
+};
 
 // 处理流式错误
 const handleStreamError = (messageId: string, errorMessage: string) => {
-  const chat = chatSessions.value[activeChatId.value!]
+  const chat = chatSessions.value[activeChatId.value!];
   if (chat) {
-    const message = chat.messages.find(m => m.id === messageId)
+    const message = chat.messages.find((m) => m.id === messageId);
     if (message) {
-      message.content = `抱歉，回答过程中出现错误：${errorMessage}`
-      message.streaming = false
+      message.content = `抱歉，回答过程中出现错误：${errorMessage}`;
+      message.streaming = false;
     }
   }
-  isStreaming.value = false
-  currentStreamingMessageId = null
-  resetStreamState()
-}
+  isStreaming.value = false;
+  currentStreamingMessageId = null;
+  resetStreamState();
+};
 
 // 停止流式输出
 const stopStream = () => {
   if (abortController) {
-    abortController.abort()
+    abortController.abort();
   }
-  
+
   if (currentStreamingMessageId) {
-    const chat = chatSessions.value[activeChatId.value!]
+    const chat = chatSessions.value[activeChatId.value!];
     if (chat) {
-      const message = chat.messages.find(m => m.id === currentStreamingMessageId)
+      const message = chat.messages.find((m) => m.id === currentStreamingMessageId);
       if (message) {
-        message.streaming = false
+        message.streaming = false;
         if (message.content === '') {
-          message.content = '用户停止了生成'
+          message.content = '用户停止了生成';
         }
       }
     }
   }
-  
-  isStreaming.value = false
-  currentStreamingMessageId = null
-  resetStreamState()
-  saveToLocalStorage()
-}
+
+  isStreaming.value = false;
+  currentStreamingMessageId = null;
+  resetStreamState();
+  saveToLocalStorage();
+};
 
 // 重置流式状态
 const resetStreamState = () => {
-  currentReasoning.value = ''
-  currentAnswer.value = ''
-  abortController = null
-}
+  currentReasoning.value = '';
+  currentAnswer.value = '';
+  abortController = null;
+};
 
 // 工具函数
 const saveToLocalStorage = () => {
   try {
-    localStorage.setItem('chatSessions', JSON.stringify(chatSessions.value))
-    localStorage.setItem('historyList', JSON.stringify(historyList.value))
-    localStorage.setItem('activeChatId', activeChatId.value || '')
+    localStorage.setItem('chatSessions', JSON.stringify(chatSessions.value));
+    localStorage.setItem('historyList', JSON.stringify(historyList.value));
+    localStorage.setItem('activeChatId', activeChatId.value || '');
   } catch (error) {
-    console.error('保存到localStorage失败:', error)
+    console.error('保存到localStorage失败:', error);
   }
-}
+};
 
 const loadFromLocalStorage = (chatId?: string) => {
   try {
-    const savedSessions = localStorage.getItem('chatSessions')
-    const savedHistory = localStorage.getItem('historyList')
-    const savedActiveId = localStorage.getItem('activeChatId')
-    
+    const savedSessions = localStorage.getItem('chatSessions');
+    const savedHistory = localStorage.getItem('historyList');
+    const savedActiveId = localStorage.getItem('activeChatId');
+
     if (savedSessions) {
-      chatSessions.value = JSON.parse(savedSessions)
+      chatSessions.value = JSON.parse(savedSessions);
     }
-    
+
     if (savedHistory) {
-      historyList.value = JSON.parse(savedHistory)
+      historyList.value = JSON.parse(savedHistory);
     }
-    
+
     if (savedActiveId && !chatId) {
-      activeChatId.value = savedActiveId
+      activeChatId.value = savedActiveId;
     }
   } catch (error) {
-    console.error('从localStorage加载失败:', error)
+    console.error('从localStorage加载失败:', error);
   }
-}
+};
 
 const scrollToBottom = () => {
   nextTick(() => {
-    const container = document.querySelector('.dynamic-content')
+    const container = document.querySelector('.dynamic-content');
     if (container) {
-      container.scrollTop = container.scrollHeight
+      container.scrollTop = container.scrollHeight;
     }
-  })
-}
+  });
+};
 
 // 生命周期
 onMounted(() => {
-  loadFromLocalStorage()
+  loadFromLocalStorage();
   if (!activeChatId.value && historyList.value.length > 0) {
-    activeChatId.value = historyList.value[0].id
+    activeChatId.value = historyList.value[0].id;
   }
-})
+});
 
 onUnmounted(() => {
   if (isStreaming.value) {
-    stopStream()
+    stopStream();
   }
-})
+});
 </script>
 
 <style lang="less" scoped>
@@ -551,7 +597,9 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   background: #ffffff;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
   overflow: hidden;
 }
 
@@ -566,7 +614,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #f5f5f5;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
   position: relative;
 }
 
@@ -579,11 +627,15 @@ onUnmounted(() => {
 }
 
 .input-container {
+  width: 80%;
+  margin: auto;
+  margin-bottom: 30px;
   padding: 20px;
   border-top: 1px solid #e9ecef;
   background: #ffffff;
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
   z-index: 10;
+  border-radius: 20px;
   position: relative;
 }
 
@@ -595,26 +647,26 @@ onUnmounted(() => {
   animation: slideInUp 0.3s ease;
 }
 
-.stop-btn {
-  padding: 8px 16px;
-  background: linear-gradient(135deg, #ff4d4f, #f5222d);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  box-shadow: 0 2px 8px rgba(245, 34, 45, 0.2);
-}
+// .stop-btn {
+//   padding: 8px 16px;
+//   background: linear-gradient(135deg, #ff4d4f, #f5222d);
+//   color: white;
+//   border: none;
+//   border-radius: 6px;
+//   font-size: 13px;
+//   font-weight: 500;
+//   cursor: pointer;
+//   transition: all 0.3s;
+//   display: flex;
+//   align-items: center;
+//   gap: 6px;
+//   box-shadow: 0 2px 8px rgba(245, 34, 45, 0.2);
+// }
 
-.stop-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(245, 34, 45, 0.3);
-}
+// .stop-btn:hover {
+//   transform: translateY(-1px);
+//   box-shadow: 0 4px 12px rgba(245, 34, 45, 0.3);
+// }
 
 .stop-icon {
   font-size: 12px;
@@ -650,7 +702,8 @@ onUnmounted(() => {
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
@@ -659,7 +712,8 @@ onUnmounted(() => {
 }
 
 @keyframes blink {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {

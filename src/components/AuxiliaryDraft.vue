@@ -365,7 +365,7 @@ const startStream = async (queryText: string) => {
     abortController.value = new AbortController();
 
     const response = await fetch(
-      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/agents/fe7b5350-c3ee-41d4-b5d5-ecc6c26d33b3/conversations/84a263c0-2795-4d91-b1c1-c5e72fb5bf15?version=1775207010237',
+      '/v1/1725c43e3fa54828a078fce60f5a3773/agents/fe7b5350-c3ee-41d4-b5d5-ecc6c26d33b3/conversations/84a263c0-2795-4d91-b1c1-c5e72fb5bf15?version=1775207010237',
       {
         method: 'post',
         headers: {
@@ -554,7 +554,7 @@ onUnmounted(() => {
               align-items: flex-end;
 
               .message-content {
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                background: #dae6fd;
                 color: white;
                 border-radius: 12px;
                 padding: 10px 20px;
@@ -684,7 +684,7 @@ onUnmounted(() => {
       margin-right: 12px;
 
       &.user-avatar {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: #dae6fd;
 
         img {
           width: 24px;

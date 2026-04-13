@@ -1,5 +1,8 @@
 <template>
-  <div class="chat-input-container" :class="{ 'has-content': inputText.trim(), 'is-disabled': disabled }">
+  <div
+    class="chat-input-container"
+    :class="{ 'has-content': inputText.trim(), 'is-disabled': disabled }"
+  >
     <div class="input-wrapper">
       <div class="textarea-container">
         <textarea
@@ -13,11 +16,9 @@
           @input="handleInput"
           rows="1"
         />
-        <div v-if="inputText.trim()" class="word-count">
-          {{ inputText.length }}/2000
-        </div>
+        <div v-if="inputText.trim()" class="word-count">{{ inputText.length }}/2000</div>
       </div>
-      
+
       <div class="action-buttons">
         <button
           v-if="!disabled"
@@ -25,15 +26,11 @@
           :disabled="!inputText.trim()"
           @click="handleSend"
         >
-          <svg
-            class="send-icon"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-          >
-            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          <svg class="send-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
           </svg>
         </button>
-        
+
         <div v-else class="loading-indicator">
           <div class="loading-spinner"></div>
         </div>
@@ -43,120 +40,122 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, watch, onMounted, onUnmounted } from 'vue'
+import { ref, nextTick, watch, onMounted, onUnmounted } from 'vue';
 
 interface Props {
-  placeholder?: string
-  disabled?: boolean
+  placeholder?: string;
+  disabled?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   placeholder: '请输入内容...',
-  disabled: false
-})
+  disabled: false,
+});
 
 const emit = defineEmits<{
-  send: [content: string]
-}>()
+  send: [content: string];
+}>();
 
 // 响应式状态
-const inputText = ref<string>('')
-const textareaRef = ref<HTMLTextAreaElement | null>(null)
-const isComposing = ref<boolean>(false)
+const inputText = ref<string>('');
+const textareaRef = ref<HTMLTextAreaElement | null>(null);
+const isComposing = ref<boolean>(false);
 
 // 方法
 const handleSend = () => {
   if (isComposing.value || !inputText.value.trim() || props.disabled) {
-    return
+    return;
   }
-  
-  const content = inputText.value.trim()
-  emit('send', content)
-  inputText.value = ''
-  resetTextareaHeight()
-}
+
+  const content = inputText.value.trim();
+  emit('send', content);
+  inputText.value = '';
+  resetTextareaHeight();
+};
 
 const handleNewLine = () => {
-  if (props.disabled) return
-  inputText.value += '\n'
+  if (props.disabled) return;
+  inputText.value += '\n';
   nextTick(() => {
-    autoResize()
-  })
-}
+    autoResize();
+  });
+};
 
 const handleInput = () => {
-  autoResize()
-  
+  autoResize();
+
   if (inputText.value.length > 2000) {
-    inputText.value = inputText.value.substring(0, 2000)
+    inputText.value = inputText.value.substring(0, 2000);
   }
-}
+};
 
 const autoResize = () => {
   nextTick(() => {
-    if (!textareaRef.value) return
-    
-    textareaRef.value.style.height = 'auto'
-    const newHeight = Math.min(textareaRef.value.scrollHeight, 150)
-    textareaRef.value.style.height = newHeight + 'px'
-  })
-}
+    if (!textareaRef.value) return;
+
+    textareaRef.value.style.height = 'auto';
+    const newHeight = Math.min(textareaRef.value.scrollHeight, 150);
+    textareaRef.value.style.height = newHeight + 'px';
+  });
+};
 
 const resetTextareaHeight = () => {
   if (textareaRef.value) {
-    textareaRef.value.style.height = 'auto'
+    textareaRef.value.style.height = 'auto';
   }
-}
+};
 
 const focusInput = () => {
   if (textareaRef.value) {
-    textareaRef.value.focus()
+    textareaRef.value.focus();
   }
-}
+};
 
 // 处理组合输入
 const handleCompositionStart = () => {
-  isComposing.value = true
-}
+  isComposing.value = true;
+};
 
 const handleCompositionEnd = () => {
-  isComposing.value = false
-}
+  isComposing.value = false;
+};
 
 // 生命周期
 onMounted(() => {
   if (textareaRef.value) {
-    textareaRef.value.addEventListener('compositionstart', handleCompositionStart)
-    textareaRef.value.addEventListener('compositionend', handleCompositionEnd)
+    textareaRef.value.addEventListener('compositionstart', handleCompositionStart);
+    textareaRef.value.addEventListener('compositionend', handleCompositionEnd);
   }
-  focusInput()
-})
+  focusInput();
+});
 
 onUnmounted(() => {
   if (textareaRef.value) {
-    textareaRef.value.removeEventListener('compositionstart', handleCompositionStart)
-    textareaRef.value.removeEventListener('compositionend', handleCompositionEnd)
+    textareaRef.value.removeEventListener('compositionstart', handleCompositionStart);
+    textareaRef.value.removeEventListener('compositionend', handleCompositionEnd);
   }
-})
+});
 
 // 监听disabled状态变化
-watch(() => props.disabled, (newVal) => {
-  if (!newVal) {
-    nextTick(() => {
-      focusInput()
-    })
-  }
-})
+watch(
+  () => props.disabled,
+  (newVal) => {
+    if (!newVal) {
+      nextTick(() => {
+        focusInput();
+      });
+    }
+  },
+);
 
 // 暴露方法
 defineExpose({
-  focusInput
-})
+  focusInput,
+});
 </script>
 
 <style lang="less" scoped>
 .chat-input-container {
-  background: #ffffff;
   border-radius: 12px;
   border: 2px solid #e4e7ed;
   transition: all 0.3s;
@@ -224,7 +223,7 @@ defineExpose({
 
 .word-count {
   position: absolute;
-  bottom: -20px;
+  bottom: -10px;
   right: 0;
   font-size: 12px;
   color: #bfbfbf;
@@ -258,6 +257,7 @@ defineExpose({
   flex-shrink: 0;
   position: relative;
   overflow: hidden;
+  color: #fff;
 }
 
 .send-btn:hover:not(:disabled) {

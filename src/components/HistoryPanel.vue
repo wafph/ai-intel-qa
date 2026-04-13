@@ -3,7 +3,7 @@
     <!-- 顶部区域 -->
     <div class="panel-header">
       <button class="new-chat-btn" @click="handleNewChat">
-        <span class="btn-icon">+</span>
+        <span class="btn-icon"><img src="../../public/menu2.png" alt=""></span>
         <span class="btn-text">新对话</span>
       </button>
     </div>
@@ -40,11 +40,6 @@
             :class="['history-item', { active: activeChatId === history.id }]"
             @click="handleSelectChat(history.id)"
           >
-            <div class="item-icon">
-              <span v-if="history.type === '智能问答'">💬</span>
-              <span v-else-if="history.type === '辅助起草'">✍️</span>
-              <span v-else>📄</span>
-            </div>
             <div class="item-content">
               <div class="item-title">{{ history.title }}</div>
               <div class="item-preview">{{ history.preview }}</div>
@@ -80,11 +75,6 @@ interface HistoryItem {
   time: string
   type: string
   preview: string
-}
-
-interface HistoryGroup {
-  date: string
-  items: HistoryItem[]
 }
 
 const props = defineProps<Props>()
@@ -161,10 +151,10 @@ const handleClearHistory = () => {
 .new-chat-btn {
   width: 100%;
   height: 44px;
-  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
-  color: white;
-  border: none;
-  border-radius: 8px;
+  border:2px solid #8287a4;
+  background: #fff;
+  color: #333;
+  border-radius: 20px;
   font-size: 15px;
   font-weight: 500;
   cursor: pointer;
@@ -173,7 +163,6 @@ const handleClearHistory = () => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.2);
 }
 
 .new-chat-btn:hover {
@@ -186,12 +175,18 @@ const handleClearHistory = () => {
 }
 
 .btn-icon {
-  font-size: 20px;
-  font-weight: 300;
+  width: 26px;
+  height: 26px;
+  margin-right: 8px;
+   img{
+    width: 100%;
+    height: 100%;
+   }
 }
 
 .btn-text {
   font-weight: 500;
+  font-size: 18px;
 }
 
 .history-list {
@@ -349,7 +344,7 @@ const handleClearHistory = () => {
 }
 
 .item-title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
   color: #333;
   line-height: 1.3;

@@ -15,17 +15,11 @@ declare module 'vue' {
     ChatInput: typeof import('./src/components/ChatInput.vue')['default']
     ComplianceReview: typeof import('./src/components/ComplianceReview.vue')['default']
     ElButton: typeof import('element-plus/es')['ElButton']
-    ElCard: typeof import('element-plus/es')['ElCard']
-    ElIcon: typeof import('element-plus/es')['ElIcon']
-    ElInput: typeof import('element-plus/es')['ElInput']
-    Header: typeof import('./src/components/Header.vue')['default']
     HeaderMenu: typeof import('./src/components/HeaderMenu.vue')['default']
     HistoryPanel: typeof import('./src/components/HistoryPanel.vue')['default']
-    IntelligentQA: typeof import('./src/components/IntelligentQA.vue')['default']
     IntelligentRetrieval: typeof import('./src/components/IntelligentRetrieval.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     Sidebar: typeof import('./src/components/Sidebar.vue')['default']
-    SideBar: typeof import('./src/components/SideBar.vue')['default']
   }
 }
