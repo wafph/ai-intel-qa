@@ -20,7 +20,7 @@
 
     <div class="header-right">
       <button class="user-btn">
-        <span class="user-avatar">👤</span>
+        <img class="user-avatar" src="../../public/user.png" alt="" />
       </button>
     </div>
   </header>
@@ -84,7 +84,7 @@ const handleTabClick = (tabName: string) => {
   font-size: 20px;
   font-weight: 600;
   text-decoration: none;
-  
+
   span {
     margin-right: 20px;
   }
@@ -180,6 +180,7 @@ const handleTabClick = (tabName: string) => {
 }
 
 .user-avatar {
-  font-size: 20px;
+  width: 30px;
+  height: 25px;
 }
 </style>

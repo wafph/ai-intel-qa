@@ -67,7 +67,7 @@ export const useAppStore = defineStore('app', () => {
 
     try {
       // 1. 使用 fetch API
-      const response = await fetch('/v1/x-subject-token', {
+      const response = await fetch('/api2/v1/x-subject-token', {
         method: 'post',
         body: JSON.stringify(params),
       });

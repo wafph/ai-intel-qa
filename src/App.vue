@@ -333,11 +333,13 @@ const startStream = async (queryText: string, messageId: string) => {
 
     // 根据当前选项卡选择不同的API接口
     const urlqa =
-      '/v1/1725c43e3fa54828a078fce60f5a3773/workflows/60a15b33-e781-4d5d-88d3-5ed90054d9b0/conversations/068fa9f6-a615-42d9-b78a-514a1760cb06?version=1776045391962';
+      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/60a15b33-e781-4d5d-88d3-5ed90054d9b0/conversations/068fa9f6-a615-42d9-b78a-514a1760cb06?version=1776045391962';
     const urlDraf =
-      '/v1/1725c43e3fa54828a078fce60f5a3773/agents/fe7b5350-c3ee-41d4-b5d5-ecc6c26d33b3/conversations/d758b3f4-5d04-47a3-94a4-104406de1a12?version=1775627259180';
+      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/agents/fe7b5350-c3ee-41d4-b5d5-ecc6c26d33b3/conversations/d758b3f4-5d04-47a3-94a4-104406de1a12?version=1775627259180';
     const urlreview =
-      '/v1/1725c43e3fa54828a078fce60f5a3773/workflows/32dd3ef3-2bfb-4ad7-a448-811ddd37924a/conversations/57859d42-70e7-4998-9998-184832f8d6fb?version=1776051927454';
+      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/32dd3ef3-2bfb-4ad7-a448-811ddd37924a/conversations/57859d42-70e7-4998-9998-184832f8d6fb?version=1776051927454';
+      const urlSearch =
+      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/c206107e-ec31-47d8-9aaf-5c1262931168/conversations/9a98d317-ba33-435a-bfe0-8b8c4cbed470?version=1776045456703';
     var apiUrl =
       activeTab.value === '智能问答'
         ? urlqa
@@ -345,7 +347,7 @@ const startStream = async (queryText: string, messageId: string) => {
           ? urlDraf
           : activeTab.value === '合规审核'
             ? urlreview
-            : '/v1/1725c43e3fa54828a078fce60f5a3773/workflows/c206107e-ec31-47d8-9aaf-5c1262931168/conversations/9a98d317-ba33-435a-bfe0-8b8c4cbed470?version=1776045456703';
+            : urlSearch;
 
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -403,7 +405,7 @@ const startStream = async (queryText: string, messageId: string) => {
 const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
   console.log('收到流式数据块:', chunk);
   var dataReasion;
-  if (activeTab.value === '智能问答' || activeTab.value === '合规审核') {
+  if (activeTab.value === '智能问答' || activeTab.value === '合规审核' || activeTab.value === '智能检索') {
     dataReasion = chunk.data?.reasoning_content;
   } else {
     dataReasion = chunk.reasoning_content;
@@ -430,7 +432,7 @@ const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
 
     // 处理回复内容 - 根据接口类型选择字段
     let replyContent: string | undefined;
-    if (activeTab.value === '智能问答' || activeTab.value === '合规审核') {
+    if (activeTab.value === '智能问答' || activeTab.value === '合规审核' || activeTab.value === '智能检索') {
       replyContent = chunk.data?.text;
     } else {
       replyContent = chunk?.content;
