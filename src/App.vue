@@ -403,7 +403,6 @@ const startStream = async (queryText: string, messageId: string) => {
 };
 
 const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
-  console.log('收到流式数据块:', chunk);
   var dataReasion;
   if (activeTab.value === '智能问答' || activeTab.value === '合规审核' || activeTab.value === '智能检索') {
     dataReasion = chunk.data?.reasoning_content;
@@ -427,7 +426,6 @@ const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
           message.reasoning = (message.reasoning || '') + reasoning;
         }
       }
-      console.log('更新推理内容:', currentReasoning.value);
     }
 
     // 处理回复内容 - 根据接口类型选择字段
@@ -439,8 +437,6 @@ const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
     }
     if (replyContent !== undefined) {
       currentAnswer.value += replyContent;
-      console.log('更新回复内容:', currentAnswer.value);
-
       // 更新对应的AI消息内容
       const chat = chatSessions.value[activeChatId.value!];
       if (chat) {

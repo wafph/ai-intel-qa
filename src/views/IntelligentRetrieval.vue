@@ -248,13 +248,6 @@ const scrollToBottom = () => {
 watch(
   () => props.currentAnswer,
   (newAnswer, oldAnswer = '') => {
-    console.log(
-      '🚀 回复内容变化:',
-      newAnswer?.substring(0, 50),
-      '...',
-      '长度:',
-      newAnswer?.length,
-    );
     if (newAnswer && newAnswer !== oldAnswer) {
       // 计算新增的文本部分
       const newText = newAnswer.substring(oldAnswer.length);
@@ -277,7 +270,6 @@ watch(
 watch(
   () => props.streaming,
   (newStreaming) => {
-    console.log('🔄 流式状态变化:', newStreaming);
     if (!newStreaming) {
       stopTypingEffect();
     }
@@ -289,13 +281,6 @@ watch(
 watch(
   () => props.currentReasoning,
   (newReasoning) => {
-    console.log(
-      '🤔 推理过程变化:',
-      newReasoning?.substring(0, 100),
-      '...',
-      '长度:',
-      newReasoning?.length,
-    );
     // 【核心修改】推理过程（思考中）内容更新时，触发滚动到底部
     if (newReasoning && newReasoning.trim() !== '') {
       scrollToBottom();
@@ -307,7 +292,6 @@ watch(
 watch(
   () => props.currentStreamingMessageId,
   (newId) => {
-    console.log('📱 当前流式消息ID变化:', newId);
     if (!newId) {
       stopTypingEffect();
     }

@@ -254,13 +254,6 @@ const scrollToBottom = () => {
 watch(
   () => props.currentAnswer,
   (newAnswer, oldAnswer = '') => {
-    console.log(
-      '🚀 辅助起草回复内容变化:',
-      newAnswer?.substring(0, 50),
-      '...',
-      '长度:',
-      newAnswer?.length,
-    );
     if (newAnswer && newAnswer !== oldAnswer) {
       const newText = newAnswer.substring(oldAnswer.length);
       if (newText) {
@@ -278,7 +271,6 @@ watch(
 watch(
   () => props.streaming,
   (newStreaming) => {
-    console.log('🔄 辅助起草流式状态变化:', newStreaming);
     if (!newStreaming) {
       stopTypingEffect();
     }
@@ -289,14 +281,7 @@ watch(
 // 监听推理过程变化
 watch(
   () => props.currentReasoning,
-  (newReasoning) => {
-    console.log(
-      '🤔 辅助起草推理过程变化:',
-      newReasoning?.substring(0, 100),
-      '...',
-      '长度:',
-      newReasoning?.length,
-    );
+  () => {
   },
 );
 
@@ -304,7 +289,6 @@ watch(
 watch(
   () => props.currentStreamingMessageId,
   (newId) => {
-    console.log('📱 辅助起草当前流式消息ID变化:', newId);
     if (!newId) {
       stopTypingEffect();
     }
@@ -326,8 +310,7 @@ watch(
 onMounted(() => {
   scrollToBottom();
   // 监听模板点击事件
-  window.addEventListener('send-template', (event: any) => {
-    console.log('接收到模板发送事件:', event.detail);
+  window.addEventListener('send-template', () => {
   });
 });
 

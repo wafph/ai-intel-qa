@@ -244,13 +244,6 @@ const scrollToBottom = () => {
 watch(
   () => props.currentAnswer,
   (newAnswer, oldAnswer = '') => {
-    console.log(
-      '🚀 回复内容变化:',
-      newAnswer?.substring(0, 50),
-      '...',
-      '长度:',
-      newAnswer?.length,
-    );
     if (newAnswer && newAnswer !== oldAnswer) {
       const newText = newAnswer.substring(oldAnswer.length);
       if (newText) {
@@ -270,7 +263,6 @@ watch(
 watch(
   () => props.streaming,
   (newStreaming) => {
-    console.log('🔄 流式状态变化:', newStreaming);
     if (!newStreaming) {
       stopTypingEffect();
     }
@@ -281,16 +273,7 @@ watch(
 // 【可选】可以保留对 currentReasoning 的监听，用于调试，但不再用于触发滚动（因为内容已从 item.reasoning 读取）
 watch(
   () => props.currentReasoning,
-  (newReasoning) => {
-    console.log(
-      '🤔 推理过程变化:',
-      newReasoning?.substring(0, 100),
-      '...',
-      '长度:',
-      newReasoning?.length,
-    );
-    // 注意：此处不再需要触发滚动，因为思考内容已持久化到消息对象并由模板直接渲染
-    // 滚动将由 currentAnswer 的变化或聊天数据变化触发
+  () => {
   },
 );
 
@@ -298,7 +281,6 @@ watch(
 watch(
   () => props.currentStreamingMessageId,
   (newId) => {
-    console.log('📱 当前流式消息ID变化:', newId);
     if (!newId) {
       stopTypingEffect();
     }
