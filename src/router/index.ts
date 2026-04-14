@@ -4,23 +4,33 @@ import { useAppStore } from '../stores/app';
 const routes = [
   {
     path: '/',
-    redirect: '/qa',
+    redirect: '/intelligent-qa',
   },
   {
-    path: '/qa',
+    path: '/intelligent-qa',
     name: '智能问答',
     component: () => import('../views/IntelligentQA.vue'),
   },
-  // {
-  //   path: '/retrieval',
-  //   name: '智能检索',
-  //   component: () => import('../views/IntelligentRetrieval.vue'),
-  // },
-  // {
-  //   path: '/drafting',
-  //   name: '辅助起草',
-  //   component: () => import('../views/AuxiliaryDraft.vue'),
-  // },
+  {
+    path: '/intelligent-retrieval',
+    name: '智能检索',
+    component: () => import('../views/IntelligentRetrieval.vue'),
+  },
+   {
+    path: '/auxiliary-draft',
+    name: '智能检索',
+    component: () => import('../views/AuxiliaryDraft.vue'),
+  },
+  {
+    path: '/compliance-review',
+    name: '合规审核',
+    component: () => import('../views/ComplianceReview.vue'),
+  },
+  {
+    path: '/my-collections',
+    name: '我的收藏',
+    component: () => import('../views/MyCollections.vue'),
+  },
   // {
   //   path: '/review',
   //   name: '合规审核',

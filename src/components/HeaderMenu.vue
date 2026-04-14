@@ -38,6 +38,24 @@ interface TabItem {
   label: string;
 }
 
+import { useRouter } from 'vue-router';
+
+const router = useRouter();
+
+// 修改handleTabClick方法
+const handleTabClick = (tabName: string) => {
+  if (props.activeTab !== tabName) {
+    const routeMap: Record<string, string> = {
+      智能问答: '/intelligent-qa',
+      智能检索: '/intelligent-retrieval',
+      辅助起草: '/auxiliary-draft',
+      合规审核: '/compliance-review',
+    };
+
+    router.push(routeMap[tabName] || '/intelligent-qa');
+    emit('tab-change', tabName);
+  }
+};
 const props = defineProps<Props>();
 const emit = defineEmits<{
   'tab-change': [tabName: string];
@@ -50,13 +68,6 @@ const tabs = computed<TabItem[]>(() => [
   { value: '辅助起草', label: '辅助起草' },
   { value: '合规审核', label: '合规审核' },
 ]);
-
-// 方法
-const handleTabClick = (tabName: string) => {
-  if (props.activeTab !== tabName) {
-    emit('tab-change', tabName);
-  }
-};
 </script>
 
 <style scoped>

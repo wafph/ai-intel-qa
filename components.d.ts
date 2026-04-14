@@ -15,6 +15,7 @@ declare module 'vue' {
     ChatInput: typeof import('./src/components/ChatInput.vue')['default']
     ComplianceReview: typeof import('./src/components/ComplianceReview.vue')['default']
     ElButton: typeof import('element-plus/es')['ElButton']
+    ElIcon: typeof import('element-plus/es')['ElIcon']
     HeaderMenu: typeof import('./src/components/HeaderMenu.vue')['default']
     HistoryPanel: typeof import('./src/components/HistoryPanel.vue')['default']
     IntelligentRetrieval: typeof import('./src/components/IntelligentRetrieval.vue')['default']

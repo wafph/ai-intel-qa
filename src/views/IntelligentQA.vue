@@ -6,9 +6,12 @@
       <p>你可以使用自然语言提问，我来精准回答</p>
     </div>
     <!-- 历史对话列表 -->
-    <div class="conversation-history" v-if="chatData?.messages && chatData?.messages?.length > 0">
+    <div
+      class="conversation-history"
+      v-if="chatData?.messages && chatData?.messages?.length > 0"
+    >
       <div
-        v-for="item in (chatData.messages || [])"
+        v-for="item in chatData.messages || []"
         :key="item.id"
         :class="[
           'history-item',
@@ -19,7 +22,7 @@
         <div v-if="item.role === 'user'" class="message-user">
           <div class="message-header">
             <div class="avatar user-avatar">
-              <div><img src="../../public/user.svg" alt=""></div>
+              <div><img src="../../public/user.svg" alt="" /></div>
             </div>
             <div class="message-info">
               <div class="message-content">{{ item.content }}</div>
@@ -44,7 +47,8 @@
                   <span>思考过程</span>
                 </div>
                 <div class="thinking-content">
-                  {{ item.reasoning }}
+                  <!-- 可以在显示前处理重复内容 -->
+                  {{ removeDuplicateReasoning(item.reasoning) }}
                 </div>
               </div>
 
@@ -65,10 +69,7 @@
 
                 <!-- 加载指示器（当没有任何内容时） -->
                 <div
-                  v-if="
-                    streaming &&
-                    (!currentAnswer || currentAnswer.trim() === '')
-                  "
+                  v-if="streaming && (!currentAnswer || currentAnswer.trim() === '')"
                   class="thinking-indicator"
                 >
                   <div class="thinking-dots">
@@ -78,25 +79,108 @@
                   </div>
                 </div>
               </div>
-
-              <!-- 非流式消息 -->
               <div v-else>
                 <!-- 显示最终回复内容 -->
                 <div
                   class="message-content pad"
                   v-html="renderMarkdown(item.content)"
                 ></div>
-              </div>
 
-              <div class="message-time">
-                {{ formatTime(item.timestamp) }}
-                <span
-                  v-if="item.streaming && item.id === currentStreamingMessageId"
-                  class="streaming-badge"
-                >
-                  <span class="streaming-dot"></span>
-                  生成中...
-                </span>
+                <div style="display: flex; align-items: center">
+                  <el-button style="padding: 10px 20px" size="small" type="primiary" plain
+                    >来源<el-icon class="el-icon--right"><ArrowRight /></el-icon
+                  ></el-button>
+                  <!-- 复制按钮 -->
+                  <div
+                    class="copy-container"
+                    style="display: inline-block; margin-left: 20px; cursor: pointer"
+                    :title="
+                      item.streaming && item.id === currentStreamingMessageId
+                        ? '正在生成内容，请稍后复制'
+                        : '复制内容'
+                    "
+                    @click="handleCopy(item.content, item.id)"
+                    :class="{
+                      'copy-disabled':
+                        item.streaming && item.id === currentStreamingMessageId,
+                    }"
+                  >
+                    <img
+                      src="../../public/copy.svg"
+                      style="width: 20px; height: 20px"
+                      alt="复制"
+                    />
+                    <span
+                      v-if="showCopied && copiedMessageId === item.id"
+                      class="copied-text"
+                      >已复制</span
+                    >
+                  </div>
+
+                  <!-- 点赞按钮 -->
+                  <div
+                    class="vote-container"
+                    style="display: inline-block; margin-left: 20px"
+                  >
+                    <img
+                      :src="
+                        item.vote === 'like'
+                          ? '../../public/zhan-active.svg'
+                          : '../../public/zhan.svg'
+                      "
+                      alt="点赞"
+                      style="
+                        width: 20px;
+                        height: 20px;
+                        cursor: pointer;
+                        transition: opacity 0.3s ease;
+                      "
+                      @click="handleVote(item.id, 'like')"
+                    />
+                    <span
+                      class="vote-count"
+                      :style="{ color: item.vote === 'like' ? '#409eff' : '#999' }"
+                    >
+                      {{ item.likeCount || 0 }}
+                    </span>
+                  </div>
+
+                  <div
+                    class="vote-container"
+                    style="display: inline-block; margin-left: 20px"
+                  >
+                    <img
+                      src="../../public/cai.svg"
+                      alt="踩"
+                      style="width: 20px; height: 20px; cursor: pointer"
+                      @click="handleVote(item.id, 'dislike')"
+                      :style="{
+                        filter:
+                          item.vote === 'dislike'
+                            ? 'invert(29%) sepia(82%) saturate(748%) hue-rotate(327deg) brightness(97%) contrast(101%)'
+                            : 'none',
+                        transition: 'filter 0.3s ease',
+                      }"
+                    />
+                    <span
+                      class="vote-count"
+                      :style="{ color: item.vote === 'dislike' ? '#f56c6c' : '#999' }"
+                    >
+                      {{ item.dislikeCount || 0 }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="message-time">
+                  {{ formatTime(item.timestamp) }}
+                  <span
+                    v-if="item.streaming && item.id === currentStreamingMessageId"
+                    class="streaming-badge"
+                  >
+                    <span class="streaming-dot"></span>
+                    生成中...
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -127,15 +211,18 @@ interface Props {
   currentStreamingMessageId?: string | null;
 }
 
-// 更新 ChatMessage 接口以匹配 App.vue
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  reasoning?: string; // 与 App.vue 保持一致
+  reasoning?: string;
   timestamp: Date;
   streaming?: boolean;
+  vote?: 'like' | 'dislike' | null; // 用户投票状态
+  likeCount?: number; // 点赞数量
+  dislikeCount?: number; // 踩数量
 }
+
 interface ChatSession {
   id: string;
   title: string;
@@ -158,6 +245,60 @@ const md = new MarkdownIt({
   typographer: true,
 });
 
+// 在script部分添加响应式数据
+const showCopied = ref(false);
+const copiedMessageId = ref<string | null>(null);
+let copyTimer: null = null;
+
+// 复制文本到剪贴板的函数
+const copyToClipboard = async (text: string) => {
+  try {
+    // 现代浏览器API
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      // 回退方案
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'absolute';
+      textArea.style.left = '-9999px';
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+    }
+    return true;
+  } catch (error) {
+    console.error('复制失败:', error);
+    return false;
+  }
+};
+
+// 处理复制点击事件
+const handleCopy = async (content: string, messageId: string) => {
+  if (!content || content.trim() === '') {
+    return;
+  }
+
+  const isCopied = await copyToClipboard(content);
+
+  if (isCopied) {
+    // 显示"已复制"提示
+    showCopied.value = true;
+    copiedMessageId.value = messageId;
+
+    // 清除之前的计时器
+    if (copyTimer) {
+      clearTimeout(copyTimer);
+    }
+
+    // 设置2秒后自动隐藏
+    copyTimer = setTimeout(() => {
+      showCopied.value = false;
+      copiedMessageId.value = null;
+    }, 2000);
+  }
+};
 // 将文本追加到打字机队列
 const appendToTypingQueue = (text: string) => {
   if (!text) return;
@@ -168,6 +309,45 @@ const appendToTypingQueue = (text: string) => {
     stopTypingEffect();
     const targetText = displayAnswer.value + text;
     startTypingEffect(targetText);
+  }
+};
+
+// 添加投票处理函数
+const handleVote = (messageId: string, voteType: 'like' | 'dislike') => {
+  if (!props.chatData) return;
+
+  const message = props.chatData.messages.find((msg) => msg.id === messageId);
+  if (!message) return;
+
+  // 如果已经投过票，点击相同按钮则取消
+  if (message.vote === voteType) {
+    message.vote = null;
+    if (voteType === 'like') {
+      message.likeCount = Math.max((message.likeCount || 1) - 1, 0);
+    } else {
+      message.dislikeCount = Math.max((message.dislikeCount || 1) - 1, 0);
+    }
+  }
+  // 如果从点赞切换到踩
+  else if (message.vote === 'like' && voteType === 'dislike') {
+    message.vote = 'dislike';
+    message.likeCount = Math.max((message.likeCount || 1) - 1, 0);
+    message.dislikeCount = (message.dislikeCount || 0) + 1;
+  }
+  // 如果从踩切换到点赞
+  else if (message.vote === 'dislike' && voteType === 'like') {
+    message.vote = 'like';
+    message.dislikeCount = Math.max((message.dislikeCount || 1) - 1, 0);
+    message.likeCount = (message.likeCount || 0) + 1;
+  }
+  // 首次投票
+  else {
+    message.vote = voteType;
+    if (voteType === 'like') {
+      message.likeCount = (message.likeCount || 0) + 1;
+    } else {
+      message.dislikeCount = (message.dislikeCount || 0) + 1;
+    }
   }
 };
 
@@ -240,6 +420,21 @@ const scrollToBottom = () => {
     }
   });
 };
+
+const removeDuplicateReasoning = (reasoningText: string) => {
+  if (!reasoningText) return '';
+
+  // 简单去重逻辑：如果内容完全重复，只取一半
+  const midIndex = Math.floor(reasoningText.length / 2);
+  const firstHalf = reasoningText.substring(0, midIndex);
+  const secondHalf = reasoningText.substring(midIndex);
+
+  if (firstHalf === secondHalf) {
+    return firstHalf;
+  }
+  return reasoningText;
+};
+
 // 监听回复内容变化
 watch(
   () => props.currentAnswer,
@@ -273,8 +468,7 @@ watch(
 // 【可选】可以保留对 currentReasoning 的监听，用于调试，但不再用于触发滚动（因为内容已从 item.reasoning 读取）
 watch(
   () => props.currentReasoning,
-  () => {
-  },
+  () => {},
 );
 
 // 监听当前流式消息ID变化
@@ -366,7 +560,7 @@ onUnmounted(() => {
               img {
                 width: 80%;
                 height: 80%;
-              };
+              }
             }
 
             .message-info {
@@ -375,7 +569,6 @@ onUnmounted(() => {
               .message-content {
                 background: #d7e6fe;
                 color: black;
-                font-weight: 600;
                 border-radius: 12px;
                 padding: 12px 36px;
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -398,7 +591,7 @@ onUnmounted(() => {
             width: 100%;
 
             .pad {
-              padding: 20px 40px;
+              padding: 20px;
             }
 
             .thinking-process {
@@ -449,9 +642,6 @@ onUnmounted(() => {
             }
 
             .answer-streaming {
-              background: #f6ffed;
-              border: 1px solid #b7eb8f;
-              border-radius: 8px;
               padding: 16px 35px;
               animation: fadeIn 0.5s ease;
               margin-top: 8px;
@@ -545,15 +735,6 @@ onUnmounted(() => {
             }
 
             .message-content {
-              padding: 12px 36px;
-              line-height: 1.6;
-              word-break: break-word;
-              background: white;
-              border: 1px solid #e8e8e8;
-              border-radius: 12px;
-              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-              border-left: 4px solid #4facfe;
-
               :deep(p) {
                 margin: 8px 0;
               }
@@ -650,6 +831,100 @@ onUnmounted(() => {
       flex-direction: column;
       gap: 8px;
     }
+  }
+}
+.vote-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 0.8;
+  }
+
+  img.active {
+    filter: brightness(0.9);
+  }
+}
+
+.vote-count {
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 16px;
+  text-align: center;
+  transition: color 0.3s ease;
+}
+
+.copy-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  padding: 4px 8px;
+  border-radius: 6px;
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+
+    &:not(.copy-disabled) img {
+      opacity: 0.8;
+    }
+  }
+
+  &.copy-disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  img {
+    transition: opacity 0.3s ease;
+  }
+
+  .copied-text {
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: white;
+    color: blacck;
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    animation: fadeInOut 2s ease;
+    z-index: 10;
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 4px;
+      border-style: solid;
+      border-color: #67c23a transparent transparent transparent;
+    }
+  }
+}
+
+@keyframes fadeInOut {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(5px);
+  }
+  20% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  80% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-5px);
   }
 }
 

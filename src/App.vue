@@ -1,17 +1,22 @@
 <template>
   <div class="app-container">
     <!-- 顶部菜单 -->
-    <HeaderMenu :active-tab="activeTab" @tab-change="handleTabChange" />
+    <HeaderMenu 
+      :active-tab="activeTab" 
+      @tab-change="handleTabChange" 
+    />
 
     <div class="main-layout">
       <!-- 左侧历史对话面板 -->
       <HistoryPanel
-        :history-list="historyList"
+        :history-list="filteredHistory"
         :active-chat-id="activeChatId"
+        :user="userStore.user"
         @select-chat="handleSelectChat"
         @new-chat="handleNewChat"
         @delete-chat="handleDeleteChat"
         @clear-history="handleClearHistory"
+        @toggle-favorite="handleToggleFavorite"
       />
 
       <!-- 右侧主内容区域 -->
@@ -72,38 +77,15 @@ import AuxiliaryDraft from './views/AuxiliaryDraft.vue';
 import IntelligentRetrieval from './views/IntelligentRetrieval.vue';
 import ComplianceReview from './views/ComplianceReview.vue';
 import { useAppStore } from './stores/app';
+import { useChatStore } from './stores/chat';
+import { useUserStore } from './stores/user';
+import type { ChatMessage, ChatSession, HistoryItem } from './types/chat';
+
 const appStore = useAppStore();
+const chatStore = useChatStore();
+const userStore = useUserStore();
 
 // 定义类型接口
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  reasoning?: string;
-  timestamp: Date;
-  streaming?: boolean;
-  metadata?: {
-    type?: string;
-    wordCount?: number;
-  };
-}
-
-interface ChatSession {
-  id: string;
-  title: string;
-  time: string;
-  type: string;
-  messages: ChatMessage[];
-}
-
-interface HistoryItem {
-  id: string;
-  title: string;
-  time: string;
-  type: string;
-  preview: string;
-}
-
 interface StreamChunk {
   event: string;
   reasoning_content?: string;
@@ -126,7 +108,6 @@ interface StreamChunk {
 // 状态管理
 const activeTab = ref<string>('智能问答');
 const activeChatId = ref<string | null>(null);
-const chatSessions = ref<Record<string, ChatSession>>({});
 
 // 流式相关状态
 const isStreaming = ref<boolean>(false);
@@ -135,28 +116,15 @@ const currentAnswer = ref<string>('');
 let abortController: AbortController | null = null;
 let currentStreamingMessageId: string | null = null;
 
-// 历史记录数据
-const historyList = ref<HistoryItem[]>([
-  {
-    id: '1',
-    title: '查询员工报销规定',
-    time: '今天 10:30',
-    type: '智能问答',
-    preview: '请问公司的员工报销有什么规定？',
-  },
-  {
-    id: '2',
-    title: '党委会议事规则',
-    time: '今天 09:15',
-    type: '辅助起草',
-    preview: '请帮我起草党委会议事规则...',
-  },
-]);
-
 // 计算属性
 const currentChatData = computed(() => {
   if (!activeChatId.value) return null;
-  return chatSessions.value[activeChatId.value] || null;
+  return chatStore.getChatSession(activeChatId.value) || null;
+});
+
+// 过滤后的历史记录（只显示当前菜单的历史记录）
+const filteredHistory = computed(() => {
+  return chatStore.historyList.filter(item => item.menuType === activeTab.value);
 });
 
 const activeComponent = computed(() => {
@@ -184,6 +152,7 @@ const inputPlaceholder = computed(() => {
 // 方法
 const handleTabChange = (tabName: string) => {
   activeTab.value = tabName;
+  chatStore.setCurrentActiveTab(tabName);
   handleNewChat();
 };
 
@@ -192,27 +161,27 @@ const handleNewChat = () => {
   activeChatId.value = newChatId;
   const chatTitle = `${activeTab.value} - ${new Date().toLocaleTimeString()}`;
 
-  chatSessions.value[newChatId] = {
+  const newSession: ChatSession = {
     id: newChatId,
     title: chatTitle,
     time: '刚刚',
-    type: activeTab.value,
+    type: activeTab.value as any,
     messages: [],
+    menuType: activeTab.value
   };
 
-  historyList.value.unshift({
+  const newHistory: HistoryItem = {
     id: newChatId,
     title: chatTitle,
     time: '刚刚',
-    type: activeTab.value,
+    type: activeTab.value as any,
     preview: '新对话',
-  });
+    menuType: activeTab.value
+  };
 
-  if (historyList.value.length > 50) {
-    historyList.value = historyList.value.slice(0, 50);
-  }
+  chatStore.addChatSession(newSession);
+  chatStore.addHistoryItem(newHistory);
 
-  saveToLocalStorage();
   scrollToBottom();
 };
 
@@ -222,37 +191,31 @@ const handleSelectChat = (chatId: string) => {
   }
 
   activeChatId.value = chatId;
-  if (!chatSessions.value[chatId]) {
-    loadFromLocalStorage(chatId);
-  }
-
   resetStreamState();
   scrollToBottom();
 };
 
 const handleDeleteChat = (chatId: string) => {
-  delete chatSessions.value[chatId];
-  const index = historyList.value.findIndex((h) => h.id === chatId);
-  if (index !== -1) {
-    historyList.value.splice(index, 1);
-  }
-
+  chatStore.deleteHistoryItem(chatId);
   if (activeChatId.value === chatId) {
-    if (historyList.value.length > 0) {
-      activeChatId.value = historyList.value[0].id;
+    if (chatStore.historyList.length > 0) {
+      activeChatId.value = chatStore.historyList[0].id;
     } else {
       handleNewChat();
     }
   }
-
-  saveToLocalStorage();
 };
 
 const handleClearHistory = () => {
-  historyList.value = [];
-  chatSessions.value = {};
+  chatStore.historyList = chatStore.historyList.filter(
+    item => item.menuType !== activeTab.value
+  );
+  chatStore.saveToLocalStorage();
   handleNewChat();
-  saveToLocalStorage();
+};
+
+const handleToggleFavorite = (chatId: string) => {
+  chatStore.toggleCollect(chatId);
 };
 
 const handleSendMessage = async (content: string) => {
@@ -262,7 +225,7 @@ const handleSendMessage = async (content: string) => {
     handleNewChat();
   }
 
-  const chat = chatSessions.value[activeChatId.value!];
+  const chat = chatStore.getChatSession(activeChatId.value!);
   if (!chat) return;
 
   // 添加用户消息
@@ -280,7 +243,7 @@ const handleSendMessage = async (content: string) => {
     const newTitle = content.length > 20 ? content.substring(0, 20) + '...' : content;
     chat.title = newTitle;
 
-    const historyItem = historyList.value.find((h) => h.id === chat.id);
+    const historyItem = chatStore.historyList.find((h) => h.id === chat.id);
     if (historyItem) {
       historyItem.title = newTitle;
       historyItem.preview = content;
@@ -307,7 +270,7 @@ const handleSendMessage = async (content: string) => {
   await startStream(content, aiMessageId);
 
   // 保存历史
-  saveToLocalStorage();
+  chatStore.saveToLocalStorage();
   scrollToBottom();
 };
 
@@ -338,7 +301,7 @@ const startStream = async (queryText: string, messageId: string) => {
       '/api1/v1/1725c43e3fa54828a078fce60f5a3773/agents/fe7b5350-c3ee-41d4-b5d5-ecc6c26d33b3/conversations/d758b3f4-5d04-47a3-94a4-104406de1a12?version=1775627259180';
     const urlreview =
       '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/32dd3ef3-2bfb-4ad7-a448-811ddd37924a/conversations/57859d42-70e7-4998-9998-184832f8d6fb?version=1776051927454';
-      const urlSearch =
+    const urlSearch =
       '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/c206107e-ec31-47d8-9aaf-5c1262931168/conversations/9a98d317-ba33-435a-bfe0-8b8c4cbed470?version=1776045456703';
     var apiUrl =
       activeTab.value === '智能问答'
@@ -418,7 +381,7 @@ const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
       currentReasoning.value += reasoning;
 
       // 3.2 【关键修改】将推理内容持久化到当前消息对象
-      const chat = chatSessions.value[activeChatId.value!];
+      const chat = chatStore.getChatSession(activeChatId.value!);
       if (chat) {
         const message = chat.messages.find((m) => m.id === messageId);
         if (message) {
@@ -438,12 +401,11 @@ const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
     if (replyContent !== undefined) {
       currentAnswer.value += replyContent;
       // 更新对应的AI消息内容
-      const chat = chatSessions.value[activeChatId.value!];
+      const chat = chatStore.getChatSession(activeChatId.value!);
       if (chat) {
         const message = chat.messages.find((m) => m.id === messageId);
         if (message) {
           message.content = currentAnswer.value;
-          // ... 元数据逻辑保持不变 ...
         }
       }
     }
@@ -460,14 +422,14 @@ const finishStream = (messageId: string) => {
   currentReasoning.value = '';
   currentAnswer.value = '';
 
-  const chat = chatSessions.value[activeChatId.value!];
+  const chat = chatStore.getChatSession(activeChatId.value!);
   if (chat) {
     const message = chat.messages.find((m) => m.id === messageId);
     if (message) {
       message.streaming = false;
 
       // 更新历史记录预览
-      const historyItem = historyList.value.find((h) => h.id === activeChatId.value);
+      const historyItem = chatStore.historyList.find((h) => h.id === activeChatId.value);
       if (historyItem && chat.messages.length === 2) {
         const firstQuestion = chat.messages[0].content;
         historyItem.preview =
@@ -480,13 +442,13 @@ const finishStream = (messageId: string) => {
 
   // 重置流式状态
   resetStreamState();
-  saveToLocalStorage();
+  chatStore.saveToLocalStorage();
   scrollToBottom();
 };
 
 // 处理流式错误
 const handleStreamError = (messageId: string, errorMessage: string) => {
-  const chat = chatSessions.value[activeChatId.value!];
+  const chat = chatStore.getChatSession(activeChatId.value!);
   if (chat) {
     const message = chat.messages.find((m) => m.id === messageId);
     if (message) {
@@ -506,7 +468,7 @@ const stopStream = () => {
   }
 
   if (currentStreamingMessageId) {
-    const chat = chatSessions.value[activeChatId.value!];
+    const chat = chatStore.getChatSession(activeChatId.value!);
     if (chat) {
       const message = chat.messages.find((m) => m.id === currentStreamingMessageId);
       if (message) {
@@ -521,7 +483,7 @@ const stopStream = () => {
   isStreaming.value = false;
   currentStreamingMessageId = null;
   resetStreamState();
-  saveToLocalStorage();
+  chatStore.saveToLocalStorage();
 };
 
 // 重置流式状态
@@ -532,38 +494,6 @@ const resetStreamState = () => {
 };
 
 // 工具函数
-const saveToLocalStorage = () => {
-  try {
-    localStorage.setItem('chatSessions', JSON.stringify(chatSessions.value));
-    localStorage.setItem('historyList', JSON.stringify(historyList.value));
-    localStorage.setItem('activeChatId', activeChatId.value || '');
-  } catch (error) {
-    console.error('保存到localStorage失败:', error);
-  }
-};
-
-const loadFromLocalStorage = (chatId?: string) => {
-  try {
-    const savedSessions = localStorage.getItem('chatSessions');
-    const savedHistory = localStorage.getItem('historyList');
-    const savedActiveId = localStorage.getItem('activeChatId');
-
-    if (savedSessions) {
-      chatSessions.value = JSON.parse(savedSessions);
-    }
-
-    if (savedHistory) {
-      historyList.value = JSON.parse(savedHistory);
-    }
-
-    if (savedActiveId && !chatId) {
-      activeChatId.value = savedActiveId;
-    }
-  } catch (error) {
-    console.error('从localStorage加载失败:', error);
-  }
-};
-
 const scrollToBottom = () => {
   nextTick(() => {
     const container = document.querySelector('.dynamic-content');
@@ -575,9 +505,9 @@ const scrollToBottom = () => {
 
 // 生命周期
 onMounted(() => {
-  loadFromLocalStorage();
-  if (!activeChatId.value && historyList.value.length > 0) {
-    activeChatId.value = historyList.value[0].id;
+  chatStore.loadFromLocalStorage();
+  if (chatStore.historyList.length > 0) {
+    activeChatId.value = chatStore.historyList[0].id;
   }
 });
 
@@ -644,27 +574,6 @@ onUnmounted(() => {
   gap: 16px;
   animation: slideInUp 0.3s ease;
 }
-
-// .stop-btn {
-//   padding: 8px 16px;
-//   background: linear-gradient(135deg, #ff4d4f, #f5222d);
-//   color: white;
-//   border: none;
-//   border-radius: 6px;
-//   font-size: 13px;
-//   font-weight: 500;
-//   cursor: pointer;
-//   transition: all 0.3s;
-//   display: flex;
-//   align-items: center;
-//   gap: 6px;
-//   box-shadow: 0 2px 8px rgba(245, 34, 45, 0.2);
-// }
-
-// .stop-btn:hover {
-//   transform: translateY(-1px);
-//   box-shadow: 0 4px 12px rgba(245, 34, 45, 0.3);
-// }
 
 .stop-icon {
   font-size: 12px;
