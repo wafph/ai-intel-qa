@@ -28,8 +28,7 @@ const routes = [
     path: '/compliance-review',
     name: 'ComplianceReview',
     component: ComplianceReview,
-  },
-  
+  }, 
   {
     path: '/my-collections',
     name: '我的收藏',

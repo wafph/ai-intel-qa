@@ -87,77 +87,9 @@
                 </div>
               </div>
 
-              <!-- 在AuxiliaryDraft.vue的template中，找到AI消息的最终回复内容部分 -->
+              <!-- 最终回复内容 -->
               <div v-else>
-                <!-- 显示最终回复内容 -->
                 <div class="message-text" v-html="renderMarkdown(message.content)"></div>
-
-                <!-- 操作按钮区域 -->
-                <div
-                  class="action-buttons"
-                  style="display: flex; align-items: center; margin-top: 12px"
-                >
-                  <!-- 复制按钮 -->
-                  <div
-                    class="copy-container"
-                    style="display: inline-flex; align-items: center; margin-left: 0"
-                    :title="'复制内容'"
-                    @click="handleCopy(message.content, message.id)"
-                  >
-                    <img
-                      src="/images/copy.svg"
-                      style="width: 20px; height: 20px; margin-right: 4px"
-                      alt="复制"
-                    />
-                    <span
-                      v-if="showCopied && copiedMessageId === message.id"
-                      class="copied-text"
-                      >已复制</span
-                    >
-                  </div>
-
-                  <!-- 点赞按钮 -->
-                  <div
-                    class="vote-container"
-                    :class="{ 'like-active': message.vote === 'like' }"
-                    @click="handleVote(message.id, 'like')"
-                    style="margin-left: 20px"
-                  >
-                    <img
-                      src="/images/zhan.svg"
-                      alt="点赞"
-                      style="width: 20px; height: 20px"
-                      :class="{ 'like-active': message.vote === 'like' }"
-                    />
-                    <span
-                      class="vote-count"
-                      :class="{ 'like-active': message.vote === 'like' }"
-                    >
-                      {{ message.likeCount || 0 }}
-                    </span>
-                  </div>
-
-                  <!-- 踩按钮 -->
-                  <div
-                    class="vote-container"
-                    :class="{ 'dislike-active': message.vote === 'dislike' }"
-                    @click="handleVote(message.id, 'dislike')"
-                    style="margin-left: 20px"
-                  >
-                    <img
-                      src="/images/cai.svg"
-                      alt="踩"
-                      style="width: 20px; height: 20px"
-                      :class="{ 'dislike-active': message.vote === 'dislike' }"
-                    />
-                    <span
-                      class="vote-count"
-                      :class="{ 'dislike-active': message.vote === 'dislike' }"
-                    >
-                      {{ message.dislikeCount || 0 }}
-                    </span>
-                  </div>
-                </div>
               </div>
               <div class="message-time">
                 {{ formatTime(message.timestamp) }}
@@ -180,9 +112,7 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import MarkdownIt from 'markdown-it';
-const showCopied = ref(false);
-const copiedMessageId = ref<string | null>(null);
-let copyTimer: ReturnType<typeof setTimeout> | null = null;
+
 interface Props {
   chatData: ChatSession | null;
   streaming?: boolean;
@@ -205,9 +135,6 @@ interface DraftMessage {
   content: string;
   timestamp: Date;
   streaming?: boolean;
-  vote?: 'like' | 'dislike' | null; // 新增：投票状态
-  likeCount?: number;    // 新增：点赞数
-  dislikeCount?: number; // 新增：踩数
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -237,81 +164,6 @@ const appendToTypingQueue = (text: string) => {
   }
 };
 
-const copyToClipboard = async (text: string) => {
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-    } else {
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      textArea.style.position = 'absolute';
-      textArea.style.left = '-9999px';
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-    }
-    return true;
-  } catch (error) {
-    console.error('复制失败:', error);
-    return false;
-  }
-};
-
-// 处理复制点击事件
-const handleCopy = async (content: string, messageId: string) => {
-  if (!content || content.trim() === '') {
-    return;
-  }
-  
-  const isCopied = await copyToClipboard(content);
-  
-  if (isCopied) {
-    showCopied.value = true;
-    copiedMessageId.value = messageId;
-    
-    if (copyTimer) {
-      clearTimeout(copyTimer);
-    }
-    
-    copyTimer = setTimeout(() => {
-      showCopied.value = false;
-      copiedMessageId.value = null;
-    }, 2000);
-  }
-};
-
-// 投票处理函数
-const handleVote = (messageId: string, voteType: 'like' | 'dislike') => {
-  if (!props.chatData) return;
-  
-  const message = props.chatData.messages.find(msg => msg.id === messageId);
-  if (!message) return;
-  
-  if (message.vote === voteType) {
-    message.vote = null;
-    if (voteType === 'like') {
-      message.likeCount = Math.max((message.likeCount || 1) - 1, 0);
-    } else {
-      message.dislikeCount = Math.max((message.dislikeCount || 1) - 1, 0);
-    }
-  } else if (message.vote === 'like' && voteType === 'dislike') {
-    message.vote = 'dislike';
-    message.likeCount = Math.max((message.likeCount || 1) - 1, 0);
-    message.dislikeCount = (message.dislikeCount || 0) + 1;
-  } else if (message.vote === 'dislike' && voteType === 'like') {
-    message.vote = 'like';
-    message.dislikeCount = Math.max((message.dislikeCount || 1) - 1, 0);
-    message.likeCount = (message.likeCount || 0) + 1;
-  } else {
-    message.vote = voteType;
-    if (voteType === 'like') {
-      message.likeCount = (message.likeCount || 0) + 1;
-    } else {
-      message.dislikeCount = (message.dislikeCount || 0) + 1;
-    }
-  }
-};
 const startTypingEffect = (targetText: string) => {
   stopTypingEffect();
 
@@ -429,7 +281,8 @@ watch(
 // 监听推理过程变化
 watch(
   () => props.currentReasoning,
-  () => {},
+  () => {
+  },
 );
 
 // 监听当前流式消息ID变化
@@ -457,7 +310,8 @@ watch(
 onMounted(() => {
   scrollToBottom();
   // 监听模板点击事件
-  window.addEventListener('send-template', () => {});
+  window.addEventListener('send-template', () => {
+  });
 });
 
 onUnmounted(() => {
@@ -677,17 +531,28 @@ onUnmounted(() => {
 }
 
 .message-assistant .message-text {
-  // background: white;
-  // border: 1px solid #e8e8e8;
-  // border-radius: 12px;
+  background: white;
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
   padding: 20px 24px;
   font-size: 14px;
   line-height: 1.8;
   color: #333;
-  // box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  // border-left: 4px solid #4facfe;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-left: 4px solid #4facfe;
   position: relative;
   overflow: hidden;
+}
+
+.message-assistant .message-text::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(to right, #4facfe, #00f2fe);
+  opacity: 0.8;
 }
 
 .message-assistant .message-text :deep(h1),
@@ -700,17 +565,17 @@ onUnmounted(() => {
   border-bottom: 2px solid #f0f0f0;
 }
 
-// .message-assistant .message-text :deep(h1) {
-//   font-size: 20px;
-// }
+.message-assistant .message-text :deep(h1) {
+  font-size: 20px;
+}
 
-// .message-assistant .message-text :deep(h2) {
-//   font-size: 18px;
-// }
+.message-assistant .message-text :deep(h2) {
+  font-size: 18px;
+}
 
-// .message-assistant .message-text :deep(h3) {
-//   font-size: 16px;
-// }
+.message-assistant .message-text :deep(h3) {
+  font-size: 16px;
+}
 
 .message-assistant .message-text :deep(p) {
   margin: 12px 0;
@@ -822,6 +687,9 @@ onUnmounted(() => {
 }
 
 .answer-streaming {
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  border-radius: 8px;
   padding: 16px 35px;
   animation: fadeIn 0.5s ease;
   margin-top: 8px;
@@ -931,132 +799,6 @@ onUnmounted(() => {
   color: #999;
   margin-top: 8px;
   padding: 0 4px;
-}
-
-.action-buttons {
-  display: flex;
-  align-items: center;
-  margin-top: 12px;
-  gap: 20px;
-}
-
-.copy-container {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  padding: 4px 8px;
-  border-radius: 6px;
-  
-  &:hover {
-    background-color: rgba(0, 0, 0, 0.05);
-    
-    img {
-      opacity: 0.8;
-    }
-  }
-  
-  img {
-    transition: opacity 0.3s ease;
-  }
-  
-  .copied-text {
-    position: absolute;
-    top: -30px;
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: #67c23a;
-    color: white;
-    font-size: 12px;
-    padding: 4px 8px;
-    border-radius: 4px;
-    white-space: nowrap;
-    animation: fadeInOut 2s ease;
-    z-index: 10;
-    
-    &::after {
-      content: '';
-      position: absolute;
-      top: 100%;
-      left: 50%;
-      transform: translateX(-50%);
-      border-width: 4px;
-      border-style: solid;
-      border-color: #67c23a transparent transparent transparent;
-    }
-  }
-}
-
-.vote-container {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  padding: 4px 8px;
-  border-radius: 6px;
-  
-  &:hover {
-    background-color: rgba(0, 0, 0, 0.05);
-  }
-  
-  &.like-active {
-    background-color: rgba(64, 158, 255, 0.1);
-  }
-  
-  &.dislike-active {
-    background-color: rgba(245, 108, 108, 0.1);
-  }
-  
-  img {
-    transition: all 0.3s ease;
-    
-    &.like-active {
-      filter: invert(39%) sepia(93%) saturate(748%) hue-rotate(183deg) brightness(97%) contrast(101%);
-    }
-    
-    &.dislike-active {
-      filter: invert(29%) sepia(82%) saturate(748%) hue-rotate(327deg) brightness(97%) contrast(101%);
-    }
-  }
-}
-
-.vote-count {
-  font-size: 12px;
-  font-weight: 600;
-  min-width: 16px;
-  text-align: center;
-  transition: all 0.3s ease;
-  
-  &.like-active {
-    color: #409eff;
-    font-weight: 700;
-  }
-  
-  &.dislike-active {
-    color: #f56c6c;
-    font-weight: 700;
-  }
-}
-
-@keyframes fadeInOut {
-  0% {
-    opacity: 0;
-    transform: translateX(-50%) translateY(5px);
-  }
-  20% {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-  80% {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-5px);
-  }
 }
 
 @keyframes bounce {

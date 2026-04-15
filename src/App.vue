@@ -1,67 +1,71 @@
 <template>
-  <div class="app-container">
-    <!-- 顶部菜单 -->
-    <HeaderMenu 
-      :active-tab="activeTab" 
-      @tab-change="handleTabChange" 
-    />
+  <template v-if="showFullLayout">
+    <div class="app-container">
+      <!-- 顶部菜单 -->
+      <HeaderMenu :active-tab="activeTab" @tab-change="handleTabChange" />
 
-    <div class="main-layout">
-      <!-- 左侧历史对话面板 -->
-      <HistoryPanel
-        :history-list="filteredHistory"
-        :active-chat-id="activeChatId"
-        :user="userStore.user"
-        @select-chat="handleSelectChat"
-        @new-chat="handleNewChat"
-        @delete-chat="handleDeleteChat"
-        @clear-history="handleClearHistory"
-        @toggle-favorite="handleToggleFavorite"
-      />
+      <div class="main-layout">
+        <!-- 左侧历史对话面板 -->
+        <HistoryPanel
+          :history-list="filteredHistory"
+          :active-chat-id="activeChatId"
+          :user="userStore.user"
+          @select-chat="handleSelectChat"
+          @new-chat="handleNewChat"
+          @delete-chat="handleDeleteChat"
+          @clear-history="handleClearHistory"
+          @toggle-favorite="handleToggleFavorite"
+        />
 
-      <!-- 右侧主内容区域 -->
-      <div class="content-area">
-        <!-- 路由视图区域（替换原有的动态组件区域） -->
-        <div class="dynamic-content">
-          <router-view
-            :key="activeChatId"
-            :chat-data="currentChatData"
-            :streaming="isStreaming"
-            :current-reasoning="currentReasoning"
-            :current-answer="currentAnswer"
-            :current-streaming-message-id="currentStreamingMessageId"
-            @stop-stream="stopStream"
-          />
-        </div>
+        <!-- 右侧主内容区域 -->
+        <div class="content-area">
+          <!-- 路由视图区域（替换原有的动态组件区域） -->
+          <div class="dynamic-content">
+            <router-view
+              v-if="activeTab"
+              :key="activeChatId"
+              :chat-data="currentChatData"
+              :streaming="isStreaming"
+              :current-reasoning="currentReasoning"
+              :current-answer="currentAnswer"
+              :current-streaming-message-id="currentStreamingMessageId"
+              @stop-stream="stopStream"
+            />
+          </div>
 
-        <!-- 底部固定输入框 -->
-        <div class="input-container">
-          <ChatInput
-            :placeholder="inputPlaceholder"
-            :disabled="isStreaming"
-            @send="handleSendMessage"
-          />
+          <!-- 底部固定输入框 -->
+          <div class="input-container">
+            <ChatInput
+              :placeholder="inputPlaceholder"
+              :disabled="isStreaming"
+              @send="handleSendMessage"
+            />
 
-          <!-- 流式传输控制 -->
-          <div v-if="isStreaming" class="stream-controls">
-            <el-button
-              style="padding: 10px 20px"
-              type="warning"
-              plain
-              @click="stopStream"
-            >
-              <span class="stop-icon">■</span>
-              停止生成
-            </el-button>
-            <div class="stream-status">
-              <span class="streaming-indicator"></span>
-              生成中...
+            <!-- 流式传输控制 -->
+            <div v-if="isStreaming" class="stream-controls">
+              <el-button
+                style="padding: 10px 20px"
+                type="warning"
+                plain
+                @click="stopStream"
+              >
+                <span class="stop-icon">■</span>
+                停止生成
+              </el-button>
+              <div class="stream-status">
+                <span class="streaming-indicator"></span>
+                生成中...
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
-  </div>
+  </template>
+   <template v-else>
+    <!-- 独立页面布局 -->
+    <router-view></router-view>
+  </template>
 </template>
 
 <script setup lang="ts">
@@ -117,10 +121,15 @@ const currentChatData = computed(() => {
   if (!activeChatId.value) return null;
   return chatStore.getChatSession(activeChatId.value) || null;
 });
-
+// 判断是否显示完整布局
+const showFullLayout = computed(() => {
+  // 这些页面不显示完整布局
+  const excludeRoutes = ['/feedback', '/my-collections'];
+  return !excludeRoutes.includes(route.path);
+});
 // 过滤后的历史记录（只显示当前菜单的历史记录）
 const filteredHistory = computed(() => {
-  return chatStore.historyList.filter((item:any) => item.menuType === activeTab.value);
+  return chatStore.historyList.filter((item: any) => item.menuType === activeTab.value);
 });
 
 // 根据当前路由设置活动标签
@@ -131,7 +140,7 @@ const updateActiveTabFromRoute = () => {
     '/auxiliary-draft': '辅助起草',
     '/compliance-review': '合规审核',
   };
-  
+
   const matchedTab = routeToTabMap[route.path];
   if (matchedTab && activeTab.value !== matchedTab) {
     activeTab.value = matchedTab;
@@ -153,22 +162,29 @@ const inputPlaceholder = computed(() => {
 
 // 方法
 const handleTabChange = (tabName: string) => {
+  // 1. 中止当前正在进行的请求
+  if (isStreaming.value) {
+    stopStream();
+  }
+
+  // 2. 重置流式状态
+  resetStreamState();
   activeTab.value = tabName;
   chatStore.setCurrentActiveTab(tabName);
-  
+
   // 根据标签导航到对应的路由
   const tabToRouteMap: Record<string, string> = {
-    '智能问答': '/intelligent-qa',
-    '智能检索': '/intelligent-retrieval',
-    '辅助起草': '/auxiliary-draft',
-    '合规审核': '/compliance-review',
+    智能问答: '/intelligent-qa',
+    智能检索: '/intelligent-retrieval',
+    辅助起草: '/auxiliary-draft',
+    合规审核: '/compliance-review',
   };
-  
+
   const targetRoute = tabToRouteMap[tabName] || '/intelligent-qa';
   if (route.path !== targetRoute) {
     router.push(targetRoute);
   }
-  
+
   handleNewChat();
 };
 
@@ -183,7 +199,7 @@ const handleNewChat = () => {
     time: '刚刚',
     type: activeTab.value as any,
     messages: [],
-    menuType: activeTab.value
+    menuType: activeTab.value,
   };
 
   const newHistory: HistoryItem = {
@@ -192,7 +208,7 @@ const handleNewChat = () => {
     time: '刚刚',
     type: activeTab.value as any,
     preview: '新对话',
-    menuType: activeTab.value
+    menuType: activeTab.value,
   };
 
   chatStore.addChatSession(newSession);
@@ -224,7 +240,7 @@ const handleDeleteChat = (chatId: string) => {
 
 const handleClearHistory = () => {
   chatStore.historyList = chatStore.historyList.filter(
-    (item:any) => item.menuType !== activeTab.value
+    (item: any) => item.menuType !== activeTab.value,
   );
   chatStore.saveToLocalStorage();
   handleNewChat();
@@ -259,7 +275,7 @@ const handleSendMessage = async (content: string) => {
     const newTitle = content.length > 20 ? content.substring(0, 20) + '...' : content;
     chat.title = newTitle;
 
-    const historyItem = chatStore.historyList.find((h:any) => h.id === chat.id);
+    const historyItem = chatStore.historyList.find((h: any) => h.id === chat.id);
     if (historyItem) {
       historyItem.title = newTitle;
       historyItem.preview = content;
@@ -383,7 +399,11 @@ const startStream = async (queryText: string, messageId: string) => {
 
 const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
   var dataReasion;
-  if (activeTab.value === '智能问答' || activeTab.value === '合规审核' || activeTab.value === '智能检索') {
+  if (
+    activeTab.value === '智能问答' ||
+    activeTab.value === '合规审核' ||
+    activeTab.value === '智能检索'
+  ) {
     dataReasion = chunk.data?.reasoning_content;
   } else {
     dataReasion = chunk.reasoning_content;
@@ -399,7 +419,7 @@ const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
       // 3.2 【关键修改】将推理内容持久化到当前消息对象
       const chat = chatStore.getChatSession(activeChatId.value!);
       if (chat) {
-        const message = chat.messages.find((m:any) => m.id === messageId);
+        const message = chat.messages.find((m: any) => m.id === messageId);
         if (message) {
           // 累加 reasoning 内容到消息对象本身
           message.reasoning = (message.reasoning || '') + reasoning;
@@ -409,7 +429,11 @@ const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
 
     // 处理回复内容 - 根据接口类型选择字段
     let replyContent: string | undefined;
-    if (activeTab.value === '智能问答' || activeTab.value === '合规审核' || activeTab.value === '智能检索') {
+    if (
+      activeTab.value === '智能问答' ||
+      activeTab.value === '合规审核' ||
+      activeTab.value === '智能检索'
+    ) {
       replyContent = chunk.data?.text;
     } else {
       replyContent = chunk?.content;
@@ -419,7 +443,7 @@ const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
       // 更新对应的AI消息内容
       const chat = chatStore.getChatSession(activeChatId.value!);
       if (chat) {
-        const message = chat.messages.find((m:any) => m.id === messageId);
+        const message = chat.messages.find((m: any) => m.id === messageId);
         if (message) {
           message.content = currentAnswer.value;
         }
@@ -440,12 +464,14 @@ const finishStream = (messageId: string) => {
 
   const chat = chatStore.getChatSession(activeChatId.value!);
   if (chat) {
-    const message = chat.messages.find((m:any) => m.id === messageId);
+    const message = chat.messages.find((m: any) => m.id === messageId);
     if (message) {
       message.streaming = false;
 
       // 更新历史记录预览
-      const historyItem = chatStore.historyList.find((h:any) => h.id === activeChatId.value);
+      const historyItem = chatStore.historyList.find(
+        (h: any) => h.id === activeChatId.value,
+      );
       if (historyItem && chat.messages.length === 2) {
         const firstQuestion = chat.messages[0].content;
         historyItem.preview =
@@ -466,7 +492,7 @@ const finishStream = (messageId: string) => {
 const handleStreamError = (messageId: string, errorMessage: string) => {
   const chat = chatStore.getChatSession(activeChatId.value!);
   if (chat) {
-    const message = chat.messages.find((m:any) => m.id === messageId);
+    const message = chat.messages.find((m: any) => m.id === messageId);
     if (message) {
       message.content = `抱歉，回答过程中出现错误：${errorMessage}`;
       message.streaming = false;
@@ -486,7 +512,7 @@ const stopStream = () => {
   if (currentStreamingMessageId) {
     const chat = chatStore.getChatSession(activeChatId.value!);
     if (chat) {
-      const message = chat.messages.find((m:any) => m.id === currentStreamingMessageId);
+      const message = chat.messages.find((m: any) => m.id === currentStreamingMessageId);
       if (message) {
         message.streaming = false;
         if (message.content === '') {
@@ -520,9 +546,13 @@ const scrollToBottom = () => {
 };
 
 // 监听路由变化
-watch(() => route.path, () => {
-  updateActiveTabFromRoute();
-}, { immediate: true });
+watch(
+  () => route.path,
+  () => {
+    updateActiveTabFromRoute();
+  },
+  { immediate: true },
+);
 
 // 生命周期
 onMounted(() => {
