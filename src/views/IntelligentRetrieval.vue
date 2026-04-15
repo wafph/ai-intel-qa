@@ -386,7 +386,6 @@ onUnmounted(() => {
               .message-content {
                 background: #d7e6fe;
                 color: black;
-                font-weight: 600;
                 border-radius: 12px;
                 padding: 12px 20px;
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
