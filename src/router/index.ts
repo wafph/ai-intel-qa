@@ -1,41 +1,45 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAppStore } from '../stores/app';
-
+import IntelligentQA from '../views/IntelligentQA.vue';
+import IntelligentRetrieval from '../views/IntelligentRetrieval.vue';
+import AuxiliaryDraft from '../views/AuxiliaryDraft.vue';
+import ComplianceReview from '../views/ComplianceReview.vue';
 const routes = [
   {
     path: '/',
     redirect: '/intelligent-qa',
   },
-  {
+    {
     path: '/intelligent-qa',
-    name: '智能问答',
-    component: () => import('../views/IntelligentQA.vue'),
+    name: 'IntelligentQA',
+    component: IntelligentQA,
   },
   {
     path: '/intelligent-retrieval',
-    name: '智能检索',
-    component: () => import('../views/IntelligentRetrieval.vue'),
+    name: 'IntelligentRetrieval',
+    component: IntelligentRetrieval,
   },
-   {
+  {
     path: '/auxiliary-draft',
-    name: '智能检索',
-    component: () => import('../views/AuxiliaryDraft.vue'),
+    name: 'AuxiliaryDraft',
+    component: AuxiliaryDraft,
   },
   {
     path: '/compliance-review',
-    name: '合规审核',
-    component: () => import('../views/ComplianceReview.vue'),
+    name: 'ComplianceReview',
+    component: ComplianceReview,
   },
+  
   {
     path: '/my-collections',
     name: '我的收藏',
     component: () => import('../views/MyCollections.vue'),
   },
-  // {
-  //   path: '/review',
-  //   name: '合规审核',
-  //   component: () => import('../views/ComplianceReview.vue'),
-  // },
+  {
+    path: '/feedback',
+    name: '合规审核',
+    component: () => import('../views/Feedback.vue'),
+  },
 ];
 
 const router = createRouter({

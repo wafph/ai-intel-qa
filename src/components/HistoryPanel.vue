@@ -101,14 +101,6 @@
           <span>我的反馈</span>
         </div>
         <div class="menu-divider"></div>
-        <div class="menu-item" @click="goToSettings">
-          <i class="menu-icon">⚙️</i>
-          <span>个人设置</span>
-        </div>
-        <div class="menu-item logout" @click="handleLogout">
-          <i class="menu-icon">🚪</i>
-          <span>退出登录</span>
-        </div>
       </div>
     </div>
   </div>
@@ -117,8 +109,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { useUserStore } from '../stores/user';
-
 interface Props {
   historyList: any[]
   activeChatId: string | null
@@ -135,7 +125,6 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter();
-const userStore = useUserStore();
 
 // 新增状态
 const showUserMenu = ref(false);
@@ -206,21 +195,6 @@ const goToMyCollections = () => {
 const goToFeedback = () => {
   showUserMenu.value = false
   router.push('/feedback')
-}
-
-// 前往个人设置
-const goToSettings = () => {
-  showUserMenu.value = false
-  router.push('/settings')
-}
-
-// 处理退出登录
-const handleLogout = () => {
-  showUserMenu.value = false
-  if (confirm('确定要退出登录吗？')) {
-    userStore.logout()
-    router.push('/login')
-  }
 }
 
 // 点击外部关闭用户菜单

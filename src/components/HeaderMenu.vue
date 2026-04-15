@@ -55,13 +55,18 @@ const emit = defineEmits<{
   'tab-change': [tabName: string];
 }>();
 
-// 标签数据
-const tabs = computed<TabItem[]>(() => [
-  { value: '智能问答', label: '智能问答' },
-  { value: '智能检索', label: '智能检索' },
-  { value: '辅助起草', label: '辅助起草' },
-  { value: '合规审核', label: '合规审核' },
-]);
+
+const tabs = computed<TabItem[]>(() => {
+  const allTabs = [
+    { value: '智能问答', label: '智能问答' },
+    { value: '智能检索', label: '智能检索' },
+    { value: '辅助起草', label: '辅助起草' },
+    { value: '合规审核', label: '合规审核' },
+
+  ];
+  
+  return allTabs;
+});
 </script>
 
 <style scoped>

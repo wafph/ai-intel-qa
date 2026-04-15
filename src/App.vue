@@ -21,20 +21,17 @@
 
       <!-- 右侧主内容区域 -->
       <div class="content-area">
-        <!-- 动态组件区域 -->
+        <!-- 路由视图区域（替换原有的动态组件区域） -->
         <div class="dynamic-content">
-          <KeepAlive>
-            <component
-              :is="activeComponent"
-              :key="activeChatId"
-              :chat-data="currentChatData"
-              :streaming="isStreaming"
-              :current-reasoning="currentReasoning"
-              :current-answer="currentAnswer"
-              :current-streaming-message-id="currentStreamingMessageId"
-              @stop-stream="stopStream"
-            />
-          </KeepAlive>
+          <router-view
+            :key="activeChatId"
+            :chat-data="currentChatData"
+            :streaming="isStreaming"
+            :current-reasoning="currentReasoning"
+            :current-answer="currentAnswer"
+            :current-streaming-message-id="currentStreamingMessageId"
+            @stop-stream="stopStream"
+          />
         </div>
 
         <!-- 底部固定输入框 -->
@@ -68,14 +65,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, onUnmounted } from 'vue';
+import { ref, computed, onMounted, nextTick, onUnmounted, watch } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import HeaderMenu from './components/HeaderMenu.vue';
 import HistoryPanel from './components/HistoryPanel.vue';
 import ChatInput from './components/ChatInput.vue';
-import IntelligentQA from './views/IntelligentQA.vue';
-import AuxiliaryDraft from './views/AuxiliaryDraft.vue';
-import IntelligentRetrieval from './views/IntelligentRetrieval.vue';
-import ComplianceReview from './views/ComplianceReview.vue';
 import { useAppStore } from './stores/app';
 import { useChatStore } from './stores/chat';
 import { useUserStore } from './stores/user';
@@ -84,6 +78,8 @@ import type { ChatMessage, ChatSession, HistoryItem } from './types/chat';
 const appStore = useAppStore();
 const chatStore = useChatStore();
 const userStore = useUserStore();
+const router = useRouter();
+const route = useRoute();
 
 // 定义类型接口
 interface StreamChunk {
@@ -127,15 +123,21 @@ const filteredHistory = computed(() => {
   return chatStore.historyList.filter((item:any) => item.menuType === activeTab.value);
 });
 
-const activeComponent = computed(() => {
-  const componentMap: Record<string, any> = {
-    智能问答: IntelligentQA,
-    智能检索: IntelligentRetrieval,
-    辅助起草: AuxiliaryDraft,
-    合规审核: ComplianceReview,
+// 根据当前路由设置活动标签
+const updateActiveTabFromRoute = () => {
+  const routeToTabMap: Record<string, string> = {
+    '/intelligent-qa': '智能问答',
+    '/intelligent-retrieval': '智能检索',
+    '/auxiliary-draft': '辅助起草',
+    '/compliance-review': '合规审核',
   };
-  return componentMap[activeTab.value] || IntelligentQA;
-});
+  
+  const matchedTab = routeToTabMap[route.path];
+  if (matchedTab && activeTab.value !== matchedTab) {
+    activeTab.value = matchedTab;
+    chatStore.setCurrentActiveTab(matchedTab);
+  }
+};
 
 const inputPlaceholder = computed(() => {
   if (activeTab.value === '智能问答') {
@@ -153,6 +155,20 @@ const inputPlaceholder = computed(() => {
 const handleTabChange = (tabName: string) => {
   activeTab.value = tabName;
   chatStore.setCurrentActiveTab(tabName);
+  
+  // 根据标签导航到对应的路由
+  const tabToRouteMap: Record<string, string> = {
+    '智能问答': '/intelligent-qa',
+    '智能检索': '/intelligent-retrieval',
+    '辅助起草': '/auxiliary-draft',
+    '合规审核': '/compliance-review',
+  };
+  
+  const targetRoute = tabToRouteMap[tabName] || '/intelligent-qa';
+  if (route.path !== targetRoute) {
+    router.push(targetRoute);
+  }
+  
   handleNewChat();
 };
 
@@ -503,12 +519,18 @@ const scrollToBottom = () => {
   });
 };
 
+// 监听路由变化
+watch(() => route.path, () => {
+  updateActiveTabFromRoute();
+}, { immediate: true });
+
 // 生命周期
 onMounted(() => {
   chatStore.loadFromLocalStorage();
   if (chatStore.historyList.length > 0) {
     activeChatId.value = chatStore.historyList[0].id;
   }
+  updateActiveTabFromRoute();
 });
 
 onUnmounted(() => {
