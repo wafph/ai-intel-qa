@@ -24,7 +24,6 @@
             placeholder="搜索收藏内容..."
             class="search-input"
           />
-          <i class="search-icon">🔍</i>
         </div>
         
         <div class="filter-options">
@@ -227,7 +226,6 @@ onMounted(() => {
 
 .collections-container {
   padding: 30px 40px;
-  max-width: 1200px;
   margin: 0 auto;
 }
 

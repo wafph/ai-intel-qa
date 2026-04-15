@@ -7,12 +7,12 @@
         <span class="btn-text">新对话</span>
       </button>
     </div>
-    
+
     <!-- 历史列表 -->
     <div class="history-list">
       <div class="list-header">
         <h3>历史对话</h3>
-        <button 
+        <button
           v-if="filteredHistory.length > 0"
           class="clear-btn"
           @click="handleClearHistory"
@@ -20,27 +20,26 @@
           清空
         </button>
       </div>
-      
+
       <div v-if="filteredHistory.length === 0" class="empty-state">
         <div class="empty-icon">📁</div>
         <p>暂无历史对话</p>
         <p class="empty-tip">开始新的对话吧</p>
       </div>
-      
+
       <div v-else class="history-items">
-        <div
-          v-for="item in groupedHistory"
-          :key="item.date"
-          class="history-group"
-        >
+        <div v-for="item in groupedHistory" :key="item.date" class="history-group">
           <div class="group-date">{{ item.date }}</div>
           <div
             v-for="history in item.items"
             :key="history.id"
-            :class="['history-item', { 
-              active: activeChatId === history.id,
-              collected: history.isCollected 
-            }]"
+            :class="[
+              'history-item',
+              {
+                active: activeChatId === history.id,
+                collected: history.isCollected,
+              },
+            ]"
             @click="handleSelectChat(history.id)"
           >
             <div class="item-content">
@@ -54,34 +53,31 @@
                 <span class="item-time">{{ history.time }}</span>
               </div>
             </div>
-            <button 
+            <button
               class="favorite-btn"
-              :class="{ 'favorited': history.isCollected }"
+              :class="{ favorited: history.isCollected }"
               @click.stop="handleToggleFavorite(history.id)"
             >
               ★
             </button>
-            <button 
-              class="delete-btn"
-              @click.stop="handleDeleteChat(history.id)"
-            >
+            <button class="delete-btn" @click.stop="handleDeleteChat(history.id)">
               ×
             </button>
           </div>
         </div>
       </div>
     </div>
-    
+
     <!-- 右下角个人中心 -->
     <div class="user-center-bottom">
-      <div 
+      <div
         class="user-info-container"
         @click="toggleUserMenu"
         :class="{ active: showUserMenu }"
       >
-        <img 
-          :src="user.avatar || '/images/user.png'" 
-          alt="用户头像" 
+        <img
+          :src="user.avatar || '/images/user.png'"
+          alt="用户头像"
           class="user-avatar"
         />
         <div class="user-details">
@@ -89,7 +85,7 @@
         </div>
         <i class="arrow-icon" :class="{ rotated: showUserMenu }">▼</i>
       </div>
-      
+
       <!-- 用户菜单 -->
       <div v-if="showUserMenu" class="user-menu">
         <div class="menu-item" @click="goToMyCollections">
@@ -110,19 +106,19 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 interface Props {
-  historyList: any[]
-  activeChatId: string | null
-  user: any
+  historyList: any[];
+  activeChatId: string | null;
+  user: any;
 }
 
-const props = defineProps<Props>()
+const props = defineProps<Props>();
 const emit = defineEmits<{
-  'select-chat': [chatId: string]
-  'new-chat': []
-  'delete-chat': [chatId: string]
-  'clear-history': []
-  'toggle-favorite': [chatId: string]
-}>()
+  'select-chat': [chatId: string];
+  'new-chat': [];
+  'delete-chat': [chatId: string];
+  'clear-history': [];
+  'toggle-favorite': [chatId: string];
+}>();
 
 const router = useRouter();
 
@@ -135,83 +131,85 @@ const filteredHistory = computed(() => {
 });
 
 const groupedHistory = computed(() => {
-  const groups: Record<string, any[]> = {}
-  
-  filteredHistory.value.forEach(item => {
-    const date = item.time.includes('今天') ? '今天' : 
-                 item.time.includes('昨天') ? '昨天' : 
-                 item.time.split(' ')[0]
-    
+  const groups: Record<string, any[]> = {};
+
+  filteredHistory.value.forEach((item) => {
+    const date = item.time.includes('今天')
+      ? '今天'
+      : item.time.includes('昨天')
+        ? '昨天'
+        : item.time.split(' ')[0];
+
     if (!groups[date]) {
-      groups[date] = []
+      groups[date] = [];
     }
-    groups[date].push(item)
-  })
-  
+    groups[date].push(item);
+  });
+
   return Object.entries(groups).map(([date, items]) => ({
     date,
-    items
-  }))
-})
+    items,
+  }));
+});
 
 // 原有的方法
 const handleSelectChat = (chatId: string) => {
-  emit('select-chat', chatId)
-}
+  emit('select-chat', chatId);
+};
 
 const handleNewChat = () => {
-  emit('new-chat')
-}
+  emit('new-chat');
+};
 
 const handleDeleteChat = (chatId: string) => {
   if (confirm('确定要删除这条对话记录吗？')) {
-    emit('delete-chat', chatId)
+    emit('delete-chat', chatId);
   }
-}
+};
 
 const handleClearHistory = () => {
   if (confirm('确定要清空所有历史记录吗？')) {
-    emit('clear-history')
+    emit('clear-history');
   }
-}
+};
 
 // 新增：切换收藏状态
 const handleToggleFavorite = (chatId: string) => {
-  emit('toggle-favorite', chatId)
-}
+  emit('toggle-favorite', chatId);
+};
 
 // 切换用户菜单显示
 const toggleUserMenu = () => {
-  showUserMenu.value = !showUserMenu.value
-}
+  showUserMenu.value = !showUserMenu.value;
+};
 
 // 前往我的收藏页面
 const goToMyCollections = () => {
-  showUserMenu.value = false
-  router.push('/my-collections')
-}
+  showUserMenu.value = false;
+  router.push('/my-collections');
+};
 
 // 前往我的反馈页面
 const goToFeedback = () => {
-  showUserMenu.value = false
-  router.push('/feedback')
-}
+  showUserMenu.value = false;
+  router.push('/feedback');
+};
 
 // 点击外部关闭用户菜单
 const handleClickOutside = (event: MouseEvent) => {
-  const userCenter = document.querySelector('.user-center-bottom')
+  const userCenter = document.querySelector('.user-center-bottom');
   if (userCenter && !userCenter.contains(event.target as Node)) {
-    showUserMenu.value = false
+    showUserMenu.value = false;
   }
-}
+};
 
 onMounted(() => {
-  document.addEventListener('click', handleClickOutside)
-})
+  document.addEventListener('click', handleClickOutside);
+});
 
 onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside)
-})
+  document.removeEventListener('click', handleClickOutside);
+});
 </script>
 
 <style scoped>
@@ -516,7 +514,7 @@ onUnmounted(() => {
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 20px;
+  padding: 3px 10px;
   background: linear-gradient(to top, #fff 80%, transparent);
   border-top: 1px solid #e9ecef;
   z-index: 20;
@@ -526,22 +524,19 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px;
   background: #f8f9fa;
-  border-radius: 12px;
   cursor: pointer;
+  padding: 0 10px;
   transition: all 0.3s ease;
   border: 2px solid transparent;
 }
 
 .user-info-container:hover {
   background: #e9ecef;
-  border-color: #dee2e6;
 }
 
 .user-info-container.active {
   background: #e7f3ff;
-  border-color: #91d5ff;
   box-shadow: 0 2px 8px rgba(24, 144, 255, 0.1);
 }
 
@@ -592,7 +587,7 @@ onUnmounted(() => {
 /* 用户菜单样式 */
 .user-menu {
   position: absolute;
-  bottom: calc(100% + 8px);
+  bottom: 100%;
   left: 20px;
   right: 20px;
   background: white;

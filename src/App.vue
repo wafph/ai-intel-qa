@@ -107,7 +107,7 @@ interface StreamChunk {
 
 // 状态管理
 const activeTab = ref<string>('智能问答');
-const activeChatId = ref<string | null>(null);
+const activeChatId = ref<string>('');
 
 // 流式相关状态
 const isStreaming = ref<boolean>(false);

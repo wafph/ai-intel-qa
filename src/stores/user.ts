@@ -4,7 +4,7 @@ import { ref } from 'vue';
 export const useUserStore = defineStore('user', () => {
   const user = ref({
     id: '1',
-    name: '张三',
+    name: 'testuser',
     avatar: '/images/user.png',
     email: 'zhangsan@example.com'
   });
