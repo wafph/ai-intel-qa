@@ -105,7 +105,7 @@
                     @click="handleCopy(message.content, message.id)"
                   >
                     <img
-                      src="../../public/copy.svg"
+                      src="/images/copy.svg"
                       style="width: 20px; height: 20px; margin-right: 4px"
                       alt="复制"
                     />
@@ -124,7 +124,7 @@
                     style="margin-left: 20px"
                   >
                     <img
-                      src="../../public/zhan.svg"
+                      src="/images/zhan.svg"
                       alt="点赞"
                       style="width: 20px; height: 20px"
                       :class="{ 'like-active': message.vote === 'like' }"
@@ -145,7 +145,7 @@
                     style="margin-left: 20px"
                   >
                     <img
-                      src="../../public/cai.svg"
+                      src="/images/cai.svg"
                       alt="踩"
                       style="width: 20px; height: 20px"
                       :class="{ 'dislike-active': message.vote === 'dislike' }"
@@ -182,7 +182,7 @@ import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import MarkdownIt from 'markdown-it';
 const showCopied = ref(false);
 const copiedMessageId = ref<string | null>(null);
-let copyTimer:  null = null;
+let copyTimer: ReturnType<typeof setTimeout> | null = null;
 interface Props {
   chatData: ChatSession | null;
   streaming?: boolean;

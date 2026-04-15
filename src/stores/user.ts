@@ -5,13 +5,13 @@ export const useUserStore = defineStore('user', () => {
   const user = ref({
     id: '1',
     name: '张三',
-    avatar: '/user.png',
+    avatar: '/images/user.png',
     email: 'zhangsan@example.com'
   });
 
   const isLoggedIn = ref(true);
 
-  const login = (username: string, password: string) => {
+  const login = (username: string) => {
     // 这里应该是实际的登录逻辑
     user.value.name = username;
     isLoggedIn.value = true;

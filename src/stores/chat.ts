@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import type { ChatSession, HistoryItem } from '@/types/chat';
+import type { ChatSession, HistoryItem } from '../types/chat';
 
 export const useChatStore = defineStore('chat', () => {
   const chatSessions = ref<Record<string, ChatSession>>({});
@@ -9,12 +9,12 @@ export const useChatStore = defineStore('chat', () => {
 
   // 过滤后的历史记录（基于当前菜单）
   const filteredHistory = computed(() => {
-    return historyList.value.filter(item => item.menuType === currentActiveTab.value);
+    return historyList.value.filter((item:any) => item.menuType === currentActiveTab.value);
   });
 
   // 收藏的历史记录
   const collectedHistory = computed(() => {
-    return historyList.value.filter(item => item.isCollected);
+    return historyList.value.filter((item:any) => item.isCollected);
   });
 
   // 切换当前菜单
@@ -48,7 +48,7 @@ export const useChatStore = defineStore('chat', () => {
 
   // 切换收藏状态
   const toggleCollect = (id: string) => {
-    const index = historyList.value.findIndex(item => item.id === id);
+    const index = historyList.value.findIndex((item:any) => item.id === id);
     if (index !== -1) {
       historyList.value[index].isCollected = !historyList.value[index].isCollected;
       saveToLocalStorage();

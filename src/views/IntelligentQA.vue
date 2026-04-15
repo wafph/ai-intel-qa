@@ -22,7 +22,7 @@
         <div v-if="item.role === 'user'" class="message-user">
           <div class="message-header">
             <div class="avatar user-avatar">
-              <div><img src="../../public/user.svg" alt="" /></div>
+              <div><img src="/images/user.svg" alt="" /></div>
             </div>
             <div class="message-info">
               <div class="message-content">{{ item.content }}</div>
@@ -106,7 +106,7 @@
                     }"
                   >
                     <img
-                      src="../../public/copy.svg"
+                      src="/images/copy.svg"
                       style="width: 20px; height: 20px"
                       alt="复制"
                     />
@@ -125,8 +125,8 @@
                     <img
                       :src="
                         item.vote === 'like'
-                          ? '../../public/zhan-active.svg'
-                          : '../../public/zhan.svg'
+                          ? '/images/zhan-active.svg'
+                          : '/images/zhan.svg'
                       "
                       alt="点赞"
                       style="
@@ -150,7 +150,7 @@
                     style="display: inline-block; margin-left: 20px"
                   >
                     <img
-                      src="../../public/cai.svg"
+                      src="/images/cai.svg"
                       alt="踩"
                       style="width: 20px; height: 20px; cursor: pointer"
                       @click="handleVote(item.id, 'dislike')"
@@ -248,7 +248,8 @@ const md = new MarkdownIt({
 // 在script部分添加响应式数据
 const showCopied = ref(false);
 const copiedMessageId = ref<string | null>(null);
-let copyTimer: null = null;
+let copyTimer: ReturnType<typeof setTimeout> | null = null;
+
 
 // 复制文本到剪贴板的函数
 const copyToClipboard = async (text: string) => {

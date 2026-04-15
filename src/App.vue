@@ -124,7 +124,7 @@ const currentChatData = computed(() => {
 
 // 过滤后的历史记录（只显示当前菜单的历史记录）
 const filteredHistory = computed(() => {
-  return chatStore.historyList.filter(item => item.menuType === activeTab.value);
+  return chatStore.historyList.filter((item:any) => item.menuType === activeTab.value);
 });
 
 const activeComponent = computed(() => {
@@ -208,7 +208,7 @@ const handleDeleteChat = (chatId: string) => {
 
 const handleClearHistory = () => {
   chatStore.historyList = chatStore.historyList.filter(
-    item => item.menuType !== activeTab.value
+    (item:any) => item.menuType !== activeTab.value
   );
   chatStore.saveToLocalStorage();
   handleNewChat();
@@ -243,7 +243,7 @@ const handleSendMessage = async (content: string) => {
     const newTitle = content.length > 20 ? content.substring(0, 20) + '...' : content;
     chat.title = newTitle;
 
-    const historyItem = chatStore.historyList.find((h) => h.id === chat.id);
+    const historyItem = chatStore.historyList.find((h:any) => h.id === chat.id);
     if (historyItem) {
       historyItem.title = newTitle;
       historyItem.preview = content;
@@ -383,7 +383,7 @@ const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
       // 3.2 【关键修改】将推理内容持久化到当前消息对象
       const chat = chatStore.getChatSession(activeChatId.value!);
       if (chat) {
-        const message = chat.messages.find((m) => m.id === messageId);
+        const message = chat.messages.find((m:any) => m.id === messageId);
         if (message) {
           // 累加 reasoning 内容到消息对象本身
           message.reasoning = (message.reasoning || '') + reasoning;
@@ -403,7 +403,7 @@ const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
       // 更新对应的AI消息内容
       const chat = chatStore.getChatSession(activeChatId.value!);
       if (chat) {
-        const message = chat.messages.find((m) => m.id === messageId);
+        const message = chat.messages.find((m:any) => m.id === messageId);
         if (message) {
           message.content = currentAnswer.value;
         }
@@ -424,12 +424,12 @@ const finishStream = (messageId: string) => {
 
   const chat = chatStore.getChatSession(activeChatId.value!);
   if (chat) {
-    const message = chat.messages.find((m) => m.id === messageId);
+    const message = chat.messages.find((m:any) => m.id === messageId);
     if (message) {
       message.streaming = false;
 
       // 更新历史记录预览
-      const historyItem = chatStore.historyList.find((h) => h.id === activeChatId.value);
+      const historyItem = chatStore.historyList.find((h:any) => h.id === activeChatId.value);
       if (historyItem && chat.messages.length === 2) {
         const firstQuestion = chat.messages[0].content;
         historyItem.preview =
@@ -450,7 +450,7 @@ const finishStream = (messageId: string) => {
 const handleStreamError = (messageId: string, errorMessage: string) => {
   const chat = chatStore.getChatSession(activeChatId.value!);
   if (chat) {
-    const message = chat.messages.find((m) => m.id === messageId);
+    const message = chat.messages.find((m:any) => m.id === messageId);
     if (message) {
       message.content = `抱歉，回答过程中出现错误：${errorMessage}`;
       message.streaming = false;
@@ -470,7 +470,7 @@ const stopStream = () => {
   if (currentStreamingMessageId) {
     const chat = chatStore.getChatSession(activeChatId.value!);
     if (chat) {
-      const message = chat.messages.find((m) => m.id === currentStreamingMessageId);
+      const message = chat.messages.find((m:any) => m.id === currentStreamingMessageId);
       if (message) {
         message.streaming = false;
         if (message.content === '') {

@@ -2,7 +2,7 @@
   <header class="header-menu">
     <div class="header-left">
       <div class="logo">
-        <img src="/logos.png" alt="Logo" />
+        <img src="/images/logos.png" alt="Logo" />
         <span>AI+规章制度智能体</span>
       </div>
     </div>
@@ -17,12 +17,6 @@
         <span class="tab-label">{{ tab.label }}</span>
       </button>
     </nav>
-
-    <div class="header-right">
-      <button class="user-btn">
-        <img class="user-avatar" src="../../public/user.png" alt="" />
-      </button>
-    </div>
   </header>
 </template>
 

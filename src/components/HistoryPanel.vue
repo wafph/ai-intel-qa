@@ -80,7 +80,7 @@
         :class="{ active: showUserMenu }"
       >
         <img 
-          :src="user.avatar || '../../public/user.png'" 
+          :src="user.avatar || '/images/user.png'" 
           alt="用户头像" 
           class="user-avatar"
         />
@@ -117,7 +117,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { useChatStore } from '../stores/chat';
 import { useUserStore } from '../stores/user';
 
 interface Props {
@@ -136,7 +135,6 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter();
-const chatStore = useChatStore();
 const userStore = useUserStore();
 
 // 新增状态
