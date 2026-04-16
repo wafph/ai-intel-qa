@@ -86,11 +86,20 @@
                   class="message-content pad"
                   v-html="renderMarkdown(item.content)"
                 ></div>
-                <div style="margin-left: 15px">
+                <div
+                  style="margin-left: 15px"
+                  v-if="item.content && item.content !== '用户停止了生成'"
+                >
                   <el-button link type="success" plain @click="handleRestart(index)">
                     重新检索<el-icon class="el-icon--right"><ArrowRight /></el-icon>
                   </el-button>
-                  <el-button link class="btnbottom" type="primary" plain @click="handleExport">
+                  <el-button
+                    link
+                    class="btnbottom"
+                    type="primary"
+                    plain
+                    @click="handleExport"
+                  >
                     导出
                   </el-button>
                 </div>
@@ -395,7 +404,7 @@ onUnmounted(() => {
     flex: 1;
     overflow-y: auto;
     margin-bottom: 20px;
-     padding-top: 20px;
+    padding-top: 20px;
     display: flex;
     flex-direction: column;
     gap: 20px;

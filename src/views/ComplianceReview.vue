@@ -21,7 +21,7 @@
         <!-- 用户消息 -->
         <div v-if="item.role === 'user'" class="message-user">
           <div class="message-header">
-           <div class="avatar user-avatar">
+            <div class="avatar user-avatar">
               <div><img src="/images/user.svg" alt="" /></div>
             </div>
             <div class="message-info">
@@ -86,7 +86,10 @@
                   class="message-content pad"
                   v-html="renderMarkdown(item.content)"
                 ></div>
-                <div>
+                <div
+                  style="margin-left: 15px"
+                  v-if="item.content && item.content !== '用户停止了生成'"
+                >
                   <el-button
                     link
                     class="btnbottom"

@@ -1,7 +1,10 @@
 <template>
   <div class="auxiliary-draft intelligent-qa">
     <!-- 头部区域 -->
-    <div class="qa-header" v-if="!loading && (!chatData?.messages || chatData.messages.length === 0)">
+    <div
+      class="qa-header"
+      v-if="!loading && (!chatData?.messages || chatData.messages.length === 0)"
+    >
       <h1>我是制度起草助手，很高兴见到你</h1>
       <p>帮助您快速生成合规、专业的制度文档，降低起草难度，节约时间成本</p>
     </div>
@@ -60,7 +63,12 @@
                   class="answer-streaming"
                 >
                   <div class="typing-container">
-                    <div class="typing-text" v-html="renderMarkdown(displayAnswer)"></div>
+                    <template v-if="isTyping">
+                      {{ displayAnswer }}
+                    </template>
+                    <template v-else>
+                      <div v-html="renderMarkdown(displayAnswer)"></div>
+                    </template>
                     <span v-if="isTyping" class="typing-cursor">|</span>
                   </div>
                 </div>
@@ -88,11 +96,20 @@
                   class="message-content pad"
                   v-html="renderMarkdown(item.content)"
                 ></div>
-                <div style="margin-left: 15px">
+                <div
+                  style="margin-left: 15px"
+                  v-if="item.content && item.content !== '用户停止了生成'"
+                >
                   <el-button link type="success" plain @click="handleRestart(index)">
                     重新起草<el-icon class="el-icon--right"><ArrowRight /></el-icon>
                   </el-button>
-                  <el-button link class="btnbottom" type="primary" plain @click="handleExport">
+                  <el-button
+                    link
+                    class="btnbottom"
+                    type="primary"
+                    plain
+                    @click="handleExport"
+                  >
                     导出
                   </el-button>
                 </div>
@@ -381,7 +398,7 @@ onUnmounted(() => {
 
   .conversation-history {
     flex: 1;
-     padding-top: 20px;
+    padding-top: 20px;
     overflow-y: auto;
     margin-bottom: 20px;
     display: flex;

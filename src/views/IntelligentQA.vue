@@ -86,7 +86,10 @@
                   v-html="renderMarkdown(item.content)"
                 ></div>
 
-                <div style="display: flex; align-items: center">
+                <div
+                  style="display: flex; align-items: center"
+                  v-if="item.content && item.content !== '用户停止了生成'"
+                >
                   <el-button link style="padding: 10px 20px" type="primary" plain
                     >来源<el-icon class="el-icon--right"><ArrowRight /></el-icon
                   ></el-button>
@@ -559,7 +562,7 @@ onUnmounted(() => {
     flex: 1;
     overflow-y: auto;
     margin-bottom: 20px;
-     padding-top: 20px;
+    padding-top: 20px;
     display: flex;
     flex-direction: column;
     gap: 20px;

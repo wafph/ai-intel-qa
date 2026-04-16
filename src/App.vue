@@ -519,9 +519,7 @@ const stopStream = () => {
       const message = chat.messages.find((m: any) => m.id === currentStreamingMessageId);
       if (message) {
         message.streaming = false;
-        if (message.content === '') {
-          message.content = '用户停止了生成';
-        }
+        message.content = '用户停止了生成';
       }
     }
   }
@@ -531,7 +529,6 @@ const stopStream = () => {
   resetStreamState();
   chatStore.saveToLocalStorage();
 };
-
 // 重置流式状态
 const resetStreamState = () => {
   currentReasoning.value = '';
