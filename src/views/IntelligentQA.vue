@@ -5,6 +5,7 @@
       <h1>我是问答助手，很高兴见到你</h1>
       <p>你可以使用自然语言提问，我来精准回答</p>
     </div>
+
     <!-- 历史对话列表 -->
     <div
       class="conversation-history"
@@ -17,6 +18,7 @@
           'history-item',
           item.role === 'user' ? 'user-message' : 'assistant-message',
         ]"
+        :data-message-id="item.id"
       >
         <!-- 用户消息 -->
         <div v-if="item.role === 'user'" class="message-user">
@@ -33,164 +35,239 @@
 
         <!-- AI回复消息 -->
         <div v-else class="message-assistant">
-          <div class="message-header">
-            <div class="avatar ai-avatar">
-              <div>AI</div>
+          <!-- 双栏布局容器 -->
+          <div
+            class="dual-column-container"
+            :class="{ 'show-sources': sourcesVisible[item.id] }"
+          >
+            <!-- 左侧消息内容区域 -->
+            <div class="left-column" :ref="(el) => setLeftColumnRef(el, item.id)">
+              <div class="message-header">
+                <div class="avatar ai-avatar">
+                  <div>AI</div>
+                </div>
+                <div class="message-info">
+                  <!-- 【核心修改点】始终显示"思考过程"部分，只要消息中存在 reasoning 内容 -->
+                  <div
+                    v-if="item.reasoning && item.reasoning.trim() !== ''"
+                    class="thinking-process"
+                    ref="thinkingProcessRef"
+                  >
+                    <div class="thinking-header">
+                      <span>思考过程</span>
+                    </div>
+                    <div class="thinking-content">
+                      <!-- 可以在显示前处理重复内容 -->
+                      {{ removeDuplicateReasoning(item.reasoning) }}
+                    </div>
+                  </div>
+
+                  <!-- 当前流式消息 -->
+                  <div v-if="item.streaming && item.id === currentStreamingMessageId">
+                    <!-- 回复内容（打字机效果） -->
+                    <div
+                      v-if="currentAnswer && currentAnswer.trim() !== ''"
+                      class="answer-streaming"
+                    >
+                      <div class="typing-container">
+                        <div
+                          class="typing-text"
+                          v-html="renderMarkdown(displayAnswer)"
+                        ></div>
+                        <span v-if="isTyping" class="typing-cursor">|</span>
+                      </div>
+                    </div>
+
+                    <!-- 加载指示器（当没有任何内容时） -->
+                    <div
+                      v-if="streaming && (!currentAnswer || currentAnswer.trim() === '')"
+                      class="thinking-indicator"
+                    >
+                      <div class="thinking-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else>
+                    <!-- 显示最终回复内容 -->
+                    <div
+                      class="message-content pad"
+                      v-html="renderMarkdown(item.content)"
+                      ref="finalContentRef"
+                    ></div>
+
+                    <div
+                      style="display: flex; align-items: center"
+                      v-if="item.content && item.content !== '用户停止了生成'"
+                    >
+                      <el-button
+                        link
+                        style="padding: 10px 20px"
+                        type="primary"
+                        plain
+                        @click="toggleAndScrollToSources(item.id)"
+                      >
+                        来源<el-icon class="el-icon--right"><ArrowRight /></el-icon>
+                      </el-button>
+                      <!-- 复制按钮 -->
+                      <div
+                        class="copy-container"
+                        :title="
+                          item.streaming && item.id === currentStreamingMessageId
+                            ? '正在生成内容，请稍后复制'
+                            : '复制内容'
+                        "
+                        @click="handleCopy(item.content, item.id)"
+                        :class="{
+                          'copy-disabled':
+                            item.streaming && item.id === currentStreamingMessageId,
+                        }"
+                      >
+                        <img
+                          src="/images/copy.svg"
+                          style="width: 20px; height: 20px"
+                          alt="复制"
+                        />
+                        <span
+                          v-if="showCopied && copiedMessageId === item.id"
+                          class="copied-text"
+                          >已复制</span
+                        >
+                      </div>
+
+                      <!-- 点赞按钮 -->
+                      <div
+                        class="vote-container"
+                        style="display: inline-block; margin-left: 20px"
+                      >
+                        <img
+                          :src="
+                            item.vote === 'like'
+                              ? '/images/zhan-active.svg'
+                              : '/images/zhan.svg'
+                          "
+                          alt="点赞"
+                          style="
+                            width: 20px;
+                            height: 20px;
+                            cursor: pointer;
+                            transition: opacity 0.3s ease;
+                          "
+                          @click="handleVote(item.id, 'like')"
+                        />
+                        <span
+                          class="vote-count"
+                          :style="{ color: item.vote === 'like' ? '#409eff' : '#999' }"
+                        >
+                          {{ item.likeCount || 0 }}
+                        </span>
+                      </div>
+
+                      <div
+                        class="vote-container"
+                        style="display: inline-block; margin-left: 20px"
+                      >
+                        <img
+                          src="/images/cai.svg"
+                          alt="踩"
+                          style="width: 20px; height: 20px; cursor: pointer"
+                          @click="handleVote(item.id, 'dislike')"
+                          :style="{
+                            filter:
+                              item.vote === 'dislike'
+                                ? 'invert(29%) sepia(82%) saturate(748%) hue-rotate(327deg) brightness(97%) contrast(101%)'
+                                : 'none',
+                            transition: 'filter 0.3s ease',
+                          }"
+                        />
+                        <span
+                          class="vote-count"
+                          :style="{ color: item.vote === 'dislike' ? '#f56c6c' : '#999' }"
+                        >
+                          {{ item.dislikeCount || 0 }}
+                        </span>
+                      </div>
+                      <el-button
+                        link
+                        class="btnbottom"
+                        type="success"
+                        plain
+                        @click="handleRestart(index)"
+                      >
+                        重新生成<el-icon class="el-icon--right"><ArrowRight /></el-icon>
+                      </el-button>
+                    </div>
+                  </div>
+                  <div class="message-time">
+                    {{ formatTime(item.timestamp) }}
+                    <span
+                      v-if="item.streaming && item.id === currentStreamingMessageId"
+                      class="streaming-badge"
+                    >
+                      <span class="streaming-dot"></span>
+                      生成中...
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="message-info">
-              <!-- 【核心修改点】始终显示“思考过程”部分，只要消息中存在 reasoning 内容 -->
-              <div
-                v-if="item.reasoning && item.reasoning.trim() !== ''"
-                class="thinking-process"
-              >
-                <div class="thinking-header">
-                  <span>思考过程</span>
-                </div>
-                <div class="thinking-content">
-                  <!-- 可以在显示前处理重复内容 -->
-                  {{ removeDuplicateReasoning(item.reasoning) }}
-                </div>
-              </div>
 
-              <!-- 当前流式消息 -->
-              <div v-if="item.streaming && item.id === currentStreamingMessageId">
-                <!-- 🚨 删除原“思考中...”的动态显示块，因为已由上方永久块显示 -->
-
-                <!-- 回复内容（打字机效果） -->
-                <div
-                  v-if="currentAnswer && currentAnswer.trim() !== ''"
-                  class="answer-streaming"
-                >
-                  <div class="typing-container">
-                    <div class="typing-text" v-html="renderMarkdown(displayAnswer)"></div>
-                    <span v-if="isTyping" class="typing-cursor">|</span>
-                  </div>
+            <!-- 右侧参考来源区域 -->
+            <div
+              v-if="item.sources && item.sources.length > 0"
+              class="right-column"
+              :ref="(el) => setRightColumnRef(el, item.id)"
+              :style="getRightColumnStyle(item.id)"
+            >
+              <div class="sources-container">
+                <div class="sources-header">
+                  <span>📄 参考来源</span>
                 </div>
-
-                <!-- 加载指示器（当没有任何内容时） -->
-                <div
-                  v-if="streaming && (!currentAnswer || currentAnswer.trim() === '')"
-                  class="thinking-indicator"
-                >
-                  <div class="thinking-dots">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                </div>
-              </div>
-              <div v-else>
-                <!-- 显示最终回复内容 -->
-                <div
-                  class="message-content pad"
-                  v-html="renderMarkdown(item.content)"
-                ></div>
-
-                <div
-                  style="display: flex; align-items: center"
-                  v-if="item.content && item.content !== '用户停止了生成'"
-                >
-                  <el-button link style="padding: 10px 20px" type="primary" plain
-                    >来源<el-icon class="el-icon--right"><ArrowRight /></el-icon
-                  ></el-button>
-                  <!-- 复制按钮 -->
+                <div class="sources-list">
                   <div
-                    class="copy-container"
-                    :title="
-                      item.streaming && item.id === currentStreamingMessageId
-                        ? '正在生成内容，请稍后复制'
-                        : '复制内容'
-                    "
-                    @click="handleCopy(item.content, item.id)"
-                    :class="{
-                      'copy-disabled':
-                        item.streaming && item.id === currentStreamingMessageId,
-                    }"
+                    v-for="(source, sourceIndex) in item.sources"
+                    :key="sourceIndex"
+                    class="source-item"
                   >
-                    <img
-                      src="/images/copy.svg"
-                      style="width: 20px; height: 20px"
-                      alt="复制"
-                    />
-                    <span
-                      v-if="showCopied && copiedMessageId === item.id"
-                      class="copied-text"
-                      >已复制</span
+                    <div
+                      class="source-title"
+                      @click="toggleSourceItem(item.id, sourceIndex)"
                     >
-                  </div>
-
-                  <!-- 点赞按钮 -->
-                  <div
-                    class="vote-container"
-                    style="display: inline-block; margin-left: 20px"
-                  >
-                    <img
-                      :src="
-                        item.vote === 'like'
-                          ? '/images/zhan-active.svg'
-                          : '/images/zhan.svg'
-                      "
-                      alt="点赞"
-                      style="
-                        width: 20px;
-                        height: 20px;
-                        cursor: pointer;
-                        transition: opacity 0.3s ease;
-                      "
-                      @click="handleVote(item.id, 'like')"
-                    />
-                    <span
-                      class="vote-count"
-                      :style="{ color: item.vote === 'like' ? '#409eff' : '#999' }"
+                      <div class="title-content">
+                        <strong>{{ source.title }}</strong>
+                        <span class="source-score"
+                          >匹配度:
+                          {{ (parseFloat(source.score) * 100).toFixed(1) }}%</span
+                        >
+                      </div>
+                      <span class="collapse-icon">
+                        {{ sourceCollapsed[`${item.id}-${sourceIndex}`] ? '▶' : '▼' }}
+                      </span>
+                    </div>
+                    <div
+                      v-show="!sourceCollapsed[`${item.id}-${sourceIndex}`]"
+                      class="source-details"
                     >
-                      {{ item.likeCount || 0 }}
-                    </span>
+                      <div class="source-subtitle">{{ source.subtitle }}</div>
+                      <div class="source-content">{{ source.content }}</div>
+                      <div class="source-footer">
+                        <span class="source-date">
+                          更新时间: {{ formatSourceDate(source.update_date_time) }}
+                        </span>
+                        <el-button
+                          link
+                          size="small"
+                          type="primary"
+                          @click="copySource(source)"
+                        >
+                          复制片段
+                        </el-button>
+                      </div>
+                    </div>
                   </div>
-
-                  <div
-                    class="vote-container"
-                    style="display: inline-block; margin-left: 20px"
-                  >
-                    <img
-                      src="/images/cai.svg"
-                      alt="踩"
-                      style="width: 20px; height: 20px; cursor: pointer"
-                      @click="handleVote(item.id, 'dislike')"
-                      :style="{
-                        filter:
-                          item.vote === 'dislike'
-                            ? 'invert(29%) sepia(82%) saturate(748%) hue-rotate(327deg) brightness(97%) contrast(101%)'
-                            : 'none',
-                        transition: 'filter 0.3s ease',
-                      }"
-                    />
-                    <span
-                      class="vote-count"
-                      :style="{ color: item.vote === 'dislike' ? '#f56c6c' : '#999' }"
-                    >
-                      {{ item.dislikeCount || 0 }}
-                    </span>
-                  </div>
-                  <el-button
-                    link
-                    class="btnbottom"
-                    type="success"
-                    plain
-                    @click="handleRestart(index)"
-                  >
-                    重新生成<el-icon class="el-icon--right"><ArrowRight /></el-icon>
-                  </el-button>
                 </div>
-              </div>
-              <div class="message-time">
-                {{ formatTime(item.timestamp) }}
-                <span
-                  v-if="item.streaming && item.id === currentStreamingMessageId"
-                  class="streaming-badge"
-                >
-                  <span class="streaming-dot"></span>
-                  生成中...
-                </span>
               </div>
             </div>
           </div>
@@ -201,8 +278,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, watch, nextTick, onMounted, onUnmounted, onUpdated, reactive } from 'vue';
 import MarkdownIt from 'markdown-it';
+import { ElMessage } from 'element-plus';
 
 // 状态变量
 const displayAnswer = ref<string>('');
@@ -212,11 +290,43 @@ let currentTypingIndex = 0;
 const loading = ref(false);
 const isTyping = ref(false);
 const emit = defineEmits(['regenerate']);
+
+// 新增：控制参考来源的显示状态和单个来源项的折叠状态
+const sourcesVisible = ref<Record<string, boolean>>({});
+const sourceCollapsed = ref<Record<string, boolean>>({});
+
+// 存储每个消息的左边栏和右边栏的DOM引用
+const leftColumnRefs = reactive<Record<string, HTMLElement>>({});
+const rightColumnRefs = reactive<Record<string, HTMLElement>>({});
+// 设置左边栏引用
+const setLeftColumnRef = (el: any, messageId: string) => {
+  if (el && el instanceof HTMLElement) {
+    leftColumnRefs[messageId] = el;
+  }
+};
+
+const setRightColumnRef = (el: any, messageId: string) => {
+  if (el && el instanceof HTMLElement) {
+    rightColumnRefs[messageId] = el;
+  }
+};
+// 获取右边栏样式
+const getRightColumnStyle = (messageId: string) => {
+  const leftColumn = leftColumnRefs[messageId];
+  if (!leftColumn) return {};
+
+  const leftHeight = leftColumn.offsetHeight;
+  return {
+    height: `${leftHeight}px`,
+    maxHeight: 'none', // 移除最大高度限制
+  };
+};
+
 // Props
 interface Props {
   chatData: ChatSession | null;
   streaming?: boolean;
-  currentReasoning?: string; // 此prop可能不再需要，或仅用于流式时的临时UI反馈
+  currentReasoning?: string;
   currentAnswer?: string;
   currentStreamingMessageId?: string | null;
 }
@@ -228,9 +338,10 @@ interface ChatMessage {
   reasoning?: string;
   timestamp: Date;
   streaming?: boolean;
-  vote?: 'like' | 'dislike' | null; // 用户投票状态
-  likeCount?: number; // 点赞数量
-  dislikeCount?: number; // 踩数量
+  vote?: 'like' | 'dislike' | null;
+  likeCount?: number;
+  dislikeCount?: number;
+  sources?: any[];
 }
 
 interface ChatSession {
@@ -284,6 +395,105 @@ const copyToClipboard = async (text: string) => {
   }
 };
 
+// 格式化来源更新时间
+const formatSourceDate = (timestamp: string) => {
+  if (!timestamp) return '';
+  const date = new Date(parseInt(timestamp));
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+// 复制来源片段
+const copySource = async (source: any) => {
+  const text = `标题：${source.title}\n子标题：${source.subtitle}\n内容：${source.content}`;
+  try {
+    await navigator.clipboard.writeText(text);
+    ElMessage.success('已复制来源片段');
+  } catch (err) {
+    console.error('复制失败:', err);
+  }
+};
+
+// 点击来源按钮时显示参考来源面板
+const toggleAndScrollToSources = (messageId: string) => {
+  // 切换显示状态
+  sourcesVisible.value[messageId] = !sourcesVisible.value[messageId];
+
+  // 如果显示，则调整右边栏高度
+  if (sourcesVisible.value[messageId]) {
+    nextTick(() => {
+      adjustRightColumnHeight(messageId);
+
+      const sourcesContainer = document.querySelector(
+        `[data-message-id="${messageId}"] .sources-container`,
+      );
+      if (sourcesContainer) {
+        sourcesContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
+  }
+};
+
+// 新增：调整右边栏高度的函数 - 精确计算推理内容+最终回复内容高度
+const adjustRightColumnHeight = (messageId: string) => {
+  const leftColumn = leftColumnRefs[messageId];
+  const rightColumn = rightColumnRefs[messageId];
+
+  if (leftColumn && rightColumn) {
+    // 获取左侧容器内所有需要计算高度的元素
+    const thinkingProcess = leftColumn.querySelector('.thinking-process') as HTMLElement;
+    const finalContent = leftColumn.querySelector('.message-content.pad') as HTMLElement;
+
+    let totalHeight = 0;
+
+    // 计算推理内容高度（如果存在）
+    if (thinkingProcess) {
+      totalHeight += thinkingProcess.offsetHeight;
+    }
+
+    // 计算最终回复内容高度（如果存在）
+    if (finalContent) {
+      totalHeight += finalContent.offsetHeight;
+    }
+
+    // 加上一些额外的间距（padding、margin等）
+    const styles = window.getComputedStyle(leftColumn);
+    const paddingTop = parseInt(styles.paddingTop) || 0;
+    const paddingBottom = parseInt(styles.paddingBottom) || 0;
+    const marginTop = parseInt(styles.marginTop) || 0;
+    const marginBottom = parseInt(styles.marginBottom) || 0;
+
+    totalHeight += paddingTop + paddingBottom + marginTop + marginBottom;
+
+    // 设置右侧容器高度
+    rightColumn.style.height = `${totalHeight}px`;
+
+    // 同时设置sources-container的高度
+    const sourcesContainer = rightColumn.querySelector(
+      '.sources-container',
+    ) as HTMLElement;
+    if (sourcesContainer) {
+      sourcesContainer.style.height = `${totalHeight}px`;
+    }
+  }
+};
+
+// 新增：切换单个来源项的折叠状态
+const toggleSourceItem = (messageId: string, sourceIndex: number) => {
+  const key = `${messageId}-${sourceIndex}`;
+  sourceCollapsed.value[key] = !sourceCollapsed.value[key];
+
+  // 延迟调整高度，等待DOM更新
+  nextTick(() => {
+    adjustRightColumnHeight(messageId);
+  });
+};
+
 const handleRestart = (index: number) => {
   if (!props.chatData || !props.chatData.messages) return;
 
@@ -326,6 +536,7 @@ const handleCopy = async (content: string, messageId: string) => {
     }, 2000);
   }
 };
+
 // 将文本追加到打字机队列
 const appendToTypingQueue = (text: string) => {
   if (!text) return;
@@ -492,12 +703,6 @@ watch(
   { immediate: true },
 );
 
-// 【可选】可以保留对 currentReasoning 的监听，用于调试，但不再用于触发滚动（因为内容已从 item.reasoning 读取）
-watch(
-  () => props.currentReasoning,
-  () => {},
-);
-
 // 监听当前流式消息ID变化
 watch(
   () => props.currentStreamingMessageId,
@@ -514,6 +719,13 @@ watch(
   () => {
     nextTick(() => {
       scrollToBottom();
+
+      // 调整所有可见的右边栏高度
+      Object.keys(sourcesVisible.value).forEach((messageId) => {
+        if (sourcesVisible.value[messageId]) {
+          adjustRightColumnHeight(messageId);
+        }
+      });
     });
   },
   { deep: true },
@@ -526,6 +738,16 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopTypingEffect();
+});
+
+// 在每次更新后调整右边栏高度
+onUpdated(() => {
+  // 调整所有可见的右边栏高度
+  Object.keys(sourcesVisible.value).forEach((messageId) => {
+    if (sourcesVisible.value[messageId]) {
+      adjustRightColumnHeight(messageId);
+    }
+  });
 });
 </script>
 
@@ -683,7 +905,7 @@ onUnmounted(() => {
             .typing-text {
               display: inline;
               line-height: 1.6;
-              font-size: 16px;
+              font-size: 17px;
               color: #333;
 
               :deep(p) {
@@ -763,6 +985,7 @@ onUnmounted(() => {
             }
 
             .message-content {
+              font-size: 17px;
               :deep(p) {
                 margin: 8px 0;
               }
@@ -859,7 +1082,169 @@ onUnmounted(() => {
       gap: 8px;
     }
   }
+
+  // 双栏布局样式
+  .dual-column-container {
+    display: flex;
+    width: 100%;
+    gap: 2%;
+    transition: all 0.3s ease;
+    align-items: flex-start; // 防止等高拉伸
+
+    // 默认单栏布局
+    .left-column {
+      width: 100%;
+      transition: width 0.3s ease;
+    }
+
+    .right-column {
+      width: 0;
+      opacity: 0;
+      overflow: hidden;
+      transition: all 0.3s ease;
+      border-left: 1px solid #e9ecef;
+      padding-left: 0;
+      margin-left: 0;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto; // 允许滚动
+      max-height: none; // 移除最大高度限制
+    }
+
+    // 显示参考来源时的双栏布局
+    &.show-sources {
+      .left-column {
+        width: 63%;
+      }
+
+      .right-column {
+        width: 35%;
+        opacity: 1;
+        padding-left: 20px;
+        margin-left: 2%;
+      }
+    }
+  }
+
+  // 参考来源容器样式
+  .sources-container {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    height: fit-content;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%; // 确保容器占满父元素高度
+
+    .sources-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 16px;
+      font-weight: 600;
+      color: #303133;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #e9ecef;
+      flex-shrink: 0;
+    }
+
+    .sources-list {
+      flex: 1;
+      overflow-y: auto;
+      min-height: 0;
+    }
+
+    .source-item {
+      background: white;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      border-left: 3px solid #409eff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      overflow: hidden;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+
+    .source-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      font-size: 14px;
+      color: #303133;
+      cursor: pointer;
+      user-select: none;
+      background: #f0f7ff;
+      transition: background-color 0.3s ease;
+
+      &:hover {
+        background: #e6f7ff;
+      }
+
+      .title-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex: 1;
+        margin-right: 10px;
+      }
+
+      .collapse-icon {
+        font-size: 12px;
+        color: #909399;
+        transition: transform 0.3s ease;
+        flex-shrink: 0;
+      }
+    }
+
+    .source-details {
+      transition: all 0.3s ease;
+      overflow: hidden;
+    }
+
+    .source-subtitle {
+      font-size: 12px;
+      color: #909399;
+      padding: 0 12px 8px 12px;
+    }
+
+    .source-content {
+      font-size: 13px;
+      color: #606266;
+      line-height: 1.6;
+      padding: 0 12px 8px 12px;
+      max-height: 200px;
+      overflow-y: auto;
+      background: #f8f9fa;
+      margin: 0 12px 8px 12px;
+      border-radius: 4px;
+    }
+
+    .source-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: #909399;
+      padding: 0 12px 12px 12px;
+    }
+
+    .source-score {
+      font-size: 12px;
+      color: #67c23a;
+      background: #f0f9eb;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+  }
 }
+
 .vote-container {
   display: inline-flex;
   align-items: center;

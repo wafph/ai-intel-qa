@@ -92,6 +92,7 @@ interface StreamChunk {
     reasoning_content?: string;
     content?: string;
     index?: number;
+    outputs?: any;
     node_id?: string;
     node_type?: string;
     node_name?: string;
@@ -183,14 +184,14 @@ const handleTabChange = (tabName: string) => {
   }
 
   const historyForTab = chatStore.historyList.filter(
-    (item: any) => item.menuType === tabName
+    (item: any) => item.menuType === tabName,
   );
   if (historyForTab.length > 0) {
     // 检查当前选中的对话是否属于当前菜单
     const currentChatBelongsToTab = historyForTab.some(
-      (item: any) => item.id === activeChatId.value
+      (item: any) => item.id === activeChatId.value,
     );
-    
+
     if (!currentChatBelongsToTab) {
       activeChatId.value = historyForTab[0].id;
     }
@@ -206,7 +207,7 @@ const handleNewChat = () => {
   const newSession: ChatSession = {
     id: newChatId,
     title: chatTitle,
-    time: Date.now(), 
+    time: Date.now(),
     type: activeTab.value as any,
     messages: [],
     menuType: activeTab.value,
@@ -337,7 +338,7 @@ const startStream = async (queryText: string, messageId: string) => {
 
     // 根据当前选项卡选择不同的API接口
     const urlqa =
-      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/60a15b33-e781-4d5d-88d3-5ed90054d9b0/conversations/068fa9f6-a615-42d9-b78a-514a1760cb06?version=1776045391962';
+      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/60a15b33-e781-4d5d-88d3-5ed90054d9b0/conversations/342b2fe7-a2e8-4da1-a0fe-4c9f068ba43f?version=1776245995063';
     const urlDraf =
       '/api1/v1/1725c43e3fa54828a078fce60f5a3773/agents/fe7b5350-c3ee-41d4-b5d5-ecc6c26d33b3/conversations/d758b3f4-5d04-47a3-94a4-104406de1a12?version=1775627259180';
     const urlreview =
@@ -424,7 +425,38 @@ const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
   } else {
     dataReasion = chunk.reasoning_content;
   }
+  // ✅ 新增：处理 workflow_finished 事件
+  if (chunk.event === 'workflow_finished') {
+    try {
+      const outputs = chunk.data?.outputs;
+      if (outputs && outputs.user_fields && outputs.user_fields.data_json) {
+        const sources = outputs.user_fields.data_json.map((item: any) => ({
+          file_id: item.file_id,
+          chunk_id: item.chunk_id,
+          title: item.title, // 文件标题
+          content: item.content, // 切片内容
+          subtitle: item.subtitle, // 子标题
+          update_date_time: item.update_date_time, // 更新时间
+          tags: item.tags,
+          repo_id: item.repo_id,
+          score: item.score,
+        }));
 
+        // 将来源信息保存到当前消息
+        const chat = chatStore.getChatSession(activeChatId.value!);
+        if (chat) {
+          const message = chat.messages.find((m: any) => m.id === messageId);
+          if (message) {
+            message.sources = sources;
+            console.log('已保存来源信息:', sources);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('解析 workflow_finished 失败:', error);
+    }
+    return; // 处理完后返回，不再走下面的逻辑
+  }
   if (chunk.event === 'message') {
     // 处理推理过程
     if (dataReasion !== undefined) {
@@ -531,7 +563,9 @@ const stopStream = () => {
       const message = chat.messages.find((m: any) => m.id === currentStreamingMessageId);
       if (message) {
         message.streaming = false;
-        message.content = '用户停止了生成';
+        if (message.content === '') {
+          message.content = '用户停止了生成';
+        }
       }
     }
   }

@@ -161,7 +161,7 @@ const shareCollection = (item: any) => {
 };
 
 // 格式化时间
-const formatTime = (timeStr: string) => {
+const formatTime = (timeStr: number) => {
   const date = new Date(timeStr);
   return date.toLocaleString();
 };

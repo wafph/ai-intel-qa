@@ -13,6 +13,7 @@ export interface ChatMessage {
     type?: string;
     wordCount?: number;
   };
+  sources?: SourceInfo[]; // ✅ 新增来源信息字段
 }
 
 export interface ChatSession {
@@ -42,4 +43,16 @@ export interface StreamChunk {
     reasoning_content?: string
     [key: string]: any
   }
+}
+
+export interface SourceInfo {
+  file_id: string;
+  chunk_id: string;
+  title: string;        // 文件标题
+  content: string;      // 切片内容
+  subtitle: string;     // 子标题
+  update_date_time: string; // 更新时间
+  tags: string;
+  repo_id: string;
+  score: string;
 }

@@ -519,7 +519,7 @@ onUnmounted(() => {
             .typing-text {
               display: inline;
               line-height: 1.6;
-              font-size: 16px;
+              font-size: 17px;
               color: #333;
 
               :deep(p) {
@@ -599,6 +599,7 @@ onUnmounted(() => {
             }
 
             .message-content {
+              font-size: 17px;
               padding: 12px 17px;
               line-height: 1.6;
               word-break: break-word;
