@@ -30,6 +30,7 @@
               :current-answer="currentAnswer"
               :current-streaming-message-id="currentStreamingMessageId"
               @stop-stream="stopStream"
+              @regenerate="handleRegenerate"
             />
           </div>
 
@@ -52,17 +53,13 @@
                 <span class="stop-icon">■</span>
                 停止生成
               </el-button>
-              <div class="stream-status">
-                <span class="streaming-indicator"></span>
-                生成中...
-              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
   </template>
-   <template v-else>
+  <template v-else>
     <!-- 独立页面布局 -->
     <router-view></router-view>
   </template>
@@ -395,6 +392,13 @@ const startStream = async (queryText: string, messageId: string) => {
   } finally {
     finishStream(messageId);
   }
+};
+
+const handleRegenerate = (content: string) => {
+  if (isStreaming.value) {
+    stopStream(); // 停止当前生成
+  }
+  handleSendMessage(content); // 重新发送原问题
 };
 
 const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {

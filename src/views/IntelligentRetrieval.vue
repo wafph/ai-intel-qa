@@ -11,7 +11,7 @@
       v-if="chatData?.messages && chatData?.messages?.length > 0"
     >
       <div
-        v-for="item in chatData.messages || []"
+        v-for="(item, index) in chatData.messages || []"
         :key="item.id"
         :class="[
           'history-item',
@@ -22,7 +22,7 @@
         <div v-if="item.role === 'user'" class="message-user">
           <div class="message-header">
             <div class="avatar user-avatar">
-              <div><img src="/images/user.svg" alt=""></div>
+              <div><img src="/images/user.svg" alt="" /></div>
             </div>
             <div class="message-info">
               <div class="message-content">{{ item.content }}</div>
@@ -86,6 +86,14 @@
                   class="message-content pad"
                   v-html="renderMarkdown(item.content)"
                 ></div>
+                <div style="margin-left: 15px">
+                  <el-button link type="success" plain @click="handleRestart(index)">
+                    重新检索<el-icon class="el-icon--right"><ArrowRight /></el-icon>
+                  </el-button>
+                  <el-button link class="btnbottom" type="primary" plain @click="handleExport">
+                    导出
+                  </el-button>
+                </div>
               </div>
 
               <div class="message-time">
@@ -117,7 +125,7 @@ let typingInterval: NodeJS.Timeout | null = null;
 let currentTypingIndex = 0;
 const loading = ref(false);
 const isTyping = ref(false);
-
+const emit = defineEmits(['regenerate']);
 // Props
 interface Props {
   chatData: ChatSession | null;
@@ -227,6 +235,41 @@ const formatTime = (date: Date) => {
     minute: '2-digit',
     second: '2-digit',
   });
+};
+
+const handleRestart = (index: number) => {
+  if (!props.chatData || !props.chatData.messages) return;
+
+  // 向前查找最近的 user 消息
+  let userMessage = null;
+  for (let i = index - 1; i >= 0; i--) {
+    if (props.chatData.messages[i].role === 'user') {
+      userMessage = props.chatData.messages[i];
+      break;
+    }
+  }
+
+  if (userMessage) {
+    emit('regenerate', userMessage.content);
+  }
+};
+const handleExport = () => {
+  if (!props.chatData) return;
+
+  const content = props.chatData.messages
+    .filter((msg) => msg.role === 'assistant')
+    .map((msg) => msg.content)
+    .join('\n\n');
+
+  const blob = new Blob([content], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${props.chatData.title}.md`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 };
 
 const renderMarkdown = (content: string) => {
@@ -351,8 +394,8 @@ onUnmounted(() => {
   .conversation-history {
     flex: 1;
     overflow-y: auto;
-    padding: 20px;
     margin-bottom: 20px;
+     padding-top: 20px;
     display: flex;
     flex-direction: column;
     gap: 20px;
@@ -374,10 +417,10 @@ onUnmounted(() => {
               margin-left: 12px;
               margin-right: 0;
 
-               img {
+              img {
                 width: 80%;
                 height: 80%;
-              };
+              }
             }
 
             .message-info {
@@ -385,7 +428,6 @@ onUnmounted(() => {
 
               .message-content {
                 background: #d7e6fe;
-                color: black;
                 border-radius: 12px;
                 padding: 12px 20px;
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -412,8 +454,6 @@ onUnmounted(() => {
             }
 
             .thinking-process {
-              // background: #fff7e6;
-              // border: 1px solid #ffd591;
               border-radius: 8px;
               padding: 16px;
               margin-bottom: 12px;
@@ -437,12 +477,10 @@ onUnmounted(() => {
             }
 
             .thinking-content {
-              font-size: 13px;
+              font-size: 15px;
               color: #333;
-              line-height: 1.6;
               white-space: pre-wrap;
               word-break: break-word;
-              font-style: italic;
               background: rgba(255, 255, 255, 0.7);
               padding: 12px;
               border-radius: 6px;
@@ -458,10 +496,8 @@ onUnmounted(() => {
             }
 
             .answer-streaming {
-              background: #f6ffed;
-              border: 1px solid #b7eb8f;
+              padding: 20px;
               border-radius: 8px;
-               padding: 16px 35px;
               animation: fadeIn 0.5s ease;
               margin-top: 8px;
             }
@@ -474,7 +510,7 @@ onUnmounted(() => {
             .typing-text {
               display: inline;
               line-height: 1.6;
-              font-size: 14px;
+              font-size: 16px;
               color: #333;
 
               :deep(p) {
@@ -554,14 +590,9 @@ onUnmounted(() => {
             }
 
             .message-content {
-              padding: 12px 36px;
+              padding: 12px 17px;
               line-height: 1.6;
               word-break: break-word;
-              background: white;
-              border: 1px solid #e8e8e8;
-              border-radius: 12px;
-              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-              border-left: 4px solid #4facfe;
 
               :deep(p) {
                 margin: 8px 0;
@@ -593,7 +624,7 @@ onUnmounted(() => {
             }
 
             .message-time {
-              font-size: 12px;
+              font-size: 16px;
               color: #999;
               margin-top: 8px;
               padding: 0 4px;

@@ -11,7 +11,7 @@
       v-if="chatData?.messages && chatData?.messages?.length > 0"
     >
       <div
-        v-for="item in chatData.messages || []"
+        v-for="(item, index) in chatData.messages || []"
         :key="item.id"
         :class="[
           'history-item',
@@ -87,13 +87,12 @@
                 ></div>
 
                 <div style="display: flex; align-items: center">
-                  <el-button style="padding: 10px 20px" size="small" type="primiary" plain
+                  <el-button link style="padding: 10px 20px" type="primary" plain
                     >来源<el-icon class="el-icon--right"><ArrowRight /></el-icon
                   ></el-button>
                   <!-- 复制按钮 -->
                   <div
                     class="copy-container"
-                    style="display: inline-block; margin-left: 20px; cursor: pointer"
                     :title="
                       item.streaming && item.id === currentStreamingMessageId
                         ? '正在生成内容，请稍后复制'
@@ -169,18 +168,26 @@
                       {{ item.dislikeCount || 0 }}
                     </span>
                   </div>
-                </div>
-
-                <div class="message-time">
-                  {{ formatTime(item.timestamp) }}
-                  <span
-                    v-if="item.streaming && item.id === currentStreamingMessageId"
-                    class="streaming-badge"
+                  <el-button
+                    link
+                    class="btnbottom"
+                    type="success"
+                    plain
+                    @click="handleRestart(index)"
                   >
-                    <span class="streaming-dot"></span>
-                    生成中...
-                  </span>
+                    重新生成<el-icon class="el-icon--right"><ArrowRight /></el-icon>
+                  </el-button>
                 </div>
+              </div>
+              <div class="message-time">
+                {{ formatTime(item.timestamp) }}
+                <span
+                  v-if="item.streaming && item.id === currentStreamingMessageId"
+                  class="streaming-badge"
+                >
+                  <span class="streaming-dot"></span>
+                  生成中...
+                </span>
               </div>
             </div>
           </div>
@@ -201,7 +208,7 @@ let typingInterval: NodeJS.Timeout | null = null;
 let currentTypingIndex = 0;
 const loading = ref(false);
 const isTyping = ref(false);
-
+const emit = defineEmits(['regenerate']);
 // Props
 interface Props {
   chatData: ChatSession | null;
@@ -250,7 +257,6 @@ const showCopied = ref(false);
 const copiedMessageId = ref<string | null>(null);
 let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
-
 // 复制文本到剪贴板的函数
 const copyToClipboard = async (text: string) => {
   try {
@@ -272,6 +278,23 @@ const copyToClipboard = async (text: string) => {
   } catch (error) {
     console.error('复制失败:', error);
     return false;
+  }
+};
+
+const handleRestart = (index: number) => {
+  if (!props.chatData || !props.chatData.messages) return;
+
+  // 向前查找最近的 user 消息
+  let userMessage = null;
+  for (let i = index - 1; i >= 0; i--) {
+    if (props.chatData.messages[i].role === 'user') {
+      userMessage = props.chatData.messages[i];
+      break;
+    }
+  }
+
+  if (userMessage) {
+    emit('regenerate', userMessage.content);
   }
 };
 
@@ -535,8 +558,8 @@ onUnmounted(() => {
   .conversation-history {
     flex: 1;
     overflow-y: auto;
-    padding: 20px;
     margin-bottom: 20px;
+     padding-top: 20px;
     display: flex;
     flex-direction: column;
     gap: 20px;
@@ -596,12 +619,15 @@ onUnmounted(() => {
             }
 
             .thinking-process {
-              // background: #fff7e6;
-              // border: 1px solid #ffd591;
               border-radius: 8px;
+              font-size: 16px;
               padding: 16px;
               margin-bottom: 12px;
               animation: fadeIn 0.5s ease;
+            }
+
+            .btnbottom {
+              margin-left: 20px;
             }
 
             .thinking-header {
@@ -621,17 +647,15 @@ onUnmounted(() => {
             }
 
             .thinking-content {
-              font-size: 13px;
+              font-size: 15px;
               color: #333;
               line-height: 1.6;
               white-space: pre-wrap;
               word-break: break-word;
-              font-style: italic;
               background: rgba(255, 255, 255, 0.7);
               padding: 12px;
               border-radius: 6px;
               border-left: 3px solid #fa8c16;
-              // overflow-y: auto;
             }
 
             .thinking-placeholder {
@@ -643,7 +667,7 @@ onUnmounted(() => {
             }
 
             .answer-streaming {
-              padding: 16px 35px;
+              padding: 20px;
               animation: fadeIn 0.5s ease;
               margin-top: 8px;
             }
@@ -656,7 +680,7 @@ onUnmounted(() => {
             .typing-text {
               display: inline;
               line-height: 1.6;
-              font-size: 14px;
+              font-size: 16px;
               color: #333;
 
               :deep(p) {
@@ -766,7 +790,6 @@ onUnmounted(() => {
             }
 
             .message-time {
-              font-size: 12px;
               color: #999;
               margin-top: 8px;
               padding: 0 4px;
@@ -861,7 +884,6 @@ onUnmounted(() => {
   position: relative;
   display: inline-flex;
   align-items: center;
-  cursor: pointer;
   transition: all 0.3s ease;
   padding: 4px 8px;
   border-radius: 6px;
