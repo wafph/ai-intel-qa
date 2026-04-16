@@ -182,9 +182,22 @@ const handleTabChange = (tabName: string) => {
     router.push(targetRoute);
   }
 
-  handleNewChat();
+  const historyForTab = chatStore.historyList.filter(
+    (item: any) => item.menuType === tabName
+  );
+  if (historyForTab.length > 0) {
+    // 检查当前选中的对话是否属于当前菜单
+    const currentChatBelongsToTab = historyForTab.some(
+      (item: any) => item.id === activeChatId.value
+    );
+    
+    if (!currentChatBelongsToTab) {
+      activeChatId.value = historyForTab[0].id;
+    }
+  } else {
+    activeChatId.value = '';
+  }
 };
-
 const handleNewChat = () => {
   const newChatId = Date.now().toString();
   activeChatId.value = newChatId;
@@ -193,7 +206,7 @@ const handleNewChat = () => {
   const newSession: ChatSession = {
     id: newChatId,
     title: chatTitle,
-    time: '刚刚',
+    time: Date.now(), 
     type: activeTab.value as any,
     messages: [],
     menuType: activeTab.value,
@@ -202,7 +215,7 @@ const handleNewChat = () => {
   const newHistory: HistoryItem = {
     id: newChatId,
     title: chatTitle,
-    time: '刚刚',
+    time: Date.now(),
     type: activeTab.value as any,
     preview: '新对话',
     menuType: activeTab.value,
@@ -213,7 +226,6 @@ const handleNewChat = () => {
 
   scrollToBottom();
 };
-
 const handleSelectChat = (chatId: string) => {
   if (isStreaming.value) {
     stopStream();

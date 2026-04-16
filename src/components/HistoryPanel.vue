@@ -48,9 +48,10 @@
                 {{ history.title }}
               </div>
               <div class="item-preview">{{ history.preview }}</div>
+              <!-- 修改历史项的时间显示 -->
               <div class="item-meta">
                 <span class="item-type">{{ history.type }}</span>
-                <span class="item-time">{{ history.time }}</span>
+                <span class="item-time">{{ history.formattedTime }}</span>
               </div>
             </div>
             <button
@@ -130,20 +131,71 @@ const filteredHistory = computed(() => {
   return props.historyList || [];
 });
 
+// 在 script setup 中添加时间格式化函数
+const formatRelativeTime = (timestamp: number | string) => {
+  // 如果已经是字符串（兼容旧数据），直接返回
+  if (typeof timestamp === 'string') {
+    return timestamp;
+  }
+
+  const now = Date.now();
+  const diff = now - timestamp;
+
+  // 计算天数差
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+  // 今天
+  if (days === 0) {
+    const date = new Date(timestamp);
+    return `今天 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  }
+
+  // 昨天
+  if (days === 1) {
+    const date = new Date(timestamp);
+    return `昨天 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  }
+
+  // 前天
+  if (days === 2) {
+    const date = new Date(timestamp);
+    return `前天 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  }
+
+  // 更早的时间，显示具体日期
+  const date = new Date(timestamp);
+  return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+};
+
+// 修改 groupedHistory 计算属性
 const groupedHistory = computed(() => {
   const groups: Record<string, any[]> = {};
 
   filteredHistory.value.forEach((item) => {
-    const date = item.time.includes('今天')
-      ? '今天'
-      : item.time.includes('昨天')
-        ? '昨天'
-        : item.time.split(' ')[0];
+    // 使用格式化后的相对时间作为分组依据
+    const relativeTime = formatRelativeTime(item.time);
 
-    if (!groups[date]) {
-      groups[date] = [];
+    // 提取日期部分用于分组
+    let groupKey = '';
+    if (relativeTime.includes('今天')) {
+      groupKey = '今天';
+    } else if (relativeTime.includes('昨天')) {
+      groupKey = '昨天';
+    } else if (relativeTime.includes('前天')) {
+      groupKey = '前天';
+    } else {
+      // 提取年月日作为分组键
+      const date = new Date(item.time);
+      groupKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
     }
-    groups[date].push(item);
+
+    if (!groups[groupKey]) {
+      groups[groupKey] = [];
+    }
+    groups[groupKey].push({
+      ...item,
+      formattedTime: relativeTime, // 添加格式化后的时间
+    });
   });
 
   return Object.entries(groups).map(([date, items]) => ({
@@ -160,7 +212,6 @@ const handleSelectChat = (chatId: string) => {
 const handleNewChat = () => {
   emit('new-chat');
 };
-
 const handleDeleteChat = (chatId: string) => {
   if (confirm('确定要删除这条对话记录吗？')) {
     emit('delete-chat', chatId);

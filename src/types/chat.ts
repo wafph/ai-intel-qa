@@ -18,7 +18,7 @@ export interface ChatMessage {
 export interface ChatSession {
   id: string;
   title: string;
-  time: string;
+  time: number;
   type: '智能问答' | '智能检索' | '辅助起草' | '合规审核';
   messages: ChatMessage[];
   isCollected?: boolean;
@@ -29,7 +29,7 @@ export interface ChatSession {
 export interface HistoryItem {
   id: string;
   title: string;
-  time: string;
+  time: number;
   type: '智能问答' | '智能检索' | '辅助起草' | '合规审核';
   preview: string;
   isCollected?: boolean;
