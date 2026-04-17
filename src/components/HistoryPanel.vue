@@ -47,8 +47,8 @@
             <div class="item-content">
               <div class="item-title">
                 <!-- 修改：收藏图标只在鼠标悬停时显示 -->
-                <span 
-                  v-if="history.isCollected && hoveredItemId === history.id" 
+                <span
+                  v-if="history.isCollected && hoveredItemId === history.id"
                   class="favorite-icon"
                 >
                   ★
@@ -61,25 +61,17 @@
                 <span class="item-time">{{ history.formattedTime }}</span>
               </div>
             </div>
-            
+
             <!-- 菜单按钮（仅鼠标悬停时显示） -->
             <div
               v-if="hoveredItemId === history.id"
               class="item-menu-container"
               @click.stop
             >
-              <button
-                class="menu-toggle-btn"
-                @click="toggleMenu(history.id)"
-              >
-                ⋮
-              </button>
-              
+              <button class="menu-toggle-btn" @click="toggleMenu(history.id)">⋮</button>
+
               <!-- 折叠菜单 -->
-              <div
-                v-if="visibleMenuId === history.id"
-                class="dropdown-menu"
-              >
+              <div v-if="visibleMenuId === history.id" class="dropdown-menu">
                 <!-- 收藏按钮 -->
                 <button
                   class="menu-item"
@@ -91,12 +83,9 @@
                     {{ history.isCollected ? '取消收藏' : '收藏' }}
                   </span>
                 </button>
-                
+
                 <!-- 删除按钮 -->
-                <button
-                  class="menu-item delete"
-                  @click="handleDeleteChat(history.id)"
-                >
+                <button class="menu-item delete" @click="handleDeleteChat(history.id)">
                   <span class="menu-icon">🗑️</span>
                   <span class="menu-text">删除</span>
                 </button>
@@ -256,7 +245,11 @@ const handleDeleteChat = (chatId: string) => {
 
 // 新增：清空所有历史记录（包括所有菜单）
 const handleClearAllHistory = () => {
-  if (confirm('确定要清空所有历史对话吗？此操作将清空所有菜单的历史记录，且当前对话也会被清空。')) {
+  if (
+    confirm(
+      '确定要清空所有历史对话吗？此操作将清空所有菜单的历史记录，且当前对话也会被清空。',
+    )
+  ) {
     emit('clear-history');
     closeMenu(); // 关闭菜单
   }
@@ -495,19 +488,14 @@ onUnmounted(() => {
 }
 
 .history-item:hover {
-  background: #f0f7ff;
+  background: #e6f7ff;
   border-left-color: #91d5ff;
 }
 
 .history-item.active {
   background: #e6f7ff;
-  // border-left-color: #1890ff;
   box-shadow: inset 2px 0 0 #1890ff;
 }
-
-// .history-item.collected {
-//   border-left-color: #f6c542;
-// }
 
 .item-content {
   flex: 1;
@@ -518,7 +506,7 @@ onUnmounted(() => {
 }
 
 .item-title {
- font-size: 15px;
+  font-size: 15px;
   font-weight: 500;
   color: #333;
   line-height: 1.3;
