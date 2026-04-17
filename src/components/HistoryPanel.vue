@@ -46,7 +46,13 @@
           >
             <div class="item-content">
               <div class="item-title">
-                <span v-if="history.isCollected" class="favorite-icon">★</span>
+                <!-- 修改：收藏图标只在鼠标悬停时显示 -->
+                <span 
+                  v-if="history.isCollected && hoveredItemId === history.id" 
+                  class="favorite-icon"
+                >
+                  ★
+                </span>
                 {{ history.title }}
               </div>
               <!-- 不再显示item-preview -->
@@ -152,6 +158,7 @@ const emit = defineEmits<{
   'delete-chat': [chatId: string];
   'clear-history': [];
   'toggle-favorite': [chatId: string];
+  'switch-tab': [tabName: string]; // 新增：通知父组件切换标签页
 }>();
 
 const router = useRouter();
@@ -466,7 +473,7 @@ onUnmounted(() => {
   color: #8c8c8c;
   font-weight: 500;
   background: #fafafa;
-  border-left: 3px solid #1890ff;
+  // border-left: 3px solid #1890ff;
   margin: 8px 0 4px 0;
   position: sticky;
   top: 60px;
@@ -494,13 +501,13 @@ onUnmounted(() => {
 
 .history-item.active {
   background: #e6f7ff;
-  border-left-color: #1890ff;
+  // border-left-color: #1890ff;
   box-shadow: inset 2px 0 0 #1890ff;
 }
 
-.history-item.collected {
-  border-left-color: #f6c542;
-}
+// .history-item.collected {
+//   border-left-color: #f6c542;
+// }
 
 .item-content {
   flex: 1;
@@ -511,24 +518,21 @@ onUnmounted(() => {
 }
 
 .item-title {
-  font-size: 15px;
+ font-size: 15px;
   font-weight: 500;
   color: #333;
   line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  white-space: nowrap; /* 关键：强制不换行 */
+  display: block;
 }
 
 .favorite-icon {
   color: #f6c542;
   font-size: 12px;
   flex-shrink: 0;
+  transition: opacity 0.2s;
 }
 
 // 移除item-preview相关样式
