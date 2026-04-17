@@ -4,12 +4,7 @@
     <div class="page-header">
       <h1>我的收藏</h1>
       <div class="header-actions">
-        <button 
-          class="back-btn"
-          @click="goBack"
-        >
-          ← 返回
-        </button>
+        <button class="back-btn" @click="goBack">← 返回</button>
       </div>
     </div>
 
@@ -25,10 +20,10 @@
             class="search-input"
           />
         </div>
-        
+
         <div class="filter-options">
-          <div 
-            v-for="tab in filterTabs" 
+          <div
+            v-for="tab in filterTabs"
             :key="tab.id"
             class="filter-tab"
             :class="{ active: activeFilter === tab.id }"
@@ -58,34 +53,28 @@
               <span class="favorite-icon">★</span>
               {{ item.title }}
             </div>
-            <button 
+            <button
               class="remove-favorite-btn"
               @click.stop="removeFromFavorites(item.id)"
             >
               ★
             </button>
           </div>
-          
+
           <div class="collection-preview">
             {{ item.preview }}
           </div>
-          
+
           <div class="collection-meta">
             <span class="collection-type">{{ item.type }}</span>
             <span class="collection-time">{{ formatTime(item.time) }}</span>
           </div>
-          
+
           <div class="collection-actions">
-            <button 
-              class="action-btn view-btn"
-              @click.stop="viewCollection(item)"
-            >
+            <button class="action-btn view-btn" @click.stop="viewCollection(item)">
               查看对话
             </button>
-            <button 
-              class="action-btn share-btn"
-              @click.stop="shareCollection(item)"
-            >
+            <button class="action-btn share-btn" @click.stop="shareCollection(item)">
               分享
             </button>
           </div>
@@ -99,7 +88,6 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useChatStore } from '../stores/chat';
-
 const router = useRouter();
 const chatStore = useChatStore();
 
@@ -111,27 +99,28 @@ const filterTabs = [
   { id: '智能问答', name: '智能问答' },
   { id: '辅助起草', name: '辅助起草' },
   { id: '合规审核', name: '合规审核' },
-  { id: '智能检索', name: '智能检索' }
+  { id: '智能检索', name: '智能检索' },
 ];
 
 // 过滤后的收藏列表
 const filteredCollections = computed(() => {
   let collections = chatStore.collectedHistory;
-  
+
   // 按类型过滤
   if (activeFilter.value !== 'all') {
-    collections = collections.filter(item => item.type === activeFilter.value);
+    collections = collections.filter((item) => item.type === activeFilter.value);
   }
-  
+
   // 按搜索关键词过滤
   if (searchQuery.value.trim()) {
     const query = searchQuery.value.toLowerCase();
-    collections = collections.filter(item => 
-      item.title.toLowerCase().includes(query) ||
-      item.preview.toLowerCase().includes(query)
+    collections = collections.filter(
+      (item) =>
+        item.title.toLowerCase().includes(query) ||
+        item.preview.toLowerCase().includes(query),
     );
   }
-  
+
   return collections;
 });
 
@@ -142,10 +131,17 @@ const setActiveFilter = (filterId: string) => {
 
 // 查看收藏
 const viewCollection = (item: any) => {
-  // 这里可以跳转到对话页面
+  let path = '/intelligent-qa'; // 默认跳转到智能问答
+  if (item.type === '智能检索') {
+    path = '/intelligent-retrieval';
+  } else if (item.type === '辅助起草') {
+    path = '/auxiliary-draft';
+  } else if (item.type === '合规审核') {
+    path = '/compliance-review';
+  }
   router.push({
-    path: '/chat',
-    query: { id: item.id }
+    path: path,
+    query: { id: item.id },
   });
 };
 

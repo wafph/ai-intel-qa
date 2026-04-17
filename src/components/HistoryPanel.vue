@@ -495,6 +495,11 @@ onUnmounted(() => {
 .history-item.active {
   background: #e6f7ff;
   box-shadow: inset 2px 0 0 #1890ff;
+  
+  .item-type {
+    background: #f0f7ff;
+    color: #1890ff;
+  }
 }
 
 .item-content {
