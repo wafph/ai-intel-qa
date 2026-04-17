@@ -243,17 +243,18 @@ const handleDeleteChat = (chatId: string) => {
     if (chatStore.historyList.length > 0) {
       activeChatId.value = chatStore.historyList[0].id;
     } else {
-      handleNewChat();
+      activeChatId.value = '';
     }
   }
 };
 
 const handleClearHistory = () => {
-  chatStore.historyList = chatStore.historyList.filter(
-    (item: any) => item.menuType !== activeTab.value,
-  );
+  // 清空所有历史记录，不区分菜单类型
+  chatStore.historyList = [];
+  chatStore.chatSessions = {};
   chatStore.saveToLocalStorage();
-  handleNewChat();
+  activeChatId.value = '';
+  resetStreamState();
 };
 
 const handleToggleFavorite = (chatId: string) => {

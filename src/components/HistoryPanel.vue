@@ -15,7 +15,7 @@
         <button
           v-if="filteredHistory.length > 0"
           class="clear-btn"
-          @click="handleClearHistory"
+          @click="handleClearAllHistory"
         >
           清空
         </button>
@@ -40,6 +40,8 @@
                 collected: history.isCollected,
               },
             ]"
+            @mouseenter="handleMouseEnter(history.id)"
+            @mouseleave="handleMouseLeave(history.id)"
             @click="handleSelectChat(history.id)"
           >
             <div class="item-content">
@@ -47,23 +49,53 @@
                 <span v-if="history.isCollected" class="favorite-icon">★</span>
                 {{ history.title }}
               </div>
-              <div class="item-preview">{{ history.preview }}</div>
-              <!-- 修改历史项的时间显示 -->
+              <!-- 不再显示item-preview -->
               <div class="item-meta">
                 <span class="item-type">{{ history.type }}</span>
                 <span class="item-time">{{ history.formattedTime }}</span>
               </div>
             </div>
-            <button
-              class="favorite-btn"
-              :class="{ favorited: history.isCollected }"
-              @click.stop="handleToggleFavorite(history.id)"
+            
+            <!-- 菜单按钮（仅鼠标悬停时显示） -->
+            <div
+              v-if="hoveredItemId === history.id"
+              class="item-menu-container"
+              @click.stop
             >
-              ★
-            </button>
-            <button class="delete-btn" @click.stop="handleDeleteChat(history.id)">
-              ×
-            </button>
+              <button
+                class="menu-toggle-btn"
+                @click="toggleMenu(history.id)"
+              >
+                ⋮
+              </button>
+              
+              <!-- 折叠菜单 -->
+              <div
+                v-if="visibleMenuId === history.id"
+                class="dropdown-menu"
+              >
+                <!-- 收藏按钮 -->
+                <button
+                  class="menu-item"
+                  :class="{ favorited: history.isCollected }"
+                  @click="handleToggleFavorite(history.id)"
+                >
+                  <span class="menu-icon">★</span>
+                  <span class="menu-text">
+                    {{ history.isCollected ? '取消收藏' : '收藏' }}
+                  </span>
+                </button>
+                
+                <!-- 删除按钮 -->
+                <button
+                  class="menu-item delete"
+                  @click="handleDeleteChat(history.id)"
+                >
+                  <span class="menu-icon">🗑️</span>
+                  <span class="menu-text">删除</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -106,6 +138,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
+
 interface Props {
   historyList: any[];
   activeChatId: string | null;
@@ -123,60 +156,53 @@ const emit = defineEmits<{
 
 const router = useRouter();
 
-// 新增状态
+// 状态
 const showUserMenu = ref(false);
+const hoveredItemId = ref<string | null>(null);
+const visibleMenuId = ref<string | null>(null);
 
 // 计算属性
 const filteredHistory = computed(() => {
   return props.historyList || [];
 });
 
-// 在 script setup 中添加时间格式化函数
+// 时间格式化函数
 const formatRelativeTime = (timestamp: number | string) => {
-  // 如果已经是字符串（兼容旧数据），直接返回
   if (typeof timestamp === 'string') {
     return timestamp;
   }
 
   const now = Date.now();
   const diff = now - timestamp;
-
-  // 计算天数差
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
-  // 今天
   if (days === 0) {
     const date = new Date(timestamp);
     return `今天 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
   }
 
-  // 昨天
   if (days === 1) {
     const date = new Date(timestamp);
     return `昨天 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
   }
 
-  // 前天
   if (days === 2) {
     const date = new Date(timestamp);
     return `前天 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
   }
 
-  // 更早的时间，显示具体日期
   const date = new Date(timestamp);
   return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
 };
 
-// 修改 groupedHistory 计算属性
+// 分组历史记录
 const groupedHistory = computed(() => {
   const groups: Record<string, any[]> = {};
 
   filteredHistory.value.forEach((item) => {
-    // 使用格式化后的相对时间作为分组依据
     const relativeTime = formatRelativeTime(item.time);
-
-    // 提取日期部分用于分组
     let groupKey = '';
+
     if (relativeTime.includes('今天')) {
       groupKey = '今天';
     } else if (relativeTime.includes('昨天')) {
@@ -184,7 +210,6 @@ const groupedHistory = computed(() => {
     } else if (relativeTime.includes('前天')) {
       groupKey = '前天';
     } else {
-      // 提取年月日作为分组键
       const date = new Date(item.time);
       groupKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
     }
@@ -194,7 +219,7 @@ const groupedHistory = computed(() => {
     }
     groups[groupKey].push({
       ...item,
-      formattedTime: relativeTime, // 添加格式化后的时间
+      formattedTime: relativeTime,
     });
   });
 
@@ -204,50 +229,88 @@ const groupedHistory = computed(() => {
   }));
 });
 
-// 原有的方法
+// 原有方法
 const handleSelectChat = (chatId: string) => {
   emit('select-chat', chatId);
+  closeMenu(); // 关闭菜单
 };
 
 const handleNewChat = () => {
   emit('new-chat');
+  closeMenu(); // 关闭菜单
 };
+
 const handleDeleteChat = (chatId: string) => {
   if (confirm('确定要删除这条对话记录吗？')) {
     emit('delete-chat', chatId);
+    closeMenu(); // 关闭菜单
   }
 };
 
-const handleClearHistory = () => {
-  if (confirm('确定要清空所有历史记录吗？')) {
+// 新增：清空所有历史记录（包括所有菜单）
+const handleClearAllHistory = () => {
+  if (confirm('确定要清空所有历史对话吗？此操作将清空所有菜单的历史记录，且当前对话也会被清空。')) {
     emit('clear-history');
+    closeMenu(); // 关闭菜单
   }
 };
 
-// 新增：切换收藏状态
+// 切换收藏状态
 const handleToggleFavorite = (chatId: string) => {
   emit('toggle-favorite', chatId);
+  closeMenu(); // 切换收藏后关闭菜单
 };
 
-// 切换用户菜单显示
+// 鼠标悬停事件
+const handleMouseEnter = (itemId: string) => {
+  hoveredItemId.value = itemId;
+};
+
+const handleMouseLeave = (itemId: string) => {
+  if (hoveredItemId.value === itemId && visibleMenuId.value !== itemId) {
+    hoveredItemId.value = null;
+  }
+};
+
+// 菜单控制
+const toggleMenu = (itemId: string) => {
+  if (visibleMenuId.value === itemId) {
+    visibleMenuId.value = null;
+  } else {
+    visibleMenuId.value = itemId;
+  }
+};
+
+const closeMenu = () => {
+  visibleMenuId.value = null;
+  hoveredItemId.value = null;
+};
+
+// 点击外部关闭菜单
+const handleClickOutsideMenu = (event: MouseEvent) => {
+  const menuContainer = document.querySelector('.item-menu-container');
+  if (menuContainer && !menuContainer.contains(event.target as Node)) {
+    closeMenu();
+  }
+};
+
+// 用户菜单相关
 const toggleUserMenu = () => {
   showUserMenu.value = !showUserMenu.value;
 };
 
-// 前往我的收藏页面
 const goToMyCollections = () => {
   showUserMenu.value = false;
   router.push('/my-collections');
 };
 
-// 前往我的反馈页面
 const goToFeedback = () => {
   showUserMenu.value = false;
   router.push('/feedback');
 };
 
 // 点击外部关闭用户菜单
-const handleClickOutside = (event: MouseEvent) => {
+const handleClickOutsideUserMenu = (event: MouseEvent) => {
   const userCenter = document.querySelector('.user-center-bottom');
   if (userCenter && !userCenter.contains(event.target as Node)) {
     showUserMenu.value = false;
@@ -255,16 +318,17 @@ const handleClickOutside = (event: MouseEvent) => {
 };
 
 onMounted(() => {
-  document.addEventListener('click', handleClickOutside);
+  document.addEventListener('click', handleClickOutsideMenu);
+  document.addEventListener('click', handleClickOutsideUserMenu);
 });
 
 onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside);
+  document.removeEventListener('click', handleClickOutsideMenu);
+  document.removeEventListener('click', handleClickOutsideUserMenu);
 });
 </script>
 
-<style scoped>
-/* 原有的样式保持不变 */
+<style lang="less" scoped>
 .history-panel {
   width: 280px;
   background: #ffffff;
@@ -321,7 +385,7 @@ onUnmounted(() => {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  padding-bottom: 100px; /* 为底部的个人中心留出空间 */
+  padding-bottom: 100px;
 }
 
 .list-header {
@@ -414,13 +478,13 @@ onUnmounted(() => {
 .history-item {
   padding: 12px 20px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
   cursor: pointer;
   transition: all 0.2s;
   border-left: 3px solid transparent;
   position: relative;
-  min-height: 70px;
+  min-height: 60px; // 调整高度，因为不显示预览了
 }
 
 .history-item:hover {
@@ -443,7 +507,7 @@ onUnmounted(() => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px; // 调整间距
 }
 
 .item-title {
@@ -464,20 +528,10 @@ onUnmounted(() => {
 .favorite-icon {
   color: #f6c542;
   font-size: 12px;
+  flex-shrink: 0;
 }
 
-.item-preview {
-  font-size: 12px;
-  color: #8c8c8c;
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  opacity: 0.8;
-}
-
+// 移除item-preview相关样式
 .item-meta {
   display: flex;
   justify-content: space-between;
@@ -491,72 +545,115 @@ onUnmounted(() => {
   border-radius: 3px;
   color: #666;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .item-time {
   color: #bfbfbf;
   white-space: nowrap;
+  margin-left: 8px;
 }
 
-/* 收藏按钮样式 */
-.favorite-btn {
-  position: absolute;
-  right: 40px;
-  top: 12px;
-  width: 20px;
-  height: 20px;
+/* 菜单相关样式 */
+.item-menu-container {
+  position: relative;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 2;
+}
+
+.history-item:hover .item-menu-container {
+  opacity: 1;
+}
+
+.menu-toggle-btn {
+  width: 24px;
+  height: 24px;
   border: none;
   background: none;
-  font-size: 16px;
-  color: #ccc;
+  color: #999;
+  font-size: 18px;
   cursor: pointer;
-  transition: all 0.2s;
-  opacity: 0;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.history-item:hover .favorite-btn {
-  opacity: 1;
-}
-
-.favorite-btn.favorited {
-  color: #f6c542;
-  opacity: 1;
-}
-
-.favorite-btn:hover {
-  transform: scale(1.2);
-}
-
-.delete-btn {
-  opacity: 0;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: none;
-  background: #ff4d4f;
-  color: white;
-  font-size: 16px;
+  transition: all 0.2s;
+  font-weight: bold;
   line-height: 1;
+  padding: 0;
+}
+
+.menu-toggle-btn:hover {
+  background: #f0f0f0;
+  color: #666;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 28px;
+  right: 0;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  min-width: 120px;
+  z-index: 100;
+  overflow: hidden;
+  border: 1px solid #e9ecef;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.menu-item {
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   cursor: pointer;
+  font-size: 13px;
+  color: #333;
   transition: all 0.2s;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.menu-item:hover {
+  background: #f0f7ff;
+  color: #1890ff;
+}
+
+.menu-item.favorited {
+  color: #f6c542;
+}
+
+.menu-item.delete:hover {
+  background: #fff2f0;
+  color: #ff4d4f;
+}
+
+.menu-icon {
+  font-size: 14px;
+  width: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  position: absolute;
-  right: 12px;
-  top: 12px;
 }
 
-.history-item:hover .delete-btn {
-  opacity: 1;
-}
-
-.delete-btn:hover {
-  background: #ff7875;
-  transform: scale(1.1);
+.menu-text {
+  flex: 1;
 }
 
 /* 右下角个人中心样式 */
