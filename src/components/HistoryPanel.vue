@@ -117,11 +117,11 @@
       <!-- 用户菜单 -->
       <div v-if="showUserMenu" class="user-menu">
         <div class="menu-item" @click="goToMyCollections">
-          <i class="menu-icon">⭐</i>
+          <el-icon><StarFilled /></el-icon>
           <span>我的收藏</span>
         </div>
         <div class="menu-item" @click="goToFeedback">
-          <i class="menu-icon">📋</i>
+          <el-icon><Document /></el-icon>
           <span>我的反馈</span>
         </div>
         <div class="menu-divider"></div>
@@ -495,7 +495,7 @@ onUnmounted(() => {
 .history-item.active {
   background: #e6f7ff;
   box-shadow: inset 2px 0 0 #1890ff;
-  
+
   .item-type {
     background: #f0f7ff;
     color: #1890ff;
