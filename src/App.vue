@@ -339,13 +339,13 @@ const startStream = async (queryText: string, messageId: string) => {
 
     // 根据当前选项卡选择不同的API接口
     const urlqa =
-      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/60a15b33-e781-4d5d-88d3-5ed90054d9b0/conversations/342b2fe7-a2e8-4da1-a0fe-4c9f068ba43f?version=1776245995063';
+      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/60a15b33-e781-4d5d-88d3-5ed90054d9b0/conversations/2c012d45-33ff-4c58-be20-455f4dc8ee62?version=1776482408051';
     const urlDraf =
       '/api1/v1/1725c43e3fa54828a078fce60f5a3773/agents/fe7b5350-c3ee-41d4-b5d5-ecc6c26d33b3/conversations/d758b3f4-5d04-47a3-94a4-104406de1a12?version=1775627259180';
     const urlreview =
       '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/32dd3ef3-2bfb-4ad7-a448-811ddd37924a/conversations/57859d42-70e7-4998-9998-184832f8d6fb?version=1776051927454';
     const urlSearch =
-      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/c206107e-ec31-47d8-9aaf-5c1262931168/conversations/9a98d317-ba33-435a-bfe0-8b8c4cbed470?version=1776045456703';
+      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/c206107e-ec31-47d8-9aaf-5c1262931168/conversations/c0ef02f9-3b8c-4e1a-8d77-75fd327a2934?version=1776650624772';
     var apiUrl =
       activeTab.value === '智能问答'
         ? urlqa

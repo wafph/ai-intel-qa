@@ -27,7 +27,7 @@
               <div><img src="/images/user.svg" alt="" /></div>
             </div>
             <div class="message-info">
-              <div class="message-content">{{ item.content }}</div>
+              <pre class="message-content">{{ item.content }}</pre>
               <div class="message-time">{{ formatTime(item.timestamp) }}</div>
             </div>
           </div>
