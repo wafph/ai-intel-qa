@@ -1013,6 +1013,15 @@ onUpdated(() => {
                 color: #666;
                 font-style: italic;
               }
+
+              & > :deep(p:nth-last-of-type(2)) {
+                border-top: 1px solid lightgray;
+              }
+
+              & > :deep(p:last-child) {
+                border-bottom: 1px solid lightgray;
+                padding-bottom: 10px;
+              }
             }
 
             .message-time {

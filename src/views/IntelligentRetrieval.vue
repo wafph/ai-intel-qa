@@ -90,15 +90,15 @@
                       :key="source.chunk_id || idx"
                       class="search-result-item"
                     >
-                     <h3 class="source-title">{{ source.subtitle }}</h3>
+                      <h3 class="source-title">{{ source.subtitle }}</h3>
                       <div class="result-content-wrapper">
-                        <div 
+                        <div
                           class="result-content"
-                          :class="{ 'truncated': !expandedStates[source.chunk_id] }"
+                          :class="{ truncated: !expandedStates[source.chunk_id] }"
                         >
                           {{ getDisplayContent(source) }}
                         </div>
-                        <span 
+                        <span
                           v-if="shouldShowExpand(source)"
                           class="expand-toggle"
                           @click="toggleExpand(source.chunk_id)"
@@ -136,25 +136,29 @@
                     class="message-content pad"
                     v-html="renderMarkdown(item.content)"
                   ></div>
+                </div>
 
-                  <!-- 操作按钮 -->
-                  <div
-                    style="display: flex; align-items: center; margin-left: 15px"
-                    v-if="item.content && item.content !== '用户停止了生成'"
+                <!-- ✅ 修改：重新检索和导出按钮 - 显示条件更宽松 -->
+                <div
+                  style="display: flex; align-items: center; margin-left: 15px"
+                  v-if="
+                    !item.streaming &&
+                    (item.content || (item.sources && item.sources.length > 0)) &&
+                    item.content !== '用户停止了生成'
+                  "
+                >
+                  <el-button link type="success" plain @click="handleRestart(index)">
+                    重新检索<el-icon class="el-icon--right"><ArrowRight /></el-icon>
+                  </el-button>
+                  <el-button
+                    link
+                    class="btnbottom"
+                    type="primary"
+                    plain
+                    @click="handleExport"
                   >
-                    <el-button link type="success" plain @click="handleRestart(index)">
-                      重新检索<el-icon class="el-icon--right"><ArrowRight /></el-icon>
-                    </el-button>
-                    <el-button
-                      link
-                      class="btnbottom"
-                      type="primary"
-                      plain
-                      @click="handleExport"
-                    >
-                      导出
-                    </el-button>
-                  </div>
+                    导出
+                  </el-button>
                 </div>
               </div>
 
@@ -192,7 +196,9 @@ const isTyping = ref(false);
 const emit = defineEmits(['regenerate']);
 
 // 分页状态管理
-const paginationStates = reactive<Record<string, { currentPage: number; pageSize: number }>>({});
+const paginationStates = reactive<
+  Record<string, { currentPage: number; pageSize: number }>
+>({});
 
 // ✅ 新增：展开状态管理
 const expandedStates = reactive<Record<string, boolean>>({});
@@ -267,12 +273,12 @@ const formatUpdateDate = (timeStr: string) => {
 const getDisplayContent = (source: SourceInfo) => {
   const content = source.content || '';
   const chunkId = source.chunk_id;
-  
+
   // 如果已展开或内容长度不超过150，显示完整内容
   if (expandedStates[chunkId] || content.length <= 150) {
     return content;
   }
-  
+
   // 否则截断前150个字符
   return content.substring(0, 150) + '...';
 };
@@ -323,11 +329,11 @@ const handleCurrentChange = (messageId: string, page: number) => {
 // 计算分页后的数据
 const paginatedSources = (item: ChatMessage) => {
   if (!item.sources || item.sources.length === 0) return [];
-  
+
   const state = paginationStates[item.id] || { currentPage: 1, pageSize: 10 };
   const startIndex = (state.currentPage - 1) * state.pageSize;
   const endIndex = startIndex + state.pageSize;
-  
+
   return item.sources.slice(startIndex, endIndex);
 };
 
@@ -417,25 +423,38 @@ const handleRestart = (index: number) => {
   }
 };
 
+// ✅ 修改：导出功能 - 支持导出搜索结果
 const handleExport = () => {
   if (!props.chatData) return;
 
-  const content = props.chatData.messages
-    .filter((msg) => msg.role === 'assistant')
-    .map((msg) => msg.content)
-    .join('\n\n');
+  let exportContent = '';
 
-  const blob = new Blob([content], { type: 'text/markdown' });
+  // 如果有搜索结果，导出搜索结果
+  const lastMessage = props.chatData.messages[props.chatData.messages.length - 1];
+  if (lastMessage && lastMessage.sources && lastMessage.sources.length > 0) {
+    exportContent = lastMessage.sources
+      .map((source: any) => {
+        return `来源：${source.title}\n子标题：${source.subtitle}\n内容：${source.content}\n更新日期：${formatUpdateDate(source.update_date_time)}\n\n`;
+      })
+      .join('---\n\n');
+  } else {
+    // 否则导出普通回复内容
+    exportContent = props.chatData.messages
+      .filter((msg: any) => msg.role === 'assistant')
+      .map((msg: any) => msg.content)
+      .join('\n\n');
+  }
+
+  const blob = new Blob([exportContent], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${props.chatData.title}.md`;
+  a.download = `${props.chatData.title || '搜索结果'}.txt`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 };
-
 const renderMarkdown = (content: string) => {
   if (!content) return '';
   return md.render(content);
@@ -794,17 +813,14 @@ onUnmounted(() => {
   }
 }
 
-/* 搜索结果容器样式 */
 .search-results-container {
   width: 100%;
   margin-bottom: 20px;
 }
 
 .search-results-box {
-  // border: 2px solid #ff4d4f;
   border-radius: 8px;
   overflow: hidden;
-  // background-color: white;
 }
 
 .search-result-item {
@@ -859,7 +875,7 @@ onUnmounted(() => {
   font-size: 14px;
   color: #666;
   padding-top: 10px;
-  border-top: 2px solid #e8e8e8;
+  border-top: 2px dashed #e8e8e8;
 
   .source-title {
     font-weight: bold;
