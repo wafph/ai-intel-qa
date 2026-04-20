@@ -13,6 +13,8 @@ declare module 'vue' {
   export interface GlobalComponents {
     ChatInput: typeof import('./src/components/ChatInput.vue')['default']
     ElButton: typeof import('element-plus/es')['ElButton']
+    ElCollapseTransition: typeof import('element-plus/es')['ElCollapseTransition']
+    ElEmpty: typeof import('element-plus/es')['ElEmpty']
     ElForm: typeof import('element-plus/es')['ElForm']
     ElFormItem: typeof import('element-plus/es')['ElFormItem']
     ElIcon: typeof import('element-plus/es')['ElIcon']

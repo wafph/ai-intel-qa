@@ -5,127 +5,163 @@
       <h1>我是智能检索助手，很高兴见到你</h1>
       <p>你可以使用自然语言提问，我来精准回答</p>
     </div>
-    <!-- 历史对话列表 -->
-    <div
-      class="conversation-history"
-      v-if="chatData?.messages && chatData?.messages?.length > 0"
-    >
-      <div
-        v-for="(item, index) in chatData.messages || []"
-        :key="item.id"
-        :class="[
-          'history-item',
-          item.role === 'user' ? 'user-message' : 'assistant-message',
-        ]"
-      >
-        <!-- 用户消息 -->
-        <div v-if="item.role === 'user'" class="message-user">
-          <div class="message-header">
-            <div class="avatar user-avatar">
-              <div><img src="/images/user.svg" alt="" /></div>
-            </div>
-            <div class="message-info">
-              <pre class="message-content">{{ item.content }}</pre>
-              <div class="message-time">{{ formatTime(item.timestamp) }}</div>
+
+    <!-- 主体区域 -->
+
+      <!-- 对话历史 -->
+      <div class="conversation-history">
+        <div
+          v-for="(item, index) in chatData?.messages || []"
+          :key="item.id"
+          :class="[
+            'history-item',
+            item.role === 'user' ? 'user-message' : 'assistant-message',
+          ]"
+          :data-message-id="item.id"
+        >
+          <!-- 用户消息 -->
+          <div v-if="item.role === 'user'" class="message-user">
+            <div class="message-header">
+              <div class="avatar user-avatar">
+                <div><img src="/images/user.svg" alt="" /></div>
+              </div>
+              <div class="message-info">
+                <pre class="message-content">{{ item.content }}</pre>
+                <div class="message-time">{{ formatTime(item.timestamp) }}</div>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- AI回复消息 -->
-        <div v-else class="message-assistant">
-          <div class="message-header">
-            <div class="avatar ai-avatar">
-              <div>AI</div>
-            </div>
-            <div class="message-info">
-              <!-- 【核心修改】始终显示消息的思考过程 -->
-              <div
-                v-if="item.reasoning && item.reasoning.trim() !== ''"
-                class="thinking-process"
-              >
-                <div class="thinking-header">
-                  <span>思考过程</span>
-                </div>
-                <div class="thinking-content">
-                  {{ item.reasoning }}
-                </div>
+          <!-- AI回复消息 -->
+          <div v-else class="message-assistant">
+            <div class="message-header">
+              <div class="avatar ai-avatar">
+                <div>AI</div>
               </div>
-
-              <!-- 当前流式消息 -->
-              <div v-if="item.streaming && item.id === currentStreamingMessageId">
-                <!-- 删除原"思考中..."的动态显示块，已由上方永久块显示 -->
-
-                <!-- 回复内容（打字机效果） -->
+              <div class="message-info">
+                <!-- 思考过程 -->
                 <div
-                  v-if="currentAnswer && currentAnswer.trim() !== ''"
-                  class="answer-streaming"
+                  v-if="item.reasoning && item.reasoning.trim() !== ''"
+                  class="thinking-process"
                 >
-                  <div class="typing-container">
-                    <div class="typing-text" v-html="renderMarkdown(displayAnswer)"></div>
-                    <span v-if="isTyping" class="typing-cursor">|</span>
+                  <div class="thinking-header">
+                    <span>思考过程</span>
+                  </div>
+                  <div class="thinking-content">
+                    {{ item.reasoning }}
                   </div>
                 </div>
 
-                <!-- 加载指示器（当没有任何内容时） -->
-                <div
-                  v-if="streaming && (!currentAnswer || currentAnswer.trim() === '')"
-                  class="thinking-indicator"
-                >
-                  <div class="thinking-dots">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 非流式消息 -->
-              <div v-else>
-                <!-- 显示最终回复内容 -->
-                <div
-                  class="message-content pad"
-                  v-html="renderMarkdown(item.content)"
-                ></div>
-                <div
-                  style="margin-left: 15px"
-                  v-if="item.content && item.content !== '用户停止了生成'"
-                >
-                  <el-button link type="success" plain @click="handleRestart(index)">
-                    重新检索<el-icon class="el-icon--right"><ArrowRight /></el-icon>
-                  </el-button>
-                  <el-button
-                    link
-                    class="btnbottom"
-                    type="primary"
-                    plain
-                    @click="handleExport"
+                <!-- 当前流式消息 -->
+                <div v-if="item.streaming && item.id === currentStreamingMessageId">
+                  <!-- 回复内容（打字机效果） -->
+                  <div
+                    v-if="currentAnswer && currentAnswer.trim() !== ''"
+                    class="answer-streaming"
                   >
-                    导出
-                  </el-button>
-                </div>
-              </div>
+                    <div class="typing-container">
+                      <div class="typing-text" v-html="renderMarkdown(displayAnswer)"></div>
+                      <span v-if="isTyping" class="typing-cursor">|</span>
+                    </div>
+                  </div>
 
-              <div class="message-time">
-                {{ formatTime(item.timestamp) }}
-                <span
-                  v-if="item.streaming && item.id === currentStreamingMessageId"
-                  class="streaming-badge"
-                >
-                  <span class="streaming-dot"></span>
-                  生成中...
-                </span>
+                  <!-- 加载指示器（当没有任何内容时） -->
+                  <div
+                    v-if="streaming && (!currentAnswer || currentAnswer.trim() === '')"
+                    class="thinking-indicator"
+                  >
+                    <div class="thinking-dots">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 非流式消息 - 搜索结果展示 -->
+                <div v-else>
+                  <!-- 当有来源信息时，显示搜索结果样式 -->
+                  <div v-if="item.sources && item.sources.length > 0" class="search-results-container">
+                    <div class="search-results-box">
+                      <!-- 搜索结果列表 -->
+                      <div
+                        v-for="(source, idx) in item.sources"
+                        :key="idx"
+                        class="search-result-item"
+                      >
+                        <div class="result-content">
+                          {{ source.content }}
+                        </div>
+                        <div class="result-meta">
+                          <span class="source-title">来源：{{ source.title }}</span>
+                          <span class="update-date">更新日期：{{ formatUpdateDate(source.update_date_time) }}</span>
+                          <a class="view-detail" href="javascript:;">查看详情 →</a>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 分页信息 -->
+                    <div class="pagination-info">
+                      <div class="total-results">总共{{ item.sources.length }}条</div>
+                      <div class="pagination-controls">
+                        <span class="page-numbers">1 2 3 4 5 6 7 8 9 ></span>
+                        <span class="page-size">10条/页</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 当没有来源信息时，显示原有回复内容 -->
+                  <div v-else>
+                    <div
+                      class="message-content pad"
+                      v-html="renderMarkdown(item.content)"
+                    ></div>
+
+                    <!-- 操作按钮 -->
+                    <div
+                      style="display: flex; align-items: center; margin-left: 15px"
+                      v-if="item.content && item.content !== '用户停止了生成'"
+                    >
+                      <el-button link type="success" plain @click="handleRestart(index)">
+                        重新检索<el-icon class="el-icon--right"><ArrowRight /></el-icon>
+                      </el-button>
+                      <el-button
+                        link
+                        class="btnbottom"
+                        type="primary"
+                        plain
+                        @click="handleExport"
+                      >
+                        导出
+                      </el-button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="message-time">
+                  {{ formatTime(item.timestamp) }}
+                  <span
+                    v-if="item.streaming && item.id === currentStreamingMessageId"
+                    class="streaming-badge"
+                  >
+                    <span class="streaming-dot"></span>
+                    生成中...
+                  </span>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+   
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import MarkdownIt from 'markdown-it';
+import { ElMessage, ElIcon } from 'element-plus';
+import { ArrowRight } from '@element-plus/icons-vue';
 
 // 状态变量
 const displayAnswer = ref<string>('');
@@ -135,6 +171,7 @@ let currentTypingIndex = 0;
 const loading = ref(false);
 const isTyping = ref(false);
 const emit = defineEmits(['regenerate']);
+
 // Props
 interface Props {
   chatData: ChatSession | null;
@@ -152,14 +189,26 @@ interface ChatSession {
   messages: ChatMessage[];
 }
 
-// 【核心修改】在ChatMessage接口中添加reasoning字段
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  reasoning?: string; // 新增：持久化存储思考过程
+  reasoning?: string;
   timestamp: Date;
   streaming?: boolean;
+  sources?: SourceInfo[];
+}
+
+interface SourceInfo {
+  file_id: string;
+  chunk_id: string;
+  title: string;
+  content: string;
+  subtitle: string;
+  update_date_time: string;
+  tags: string;
+  repo_id: string;
+  score: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -175,6 +224,19 @@ const md = new MarkdownIt({
   linkify: true,
   typographer: true,
 });
+
+// 格式化更新日期
+const formatUpdateDate = (timeStr: string) => {
+  if (!timeStr) return '';
+  // 如果是时间戳格式
+  if (!isNaN(Number(timeStr))) {
+    const timestamp = Number(timeStr);
+    const date = new Date(timestamp);
+    return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+  }
+  // 如果是字符串格式，直接返回
+  return timeStr;
+};
 
 // 将文本追加到打字机队列
 const appendToTypingQueue = (text: string) => {
@@ -212,7 +274,6 @@ const startTypingEffect = (targetText: string) => {
       displayAnswer.value += targetText.charAt(currentTypingIndex);
       currentTypingIndex++;
 
-      // 【核心修改】打字过程中触发滚动
       nextTick(() => {
         scrollToBottom();
       });
@@ -262,6 +323,7 @@ const handleRestart = (index: number) => {
     emit('regenerate', userMessage.content);
   }
 };
+
 const handleExport = () => {
   if (!props.chatData) return;
 
@@ -295,24 +357,19 @@ const scrollToBottom = () => {
   });
 };
 
-// 🚨 关键修改：优化回复内容监听逻辑
 // 监听回复内容变化
 watch(
   () => props.currentAnswer,
   (newAnswer, oldAnswer = '') => {
     if (newAnswer && newAnswer !== oldAnswer) {
-      // 计算新增的文本部分
       const newText = newAnswer.substring(oldAnswer.length);
       if (newText) {
-        // 将新增文本加入打字队列
         appendToTypingQueue(newText);
       } else if (newAnswer === '') {
-        // 如果内容被清空（如新对话），则重置显示
         displayAnswer.value = '';
         stopTypingEffect();
       }
     }
-    // 【核心修改】回复内容变化时，无论是否新增，都触发滚动
     scrollToBottom();
   },
   { immediate: true },
@@ -333,7 +390,6 @@ watch(
 watch(
   () => props.currentReasoning,
   (newReasoning) => {
-    // 【核心修改】推理过程（思考中）内容更新时，触发滚动到底部
     if (newReasoning && newReasoning.trim() !== '') {
       scrollToBottom();
     }
@@ -381,331 +437,421 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
   position: relative;
   overflow-y: auto;
+}
 
-  .qa-header {
-    text-align: center;
-    margin-bottom: 40px;
-    margin-top: 60px;
 
-    h1 {
-      font-size: 28px;
-      color: #303133;
-      margin-bottom: 12px;
-      font-weight: 600;
-    }
+.conversation-history {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 20px;
+  padding-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 80%;
 
-    p {
-      font-size: 16px;
-      color: #606266;
-    }
-  }
+  .history-item {
+    margin: 0 auto;
+    animation: slideIn 0.3s ease-out;
 
-  .conversation-history {
-    flex: 1;
-    overflow-y: auto;
-    margin-bottom: 20px;
-    padding-top: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    width: 80%;
+    &.user-message {
+      align-self: flex-end;
+      width: 100%;
 
-    .history-item {
-      margin: 0 auto;
-      animation: slideIn 0.3s ease-out;
+      .message-user {
+        .message-header {
+          flex-direction: row-reverse;
 
-      &.user-message {
-        align-self: flex-end;
-        width: 100%;
+          .avatar {
+            margin-left: 12px;
+            margin-right: 0;
 
-        .message-user {
-          .message-header {
-            flex-direction: row-reverse;
-
-            .avatar {
-              margin-left: 12px;
-              margin-right: 0;
-
-              img {
-                width: 80%;
-                height: 80%;
-              }
-            }
-
-            .message-info {
-              align-items: flex-end;
-
-              .message-content {
-                background: #d7e6fe;
-                border-radius: 12px;
-                padding: 12px 20px;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-              }
-
-              .message-time {
-                text-align: right;
-              }
+            img {
+              width: 80%;
+              height: 80%;
             }
           }
-        }
-      }
 
-      &.assistant-message {
-        align-self: flex-start;
-        width: 100%;
-
-        .message-header {
           .message-info {
-            width: 100%;
-
-            .pad {
-              padding: 20px 40px;
-            }
-
-            .thinking-process {
-              border-radius: 8px;
-              padding: 16px;
-              margin-bottom: 12px;
-              animation: fadeIn 0.5s ease;
-            }
-
-            .thinking-header {
-              display: flex;
-              align-items: center;
-              gap: 8px;
-              margin-bottom: 12px;
-              font-size: 13px;
-              font-weight: 600;
-              color: #fa8c16;
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
-            }
-
-            .thinking-icon {
-              font-size: 16px;
-            }
-
-            .thinking-content {
-              font-size: 15px;
-              color: #333;
-              white-space: pre-wrap;
-              word-break: break-word;
-              background: rgba(255, 255, 255, 0.7);
-              padding: 12px;
-              border-radius: 6px;
-              border-left: 3px solid #fa8c16;
-            }
-
-            .thinking-placeholder {
-              font-size: 12px;
-              color: #999;
-              font-style: italic;
-              text-align: center;
-              padding: 8px;
-            }
-
-            .answer-streaming {
-              padding: 20px;
-              border-radius: 8px;
-              animation: fadeIn 0.5s ease;
-              margin-top: 8px;
-            }
-
-            .typing-container {
-              position: relative;
-              min-height: 20px;
-            }
-
-            .typing-text {
-              display: inline;
-              line-height: 1.6;
-              font-size: 17px;
-              color: #333;
-
-              :deep(p) {
-                margin: 8px 0;
-              }
-
-              :deep(code) {
-                background: #f5f5f5;
-                padding: 2px 4px;
-                border-radius: 4px;
-                font-family: 'Courier New', monospace;
-              }
-
-              :deep(pre) {
-                background: #2d2d2d;
-                color: #f8f8f2;
-                padding: 12px;
-                border-radius: 8px;
-                overflow-x: auto;
-                margin: 12px 0;
-              }
-
-              :deep(blockquote) {
-                border-left: 4px solid #ddd;
-                margin: 12px 0;
-                padding-left: 12px;
-                color: #666;
-                font-style: italic;
-              }
-            }
-
-            .typing-cursor {
-              display: inline-block;
-              font-weight: bold;
-              color: #409eff;
-              animation: blink 0.7s infinite;
-              margin-left: 2px;
-              position: relative;
-              top: 1px;
-            }
-
-            @keyframes blink {
-              0%,
-              100% {
-                opacity: 1;
-              }
-              50% {
-                opacity: 0;
-              }
-            }
-
-            .thinking-indicator {
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              padding: 8px;
-
-              .thinking-dots {
-                display: flex;
-                gap: 8px;
-              }
-
-              .thinking-dots span {
-                width: 8px;
-                height: 8px;
-                border-radius: 50%;
-                background: #409eff;
-                animation: bounce 1.4s ease-in-out infinite;
-              }
-
-              .thinking-dots span:nth-child(1) {
-                animation-delay: -0.32s;
-              }
-              .thinking-dots span:nth-child(2) {
-                animation-delay: -0.16s;
-              }
-            }
+            align-items: flex-end;
 
             .message-content {
-              font-size: 17px;
-              padding: 12px 17px;
-              line-height: 1.6;
-              word-break: break-word;
-
-              :deep(p) {
-                margin: 8px 0;
-              }
-
-              :deep(code) {
-                background: #f5f5f5;
-                padding: 2px 4px;
-                border-radius: 4px;
-                font-family: 'Courier New', monospace;
-              }
-
-              :deep(pre) {
-                background: #2d2d2d;
-                color: #f8f8f2;
-                padding: 12px;
-                border-radius: 8px;
-                overflow-x: auto;
-                margin: 12px 0;
-              }
-
-              :deep(blockquote) {
-                border-left: 4px solid #ddd;
-                margin: 12px 0;
-                padding-left: 12px;
-                color: #666;
-                font-style: italic;
-              }
+              background: #d7e6fe;
+              border-radius: 12px;
+              padding: 12px 20px;
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             }
 
             .message-time {
-              font-size: 16px;
-              color: #999;
-              margin-top: 8px;
-              padding: 0 4px;
-            }
-
-            .streaming-badge {
-              display: inline-flex;
-              align-items: center;
-              gap: 4px;
-              padding: 2px 8px;
-              background: #f0f7ff;
-              border-radius: 12px;
-              font-size: 11px;
-              color: #409eff;
-              border: 1px solid #91d5ff;
-              animation: pulse 1.5s ease-in-out infinite;
-            }
-
-            .streaming-dot {
-              width: 6px;
-              height: 6px;
-              border-radius: 50%;
-              background: #409eff;
-              animation: blink 1s infinite;
+              text-align: right;
             }
           }
         }
       }
     }
-  }
 
-  .message-header {
-    display: flex;
-    align-items: flex-start;
-    max-width: 100%;
+    &.assistant-message {
+      align-self: flex-start;
+      width: 100%;
 
-    .avatar {
-      flex-shrink: 0;
-      width: 40px;
-      height: 40px;
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 15px;
-      font-weight: 600;
-      color: white;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      margin-right: 12px;
-
-      &.user-avatar {
-        background: #d7e6fe;
-
-        img {
+      .message-header {
+        .message-info {
           width: 100%;
-          height: 100%;
-          object-fit: cover;
+
+          .pad {
+            padding: 20px 40px;
+          }
+
+          .thinking-process {
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            animation: fadeIn 0.5s ease;
+          }
+
+          .thinking-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #fa8c16;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+
+          .thinking-content {
+            font-size: 15px;
+            color: #333;
+            white-space: pre-wrap;
+            word-break: break-word;
+            background: rgba(255, 255, 255, 0.7);
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 3px solid #fa8c16;
+          }
+
+          .thinking-placeholder {
+            font-size: 12px;
+            color: #999;
+            font-style: italic;
+            text-align: center;
+            padding: 8px;
+          }
+
+          .answer-streaming {
+            padding: 20px;
+            border-radius: 8px;
+            animation: fadeIn 0.5s ease;
+            margin-top: 8px;
+          }
+
+          .typing-container {
+            position: relative;
+            min-height: 20px;
+          }
+
+          .typing-text {
+            display: inline;
+            line-height: 1.6;
+            font-size: 17px;
+            color: #333;
+
+            :deep(p) {
+              margin: 8px 0;
+            }
+
+            :deep(code) {
+              background: #f5f5f5;
+              padding: 2px 4px;
+              border-radius: 4px;
+              font-family: 'Courier New', monospace;
+            }
+
+            :deep(pre) {
+              background: #2d2d2d;
+              color: #f8f8f2;
+              padding: 12px;
+              border-radius: 8px;
+              overflow-x: auto;
+              margin: 12px 0;
+            }
+
+            :deep(blockquote) {
+              border-left: 4px solid #ddd;
+              margin: 12px 0;
+              padding-left: 12px;
+              color: #666;
+              font-style: italic;
+            }
+          }
+
+          .typing-cursor {
+            display: inline-block;
+            font-weight: bold;
+            color: #409eff;
+            animation: blink 0.7s infinite;
+            margin-left: 2px;
+            position: relative;
+            top: 1px;
+          }
+
+          @keyframes blink {
+            0%,
+            100% {
+              opacity: 1;
+            }
+            50% {
+              opacity: 0;
+            }
+          }
+
+          .thinking-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px;
+
+            .thinking-dots {
+              display: flex;
+              gap: 8px;
+            }
+
+            .thinking-dots span {
+              width: 8px;
+              height: 8px;
+              border-radius: 50%;
+              background: #409eff;
+              animation: bounce 1.4s ease-in-out infinite;
+            }
+
+            .thinking-dots span:nth-child(1) {
+              animation-delay: -0.32s;
+            }
+            .thinking-dots span:nth-child(2) {
+              animation-delay: -0.16s;
+            }
+          }
+
+          .message-content {
+            font-size: 17px;
+            padding: 12px 17px;
+            line-height: 1.6;
+            word-break: break-word;
+
+            :deep(p) {
+              margin: 8px 0;
+            }
+
+            :deep(code) {
+              background: #f5f5f5;
+              padding: 2px 4px;
+              border-radius: 4px;
+              font-family: 'Courier New', monospace;
+            }
+
+            :deep(pre) {
+              background: #2d2d2d;
+              color: #f8f8f2;
+              padding: 12px;
+              border-radius: 8px;
+              overflow-x: auto;
+              margin: 12px 0;
+            }
+
+            :deep(blockquote) {
+              border-left: 4px solid #ddd;
+              margin: 12px 0;
+              padding-left: 12px;
+              color: #666;
+              font-style: italic;
+            }
+          }
+
+          .message-time {
+            font-size: 16px;
+            color: #999;
+            margin-top: 8px;
+            padding: 0 4px;
+          }
+
+          .streaming-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            background: #f0f7ff;
+            border-radius: 12px;
+            font-size: 11px;
+            color: #409eff;
+            border: 1px solid #91d5ff;
+            animation: pulse 1.5s ease-in-out infinite;
+          }
+
+          .streaming-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #409eff;
+            animation: blink 1s infinite;
+          }
         }
       }
+    }
+  }
+}
 
-      &.ai-avatar {
-        background: linear-gradient(135deg, #4facfe, #00f2fe);
+/* 搜索结果容器样式 */
+.search-results-container {
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.search-results-box {
+  // border: 2px solid #ff4d4f;
+  border-radius: 8px;
+  overflow: hidden;
+  // background-color: white;
+}
+
+.search-result-item {
+  padding: 20px;
+  border-bottom: 1px solid #f0f0f0;
+  
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.result-content {
+  font-size: 16px;
+  line-height: 1.6;
+  color: #333;
+  margin-bottom: 15px;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.result-meta {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  color: #666;
+  padding-top: 10px;
+  border-top: 1px dashed #e8e8e8;
+  
+  .source-title {
+    font-weight: bold;
+    margin-right: 20px;
+  }
+  
+  .update-date {
+    margin-right: auto;
+  }
+  
+  .view-detail {
+    color: #1890ff;
+    text-decoration: none;
+    cursor: pointer;
+    
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.pagination-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 0;
+  font-size: 14px;
+  color: #666;
+  border-top: 1px solid #e8e8e8;
+  margin-top: 20px;
+  
+  .total-results {
+    font-weight: 500;
+  }
+  
+  .pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    
+    .page-numbers {
+      font-weight: 500;
+      cursor: pointer;
+      
+      &:hover {
+        color: #1890ff;
+      }
+    }
+    
+    .page-size {
+      color: #999;
+    }
+  }
+}
+
+.message-header {
+  display: flex;
+  align-items: flex-start;
+  max-width: 100%;
+
+  .avatar {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 600;
+    color: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    margin-right: 12px;
+
+    &.user-avatar {
+      background: #d7e6fe;
+
+      img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
       }
     }
 
-    .message-info {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
+    &.ai-avatar {
+      background: linear-gradient(135deg, #4facfe, #00f2fe);
     }
+  }
+
+  .message-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
+.qa-header {
+  text-align: center;
+  margin-bottom: 40px;
+  margin-top: 60px;
+
+  h1 {
+    font-size: 28px;
+    color: #303133;
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+
+  p {
+    font-size: 16px;
+    color: #606266;
   }
 }
 
