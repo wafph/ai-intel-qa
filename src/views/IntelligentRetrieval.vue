@@ -7,160 +7,166 @@
     </div>
 
     <!-- 主体区域 -->
-
-      <!-- 对话历史 -->
-      <div class="conversation-history">
-        <div
-          v-for="(item, index) in chatData?.messages || []"
-          :key="item.id"
-          :class="[
-            'history-item',
-            item.role === 'user' ? 'user-message' : 'assistant-message',
-          ]"
-          :data-message-id="item.id"
-        >
-          <!-- 用户消息 -->
-          <div v-if="item.role === 'user'" class="message-user">
-            <div class="message-header">
-              <div class="avatar user-avatar">
-                <div><img src="/images/user.svg" alt="" /></div>
-              </div>
-              <div class="message-info">
-                <pre class="message-content">{{ item.content }}</pre>
-                <div class="message-time">{{ formatTime(item.timestamp) }}</div>
-              </div>
+    <div class="conversation-history">
+      <div
+        v-for="(item, index) in chatData?.messages || []"
+        :key="item.id"
+        :class="[
+          'history-item',
+          item.role === 'user' ? 'user-message' : 'assistant-message',
+        ]"
+        :data-message-id="item.id"
+      >
+        <!-- 用户消息 -->
+        <div v-if="item.role === 'user'" class="message-user">
+          <div class="message-header">
+            <div class="avatar user-avatar">
+              <div><img src="/images/user.svg" alt="" /></div>
+            </div>
+            <div class="message-info">
+              <pre class="message-content">{{ item.content }}</pre>
+              <div class="message-time">{{ formatTime(item.timestamp) }}</div>
             </div>
           </div>
+        </div>
 
-          <!-- AI回复消息 -->
-          <div v-else class="message-assistant">
-            <div class="message-header">
-              <div class="avatar ai-avatar">
-                <div>AI</div>
+        <!-- AI回复消息 -->
+        <div v-else class="message-assistant">
+          <div class="message-header">
+            <div class="avatar ai-avatar">
+              <div>AI</div>
+            </div>
+            <div class="message-info">
+              <!-- 思考过程 -->
+              <div
+                v-if="item.reasoning && item.reasoning.trim() !== ''"
+                class="thinking-process"
+              >
+                <div class="thinking-header">
+                  <span>思考过程</span>
+                </div>
+                <div class="thinking-content">
+                  {{ item.reasoning }}
+                </div>
               </div>
-              <div class="message-info">
-                <!-- 思考过程 -->
+
+              <!-- 当前流式消息 -->
+              <div v-if="item.streaming && item.id === currentStreamingMessageId">
+                <!-- 回复内容（打字机效果） -->
                 <div
-                  v-if="item.reasoning && item.reasoning.trim() !== ''"
-                  class="thinking-process"
+                  v-if="currentAnswer && currentAnswer.trim() !== ''"
+                  class="answer-streaming"
                 >
-                  <div class="thinking-header">
-                    <span>思考过程</span>
-                  </div>
-                  <div class="thinking-content">
-                    {{ item.reasoning }}
+                  <div class="typing-container">
+                    <div class="typing-text" v-html="renderMarkdown(displayAnswer)"></div>
+                    <span v-if="isTyping" class="typing-cursor">|</span>
                   </div>
                 </div>
 
-                <!-- 当前流式消息 -->
-                <div v-if="item.streaming && item.id === currentStreamingMessageId">
-                  <!-- 回复内容（打字机效果） -->
-                  <div
-                    v-if="currentAnswer && currentAnswer.trim() !== ''"
-                    class="answer-streaming"
-                  >
-                    <div class="typing-container">
-                      <div class="typing-text" v-html="renderMarkdown(displayAnswer)"></div>
-                      <span v-if="isTyping" class="typing-cursor">|</span>
-                    </div>
-                  </div>
-
-                  <!-- 加载指示器（当没有任何内容时） -->
-                  <div
-                    v-if="streaming && (!currentAnswer || currentAnswer.trim() === '')"
-                    class="thinking-indicator"
-                  >
-                    <div class="thinking-dots">
-                      <span></span>
-                      <span></span>
-                      <span></span>
-                    </div>
+                <!-- 加载指示器（当没有任何内容时） -->
+                <div
+                  v-if="streaming && (!currentAnswer || currentAnswer.trim() === '')"
+                  class="thinking-indicator"
+                >
+                  <div class="thinking-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
                   </div>
                 </div>
+              </div>
 
-                <!-- 非流式消息 - 搜索结果展示 -->
-                <div v-else>
-                  <!-- 当有来源信息时，显示搜索结果样式 -->
-                  <div v-if="item.sources && item.sources.length > 0" class="search-results-container">
-                    <div class="search-results-box">
-                      <!-- 搜索结果列表 -->
-                      <div
-                        v-for="(source, idx) in item.sources"
-                        :key="idx"
-                        class="search-result-item"
-                      >
-                        <div class="result-content">
-                          {{ source.content }}
-                        </div>
-                        <div class="result-meta">
-                          <span class="source-title">来源：{{ source.title }}</span>
-                          <span class="update-date">更新日期：{{ formatUpdateDate(source.update_date_time) }}</span>
-                          <a class="view-detail" href="javascript:;">查看详情 →</a>
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- 分页信息 -->
-                    <div class="pagination-info">
-                      <div class="total-results">总共{{ item.sources.length }}条</div>
-                      <div class="pagination-controls">
-                        <span class="page-numbers">1 2 3 4 5 6 7 8 9 ></span>
-                        <span class="page-size">10条/页</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- 当没有来源信息时，显示原有回复内容 -->
-                  <div v-else>
+              <!-- 非流式消息 - 搜索结果展示 -->
+              <div v-else>
+                <!-- 当有来源信息时，显示搜索结果样式 -->
+                <div
+                  v-if="item.sources && item.sources.length > 0"
+                  class="search-results-container"
+                >
+                  <div class="search-results-box">
+                    <!-- 搜索结果列表 -->
                     <div
-                      class="message-content pad"
-                      v-html="renderMarkdown(item.content)"
-                    ></div>
-
-                    <!-- 操作按钮 -->
-                    <div
-                      style="display: flex; align-items: center; margin-left: 15px"
-                      v-if="item.content && item.content !== '用户停止了生成'"
+                      v-for="(source, idx) in paginatedSources(item)"
+                      :key="idx"
+                      class="search-result-item"
                     >
-                      <el-button link type="success" plain @click="handleRestart(index)">
-                        重新检索<el-icon class="el-icon--right"><ArrowRight /></el-icon>
-                      </el-button>
-                      <el-button
-                        link
-                        class="btnbottom"
-                        type="primary"
-                        plain
-                        @click="handleExport"
-                      >
-                        导出
-                      </el-button>
+                      <div class="result-content">
+                        {{ source.content }}
+                      </div>
+                      <div class="result-meta">
+                        <span class="source-title">来源：{{ source.title }}</span>
+                        <span class="update-date"
+                          >更新日期：{{ formatUpdateDate(source.update_date_time) }}</span
+                        >
+                        <a class="view-detail" href="javascript:;">查看详情 →</a>
+                      </div>
                     </div>
+                  </div>
+
+                  <!-- 使用 Element Plus 分页组件 -->
+                  <div class="pagination-wrapper">
+                    <el-pagination
+                      :current-page="getCurrentPage(item.id)"
+                      :page-size="getPageSize(item.id)"
+                      :page-sizes="[5, 10, 20, 50]"
+                      :total="item.sources.length"
+                      layout="total, sizes, prev, pager, next, jumper"
+                      @size-change="(size) => handleSizeChange(item.id, size)"
+                      @current-change="(page) => handleCurrentChange(item.id, page)"
+                    />
                   </div>
                 </div>
 
-                <div class="message-time">
-                  {{ formatTime(item.timestamp) }}
-                  <span
-                    v-if="item.streaming && item.id === currentStreamingMessageId"
-                    class="streaming-badge"
+                <!-- 当没有来源信息时，显示原有回复内容 -->
+                <div v-else>
+                  <div
+                    class="message-content pad"
+                    v-html="renderMarkdown(item.content)"
+                  ></div>
+
+                  <!-- 操作按钮 -->
+                  <div
+                    style="display: flex; align-items: center; margin-left: 15px"
+                    v-if="item.content && item.content !== '用户停止了生成'"
                   >
-                    <span class="streaming-dot"></span>
-                    生成中...
-                  </span>
+                    <el-button link type="success" plain @click="handleRestart(index)">
+                      重新检索<el-icon class="el-icon--right"><ArrowRight /></el-icon>
+                    </el-button>
+                    <el-button
+                      link
+                      class="btnbottom"
+                      type="primary"
+                      plain
+                      @click="handleExport"
+                    >
+                      导出
+                    </el-button>
+                  </div>
                 </div>
+              </div>
+
+              <div class="message-time">
+                {{ formatTime(item.timestamp) }}
+                <span
+                  v-if="item.streaming && item.id === currentStreamingMessageId"
+                  class="streaming-badge"
+                >
+                  <span class="streaming-dot"></span>
+                  生成中...
+                </span>
               </div>
             </div>
           </div>
         </div>
       </div>
-   
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import MarkdownIt from 'markdown-it';
-import { ElMessage, ElIcon } from 'element-plus';
+import { ElMessage, ElIcon, ElPagination } from 'element-plus';
 import { ArrowRight } from '@element-plus/icons-vue';
 
 // 状态变量
@@ -172,6 +178,8 @@ const loading = ref(false);
 const isTyping = ref(false);
 const emit = defineEmits(['regenerate']);
 
+// 分页状态管理
+const paginationStates = reactive<Record<string, { currentPage: number; pageSize: number }>>({});
 // Props
 interface Props {
   chatData: ChatSession | null;
@@ -238,6 +246,47 @@ const formatUpdateDate = (timeStr: string) => {
   return timeStr;
 };
 
+// 获取当前页码（带默认值）
+const getCurrentPage = (messageId: string): number => {
+  if (!paginationStates[messageId]) {
+    paginationStates[messageId] = { currentPage: 1, pageSize: 10 };
+  }
+  return paginationStates[messageId].currentPage;
+};
+
+// 获取每页条数（带默认值）
+const getPageSize = (messageId: string): number => {
+  if (!paginationStates[messageId]) {
+    paginationStates[messageId] = { currentPage: 1, pageSize: 10 };
+  }
+  return paginationStates[messageId].pageSize;
+};
+// 分页处理函数
+const handleSizeChange = (messageId: string, size: number) => {
+  if (!paginationStates[messageId]) {
+    paginationStates[messageId] = { currentPage: 1, pageSize: 10 };
+  }
+  paginationStates[messageId].pageSize = size;
+  paginationStates[messageId].currentPage = 1; // 重置到第一页
+};
+
+const handleCurrentChange = (messageId: string, page: number) => {
+  if (!paginationStates[messageId]) {
+    paginationStates[messageId] = { currentPage: 1, pageSize: 10 };
+  }
+  paginationStates[messageId].currentPage = page;
+};
+
+// 计算分页后的数据
+const paginatedSources = (item: ChatMessage) => {
+  if (!item.sources || item.sources.length === 0) return [];
+  
+  const state = paginationStates[item.id] || { currentPage: 1, pageSize: 10 };
+  const startIndex = (state.currentPage - 1) * state.pageSize;
+  const endIndex = startIndex + state.pageSize;
+  
+  return item.sources.slice(startIndex, endIndex);
+};
 // 将文本追加到打字机队列
 const appendToTypingQueue = (text: string) => {
   if (!text) return;
@@ -438,7 +487,6 @@ onUnmounted(() => {
   position: relative;
   overflow-y: auto;
 }
-
 
 .conversation-history {
   flex: 1;
@@ -718,7 +766,7 @@ onUnmounted(() => {
 .search-result-item {
   padding: 20px;
   border-bottom: 1px solid #f0f0f0;
-  
+
   &:last-child {
     border-bottom: none;
   }
@@ -740,57 +788,94 @@ onUnmounted(() => {
   color: #666;
   padding-top: 10px;
   border-top: 1px dashed #e8e8e8;
-  
+
   .source-title {
     font-weight: bold;
     margin-right: 20px;
   }
-  
+
   .update-date {
     margin-right: auto;
   }
-  
+
   .view-detail {
     color: #1890ff;
     text-decoration: none;
     cursor: pointer;
-    
+
     &:hover {
       text-decoration: underline;
     }
   }
 }
 
-.pagination-info {
+/* 分页组件样式 */
+.pagination-wrapper {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   padding: 15px 0;
   font-size: 14px;
   color: #666;
   border-top: 1px solid #e8e8e8;
   margin-top: 20px;
-  
-  .total-results {
-    font-weight: 500;
-  }
-  
-  .pagination-controls {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    
-    .page-numbers {
-      font-weight: 500;
-      cursor: pointer;
-      
+
+  :deep(.el-pagination) {
+    --el-pagination-font-size: 14px;
+    --el-pagination-bg-color: #fff;
+    --el-pagination-text-color: #606266;
+    --el-pagination-border-radius: 4px;
+    --el-pagination-button-color: #606266;
+    --el-pagination-button-bg-color: #f4f4f5;
+    --el-pagination-button-disabled-color: #c0c4cc;
+    --el-pagination-button-disabled-bg-color: #fff;
+    --el-pagination-hover-color: #409eff;
+
+    .el-pagination__total {
+      margin-right: 16px;
+      font-weight: normal;
+    }
+
+    .el-pagination__sizes {
+      margin-right: 16px;
+    }
+
+    .el-pagination__jump {
+      margin-left: 16px;
+    }
+
+    .btn-prev,
+    .btn-next {
+      background-color: transparent;
+      border: 1px solid #dcdfe6;
+      border-radius: 4px;
+      margin: 0 4px;
+
       &:hover {
-        color: #1890ff;
+        color: #409eff;
+        border-color: #409eff;
       }
     }
-    
-    .page-size {
-      color: #999;
+
+    .el-pager li {
+      background-color: transparent;
+      border: 1px solid #dcdfe6;
+      border-radius: 4px;
+      margin: 0 4px;
+      min-width: 32px;
+      height: 32px;
+      line-height: 30px;
+
+      &.is-active {
+        background-color: #409eff;
+        color: #fff;
+        border-color: #409eff;
+      }
+
+      &:hover {
+        color: #409eff;
+        border-color: #409eff;
+      }
     }
   }
 }
