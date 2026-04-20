@@ -133,6 +133,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { ElMessageBox, ElMessage } from 'element-plus'; // ✅ 导入 ElMessageBox
 
 interface Props {
   historyList: any[];
@@ -237,22 +238,38 @@ const handleNewChat = () => {
 };
 
 const handleDeleteChat = (chatId: string) => {
-  if (confirm('确定要删除这条对话记录吗？')) {
+  // ✅ 也可以使用 ElMessageBox 替换这里的 confirm
+  ElMessageBox.confirm('确定要删除这条对话记录吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
+  }).then(() => {
     emit('delete-chat', chatId);
     closeMenu(); // 关闭菜单
-  }
+    ElMessage.success('删除成功');
+  }).catch(() => {
+    // 用户取消删除
+  });
 };
 
-// 新增：清空所有历史记录（包括所有菜单）
+// ✅ 修改：使用 Element Plus 的 MessageBox 替换原生 confirm
 const handleClearAllHistory = () => {
-  if (
-    confirm(
-      '确定要清空所有历史对话吗？此操作将清空所有菜单的历史记录，且当前对话也会被清空。',
-    )
-  ) {
+  ElMessageBox.confirm(
+    '此操作将清空所有菜单的历史记录，且当前对话也会被清空， 确定要清空所有历史对话吗？',
+    '提示',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+      customClass: 'clear-history-dialog', // 自定义类名，方便样式调整
+    }
+  ).then(() => {
     emit('clear-history');
     closeMenu(); // 关闭菜单
-  }
+    ElMessage.success('已清空所有历史记录');
+  }).catch(() => {
+    // 用户取消操作
+  });
 };
 
 // 切换收藏状态

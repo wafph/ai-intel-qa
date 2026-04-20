@@ -87,11 +87,24 @@
                     <!-- 搜索结果列表 -->
                     <div
                       v-for="(source, idx) in paginatedSources(item)"
-                      :key="idx"
+                      :key="source.chunk_id || idx"
                       class="search-result-item"
                     >
-                      <div class="result-content">
-                        {{ source.content }}
+                     <h3 class="source-title">{{ source.subtitle }}</h3>
+                      <div class="result-content-wrapper">
+                        <div 
+                          class="result-content"
+                          :class="{ 'truncated': !expandedStates[source.chunk_id] }"
+                        >
+                          {{ getDisplayContent(source) }}
+                        </div>
+                        <span 
+                          v-if="shouldShowExpand(source)"
+                          class="expand-toggle"
+                          @click="toggleExpand(source.chunk_id)"
+                        >
+                          {{ expandedStates[source.chunk_id] ? '收起 ↑' : '展开 ↓' }}
+                        </span>
                       </div>
                       <div class="result-meta">
                         <span class="source-title">来源：{{ source.title }}</span>
@@ -166,7 +179,7 @@
 <script setup lang="ts">
 import { ref, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import MarkdownIt from 'markdown-it';
-import { ElMessage, ElIcon, ElPagination } from 'element-plus';
+import { ElIcon, ElPagination } from 'element-plus';
 import { ArrowRight } from '@element-plus/icons-vue';
 
 // 状态变量
@@ -180,6 +193,10 @@ const emit = defineEmits(['regenerate']);
 
 // 分页状态管理
 const paginationStates = reactive<Record<string, { currentPage: number; pageSize: number }>>({});
+
+// ✅ 新增：展开状态管理
+const expandedStates = reactive<Record<string, boolean>>({});
+
 // Props
 interface Props {
   chatData: ChatSession | null;
@@ -246,6 +263,31 @@ const formatUpdateDate = (timeStr: string) => {
   return timeStr;
 };
 
+// ✅ 新增：获取显示内容（截断或完整）
+const getDisplayContent = (source: SourceInfo) => {
+  const content = source.content || '';
+  const chunkId = source.chunk_id;
+  
+  // 如果已展开或内容长度不超过150，显示完整内容
+  if (expandedStates[chunkId] || content.length <= 150) {
+    return content;
+  }
+  
+  // 否则截断前150个字符
+  return content.substring(0, 150) + '...';
+};
+
+// ✅ 新增：判断是否应该显示展开/收起按钮
+const shouldShowExpand = (source: SourceInfo) => {
+  const content = source.content || '';
+  return content.length > 150;
+};
+
+// ✅ 新增：切换展开状态
+const toggleExpand = (chunkId: string) => {
+  expandedStates[chunkId] = !expandedStates[chunkId];
+};
+
 // 获取当前页码（带默认值）
 const getCurrentPage = (messageId: string): number => {
   if (!paginationStates[messageId]) {
@@ -261,6 +303,7 @@ const getPageSize = (messageId: string): number => {
   }
   return paginationStates[messageId].pageSize;
 };
+
 // 分页处理函数
 const handleSizeChange = (messageId: string, size: number) => {
   if (!paginationStates[messageId]) {
@@ -287,6 +330,7 @@ const paginatedSources = (item: ChatMessage) => {
   
   return item.sources.slice(startIndex, endIndex);
 };
+
 // 将文本追加到打字机队列
 const appendToTypingQueue = (text: string) => {
   if (!text) return;
@@ -772,13 +816,41 @@ onUnmounted(() => {
   }
 }
 
+.result-content-wrapper {
+  position: relative;
+  margin-bottom: 15px;
+}
+
 .result-content {
   font-size: 16px;
   line-height: 1.6;
   color: #333;
-  margin-bottom: 15px;
   word-break: break-word;
   white-space: pre-wrap;
+  transition: all 0.3s ease;
+
+  &.truncated {
+    max-height: 4.8em; /* 大约3行文字的高度 */
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+  }
+}
+
+.expand-toggle {
+  display: inline-block;
+  margin-top: 8px;
+  color: #1890ff;
+  cursor: pointer;
+  font-size: 14px;
+  user-select: none;
+  transition: color 0.3s;
+
+  &:hover {
+    color: #40a9ff;
+    text-decoration: underline;
+  }
 }
 
 .result-meta {
@@ -787,7 +859,7 @@ onUnmounted(() => {
   font-size: 14px;
   color: #666;
   padding-top: 10px;
-  border-top: 1px dashed #e8e8e8;
+  border-top: 2px solid #e8e8e8;
 
   .source-title {
     font-weight: bold;
@@ -817,7 +889,7 @@ onUnmounted(() => {
   padding: 15px 0;
   font-size: 14px;
   color: #666;
-  border-top: 1px solid #e8e8e8;
+  // border-top: 1px solid #e8e8e8;
   margin-top: 20px;
 
   :deep(.el-pagination) {

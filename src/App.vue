@@ -345,7 +345,7 @@ const startStream = async (queryText: string, messageId: string) => {
     const urlreview =
       '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/32dd3ef3-2bfb-4ad7-a448-811ddd37924a/conversations/57859d42-70e7-4998-9998-184832f8d6fb?version=1776051927454';
     const urlSearch =
-      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/c206107e-ec31-47d8-9aaf-5c1262931168/conversations/c0ef02f9-3b8c-4e1a-8d77-75fd327a2934?version=1776650624772';
+      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/c206107e-ec31-47d8-9aaf-5c1262931168/conversations/9f57de87-98d4-432c-9e14-5e338fbc830b?version=1776669038280';
     var apiUrl =
       activeTab.value === '智能问答'
         ? urlqa
