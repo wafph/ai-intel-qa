@@ -142,7 +142,7 @@ const tabs = computed<TabItem[]>(() => {
 }
 
 .tab-btn.active {
-  border-bottom: 3px solid #b6bfdc;
+  border-bottom: 3px solid #1c73eb;
   color: white;
 }
 

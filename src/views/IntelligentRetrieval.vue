@@ -105,7 +105,14 @@
                         <span class="update-date"
                           >更新日期：{{ formatUpdateDate(source.update_date_time) }}</span
                         >
-                        <a class="view-detail" href="javascript:;">查看详情 →</a>
+                        <!-- 修改这里：添加点击事件 -->
+                        <a
+                          class="view-detail"
+                          href="javascript:;"
+                          @click.prevent="handleViewPdf(source.file_id)"
+                        >
+                          查看详情 →
+                        </a>
                       </div>
                     </div>
                   </div>
@@ -283,6 +290,61 @@ const shouldShowExpand = (source: SourceInfo) => {
   return content.length > 150;
 };
 
+
+const handleViewPdf = async (fileId: string) => {
+  try {
+    // 1. 先调用 POST 接口
+    const postResponse = await fetch('http://1.94.244.72:11328/download', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        file_ids: [fileId]
+      }),
+    });
+
+    if (!postResponse.ok) {
+      throw new Error(`POST 请求失败: ${postResponse.status}`);
+    }
+
+    // 2. 调用 GET 接口获取 PDF 文件
+    const pdfResponse = await fetch(`http://1.94.244.72:11328/download/${fileId}`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/pdf',
+      },
+    });
+
+    if (!pdfResponse.ok) {
+      throw new Error(`GET 请求失败: ${pdfResponse.status}`);
+    }
+
+    // 3. 获取 PDF 文件数据
+    const pdfBlob = await pdfResponse.blob();
+    
+    // 4. 创建 Blob URL
+    const pdfUrl = window.URL.createObjectURL(pdfBlob);
+    
+    // 5. 在新窗口中打开 PDF
+    const newWindow = window.open('', '_blank');
+    if (newWindow) {
+      newWindow.location.href = pdfUrl;
+      
+      // 可选：添加清理逻辑
+      setTimeout(() => {
+        window.URL.revokeObjectURL(pdfUrl);
+      }, 1000);
+    } else {
+      // 如果弹窗被阻止，提示用户
+      alert('请允许浏览器弹出窗口以查看 PDF');
+    }
+    
+  } catch (error) {
+    console.error('获取 PDF 失败:', error);
+    alert('获取 PDF 文件失败，请稍后重试');
+  }
+};
 // ✅ 新增：切换展开状态
 const toggleExpand = (chunkId: string) => {
   expandedStates[chunkId] = !expandedStates[chunkId];
