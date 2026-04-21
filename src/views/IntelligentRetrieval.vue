@@ -173,6 +173,19 @@
                   生成中...
                 </span>
               </div>
+              <div
+                v-if="showPdfViewer"
+                class="pdf-viewer-modal"
+                @click.self="closePdfViewer"
+              >
+                <div class="pdf-viewer-container">
+                  <div class="pdf-viewer-header">
+                    <span>PDF 预览</span>
+                    <button class="close-btn" @click="closePdfViewer">×</button>
+                  </div>
+                  <iframe :src="pdfViewerUrl" class="pdf-iframe" frameborder="0"></iframe>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -195,7 +208,9 @@ let currentTypingIndex = 0;
 const loading = ref(false);
 const isTyping = ref(false);
 const emit = defineEmits(['regenerate']);
-
+// ✅ 新增：PDF 查看器状态
+const showPdfViewer = ref(false);
+const pdfViewerUrl = ref('');
 // 分页状态管理
 const paginationStates = reactive<
   Record<string, { currentPage: number; pageSize: number }>
@@ -290,7 +305,7 @@ const shouldShowExpand = (source: SourceInfo) => {
   return content.length > 150;
 };
 
-
+// ✅ 修改：查看 PDF 的方法（使用 iframe）
 const handleViewPdf = async (fileId: string) => {
   try {
     // 1. 先调用 POST 接口
@@ -300,7 +315,7 @@ const handleViewPdf = async (fileId: string) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        file_ids: [fileId]
+        file_ids: [fileId],
       }),
     });
 
@@ -312,7 +327,7 @@ const handleViewPdf = async (fileId: string) => {
     const pdfResponse = await fetch(`http://1.94.244.72:11328/download/${fileId}`, {
       method: 'GET',
       headers: {
-        'Accept': 'application/pdf',
+        Accept: 'application/pdf',
       },
     });
 
@@ -322,28 +337,23 @@ const handleViewPdf = async (fileId: string) => {
 
     // 3. 获取 PDF 文件数据
     const pdfBlob = await pdfResponse.blob();
-    
+
     // 4. 创建 Blob URL
-    const pdfUrl = window.URL.createObjectURL(pdfBlob);
-    
-    // 5. 在新窗口中打开 PDF
-    const newWindow = window.open('', '_blank');
-    if (newWindow) {
-      newWindow.location.href = pdfUrl;
-      
-      // 可选：添加清理逻辑
-      setTimeout(() => {
-        window.URL.revokeObjectURL(pdfUrl);
-      }, 1000);
-    } else {
-      // 如果弹窗被阻止，提示用户
-      alert('请允许浏览器弹出窗口以查看 PDF');
-    }
-    
+    pdfViewerUrl.value = window.URL.createObjectURL(pdfBlob);
+    showPdfViewer.value = true;
   } catch (error) {
     console.error('获取 PDF 失败:', error);
     alert('获取 PDF 文件失败，请稍后重试');
   }
+};
+
+// ✅ 新增：关闭 PDF 查看器
+const closePdfViewer = () => {
+  if (pdfViewerUrl.value) {
+    window.URL.revokeObjectURL(pdfViewerUrl.value);
+    pdfViewerUrl.value = '';
+  }
+  showPdfViewer.value = false;
 };
 // ✅ 新增：切换展开状态
 const toggleExpand = (chunkId: string) => {
@@ -1063,6 +1073,57 @@ onUnmounted(() => {
     font-size: 16px;
     color: #606266;
   }
+}
+
+.pdf-viewer-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.pdf-viewer-container {
+  width: 90%;
+  height: 90%;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.pdf-viewer-header {
+  padding: 16px 20px;
+  background: #f5f5f5;
+  border-bottom: 1px solid #e8e8e8;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0 8px;
+
+  &:hover {
+    color: #333;
+  }
+}
+
+.pdf-iframe {
+  flex: 1;
+  width: 100%;
 }
 
 @keyframes slideIn {
