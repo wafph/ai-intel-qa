@@ -641,7 +641,9 @@ const formatTime = (date: Date) => {
 
 const renderMarkdown = (content: string) => {
   if (!content) return '';
-  return md.render(content);
+  // 將 "$$$" 替換為 Markdown 分割線
+  const processedContent = content.replace(/\$\$\$/g, '\n\n---\n\n');
+  return md.render(processedContent);
 };
 
 const scrollToBottom = () => {
@@ -1016,13 +1018,8 @@ onUpdated(() => {
                 font-style: italic;
               }
 
-              & > :deep(p:nth-last-of-type(2)) {
-                border-top: 1px solid lightgray;
-              }
-
-              & > :deep(p:last-child) {
-                border-bottom: 1px solid lightgray;
-                padding-bottom: 10px;
+              :deep(hr) {
+                margin: 10px 0;
               }
             }
 
@@ -1305,6 +1302,10 @@ onUpdated(() => {
       border-style: solid;
       border-color: #67c23a transparent transparent transparent;
     }
+  }
+
+  hr {
+    margin: 10px 0;
   }
 }
 
