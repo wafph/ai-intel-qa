@@ -1,9 +1,9 @@
 <template>
-  <div class="history-panel">
+    <div class="history-panel">
     <!-- 顶部区域 -->
     <div class="panel-header">
       <button class="new-chat-btn" @click="handleNewChat">
-       <img src="/images/chats.png" alt="">
+        <img src="/images/chats.png" alt="" />
         <span class="btn-text">新聊天</span>
       </button>
     </div>
@@ -46,7 +46,6 @@
           >
             <div class="item-content">
               <div class="item-title">
-                <!-- 修改：收藏图标只在鼠标悬停时显示 -->
                 <span
                   v-if="history.isCollected && hoveredItemId === history.id"
                   class="favorite-icon"
@@ -55,24 +54,22 @@
                 </span>
                 {{ history.title }}
               </div>
-              <!-- 不再显示item-preview -->
               <div class="item-meta">
                 <span class="item-type">{{ history.type }}</span>
                 <span class="item-time">{{ history.formattedTime }}</span>
               </div>
             </div>
 
-            <!-- 菜单按钮（仅鼠标悬停时显示） -->
             <div
               v-if="hoveredItemId === history.id"
               class="item-menu-container"
               @click.stop
             >
-              <button class="menu-toggle-btn" @click="toggleMenu(history.id)">⋮</button>
+              <button class="menu-toggle-btn" @click="toggleMenu(history.id)">
+                ⋮
+              </button>
 
-              <!-- 折叠菜单 -->
               <div v-if="visibleMenuId === history.id" class="dropdown-menu">
-                <!-- 收藏按钮 -->
                 <button
                   class="menu-item"
                   :class="{ favorited: history.isCollected }"
@@ -80,11 +77,10 @@
                 >
                   <span class="menu-icon">★</span>
                   <span class="menu-text">
-                    {{ history.isCollected ? '取消收藏' : '收藏' }}
+                    {{ history.isCollected ? "取消收藏" : "收藏" }}
                   </span>
                 </button>
 
-                <!-- 删除按钮 -->
                 <button class="menu-item delete" @click="handleDeleteChat(history.id)">
                   <span class="menu-icon">🗑️</span>
                   <span class="menu-text">删除</span>
@@ -109,12 +105,11 @@
           class="user-avatar"
         />
         <div class="user-details">
-          <span class="user-name">{{ user.name || '用户' }}</span>
+          <span class="user-name">{{ user.name || "用户" }}</span>
         </div>
         <i class="arrow-icon" :class="{ rotated: showUserMenu }">▼</i>
       </div>
 
-      <!-- 用户菜单 -->
       <div v-if="showUserMenu" class="user-menu">
         <div class="menu-item" @click="goToMyCollections">
           <el-icon><StarFilled /></el-icon>
@@ -133,7 +128,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { ElMessageBox, ElMessage } from 'element-plus'; // ✅ 导入 ElMessageBox
+import { ElMessageBox, ElMessage } from 'element-plus';
 
 interface Props {
   historyList: any[];
@@ -148,51 +143,64 @@ const emit = defineEmits<{
   'delete-chat': [chatId: string];
   'clear-history': [];
   'toggle-favorite': [chatId: string];
-  'switch-tab': [tabName: string]; // 新增：通知父组件切换标签页
+  'switch-tab': [tabName: string];
 }>();
 
 const router = useRouter();
 
-// 状态
 const showUserMenu = ref(false);
 const hoveredItemId = ref<string | null>(null);
 const visibleMenuId = ref<string | null>(null);
 
-// 计算属性
 const filteredHistory = computed(() => {
   return props.historyList || [];
 });
 
-// 时间格式化函数
+/**
+ * ✅ 修复后的日期格式化函数
+ * 通过“日期归零法”严格比较年月日，避免跨日误判
+ */
 const formatRelativeTime = (timestamp: number | string) => {
   if (typeof timestamp === 'string') {
     return timestamp;
   }
 
-  const now = Date.now();
-  const diff = now - timestamp;
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-  if (days === 0) {
-    const date = new Date(timestamp);
-    return `今天 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-  }
-
-  if (days === 1) {
-    const date = new Date(timestamp);
-    return `昨天 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-  }
-
-  if (days === 2) {
-    const date = new Date(timestamp);
-    return `前天 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-  }
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   const date = new Date(timestamp);
-  return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+  const thatDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+  const diffDays = Math.round(
+    (today.getTime() - thatDay.getTime()) / (1000 * 60 * 60 * 24),
+  );
+
+  if (diffDays === 0) {
+    return `今天 ${date.getHours().toString().padStart(2, '0')}:${date
+      .getMinutes()
+      .toString()
+      .padStart(2, '0')}`;
+  }
+
+  if (diffDays === 1) {
+    return `昨天 ${date.getHours().toString().padStart(2, '0')}:${date
+      .getMinutes()
+      .toString()
+      .padStart(2, '0')}`;
+  }
+
+  if (diffDays === 2) {
+    return `前天 ${date.getHours().toString().padStart(2, '0')}:${date
+      .getMinutes()
+      .toString()
+      .padStart(2, '0')}`;
+  }
+
+  return `${date.getFullYear()}-${(date.getMonth() + 1)
+    .toString()
+    .padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
 };
 
-// 分组历史记录
 const groupedHistory = computed(() => {
   const groups: Record<string, any[]> = {};
 
@@ -208,7 +216,9 @@ const groupedHistory = computed(() => {
       groupKey = '前天';
     } else {
       const date = new Date(item.time);
-      groupKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+      groupKey = `${date.getFullYear()}-${(date.getMonth() + 1)
+        .toString()
+        .padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
     }
 
     if (!groups[groupKey]) {
@@ -226,19 +236,17 @@ const groupedHistory = computed(() => {
   }));
 });
 
-// 原有方法
 const handleSelectChat = (chatId: string) => {
   emit('select-chat', chatId);
-  closeMenu(); // 关闭菜单
+  closeMenu();
 };
 
 const handleNewChat = () => {
   emit('new-chat');
-  closeMenu(); // 关闭菜单
+  closeMenu();
 };
 
 const handleDeleteChat = (chatId: string) => {
-  // ✅ 也可以使用 ElMessageBox 替换这里的 confirm
   ElMessageBox.confirm('确定要删除这条对话记录吗？', '提示', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
@@ -246,43 +254,36 @@ const handleDeleteChat = (chatId: string) => {
   })
     .then(() => {
       emit('delete-chat', chatId);
-      closeMenu(); // 关闭菜单
+      closeMenu();
       ElMessage.success('删除成功');
     })
-    .catch(() => {
-      // 用户取消删除
-    });
+    .catch(() => {});
 };
 
-// ✅ 修改：使用 Element Plus 的 MessageBox 替换原生 confirm
 const handleClearAllHistory = () => {
   ElMessageBox.confirm(
-    '此操作将清空所有菜单的历史记录，且当前对话也会被清空， 确定要清空所有历史对话吗？',
+    '此操作将清空所有菜单的历史记录，且当前对话也会被清空，确定要清空所有历史对话吗？',
     '提示',
     {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: 'warning',
-      customClass: 'clear-history-dialog', // 自定义类名，方便样式调整
+      customClass: 'clear-history-dialog',
     },
   )
     .then(() => {
       emit('clear-history');
-      closeMenu(); // 关闭菜单
+      closeMenu();
       ElMessage.success('已清空所有历史记录');
     })
-    .catch(() => {
-      // 用户取消操作
-    });
+    .catch(() => {});
 };
 
-// 切换收藏状态
 const handleToggleFavorite = (chatId: string) => {
   emit('toggle-favorite', chatId);
-  closeMenu(); // 切换收藏后关闭菜单
+  closeMenu();
 };
 
-// 鼠标悬停事件
 const handleMouseEnter = (itemId: string) => {
   hoveredItemId.value = itemId;
 };
@@ -293,13 +294,8 @@ const handleMouseLeave = (itemId: string) => {
   }
 };
 
-// 菜单控制
 const toggleMenu = (itemId: string) => {
-  if (visibleMenuId.value === itemId) {
-    visibleMenuId.value = null;
-  } else {
-    visibleMenuId.value = itemId;
-  }
+  visibleMenuId.value = visibleMenuId.value === itemId ? null : itemId;
 };
 
 const closeMenu = () => {
@@ -307,7 +303,6 @@ const closeMenu = () => {
   hoveredItemId.value = null;
 };
 
-// 点击外部关闭菜单
 const handleClickOutsideMenu = (event: MouseEvent) => {
   const menuContainer = document.querySelector('.item-menu-container');
   if (menuContainer && !menuContainer.contains(event.target as Node)) {
@@ -315,7 +310,6 @@ const handleClickOutsideMenu = (event: MouseEvent) => {
   }
 };
 
-// 用户菜单相关
 const toggleUserMenu = () => {
   showUserMenu.value = !showUserMenu.value;
 };
@@ -330,7 +324,6 @@ const goToFeedback = () => {
   router.push('/feedback');
 };
 
-// 点击外部关闭用户菜单
 const handleClickOutsideUserMenu = (event: MouseEvent) => {
   const userCenter = document.querySelector('.user-center-bottom');
   if (userCenter && !userCenter.contains(event.target as Node)) {
@@ -374,7 +367,7 @@ onUnmounted(() => {
   height: 44px;
   border: 2px solid #1c73eb;
   background: #fff;
-  color: #1C73EB;
+  color: #1c73eb;
   border-radius: 20px;
   font-size: 15px;
   font-weight: 500;

@@ -202,7 +202,7 @@ const handleTabChange = (tabName: string) => {
 const handleNewChat = () => {
   const newChatId = Date.now().toString();
   activeChatId.value = newChatId;
-  const chatTitle = `${activeTab.value} - ${new Date().toLocaleTimeString()}`;
+  const chatTitle = activeTab.value;
 
   const newSession: ChatSession = {
     id: newChatId,
