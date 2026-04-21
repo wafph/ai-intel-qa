@@ -23,11 +23,8 @@
         <!-- 用户消息 -->
         <div v-if="item.role === 'user'" class="message-user">
           <div class="message-header">
-            <div class="avatar user-avatar">
-              <div><img src="/images/user.svg" alt="" /></div>
-            </div>
             <div class="message-info">
-              <pre class="message-content">{{ item.content }}</pre>
+              <pre class="message-content user-message-content">{{ item.content }}</pre>
               <div class="message-time">{{ formatTime(item.timestamp) }}</div>
             </div>
           </div>
@@ -43,9 +40,6 @@
             <!-- 左侧消息内容区域 -->
             <div class="left-column" :ref="(el) => setLeftColumnRef(el, item.id)">
               <div class="message-header">
-                <div class="avatar ai-avatar">
-                  <div>AI</div>
-                </div>
                 <div class="message-info">
                   <!-- 【核心修改点】始终显示"思考过程"部分，只要消息中存在 reasoning 内容 -->
                   <div
@@ -802,25 +796,28 @@ onUpdated(() => {
           .message-header {
             flex-direction: row-reverse;
 
-            .avatar {
-              margin-left: 12px;
-              margin-right: 0;
-
-              img {
-                width: 80%;
-                height: 80%;
-              }
-            }
-
             .message-info {
               align-items: flex-end;
+              margin-right: 30px;
 
               .message-content {
-                background: #d7e6fe;
-                color: black;
-                border-radius: 12px;
+                background: #1c73eb;
+                color: @white;
+                border-radius: 22px;
                 padding: 12px 36px;
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+              }
+
+              .user-message-content {
+                white-space: pre-wrap;
+                word-break: break-word;
+                border-radius: 12px;
+                padding: 12px 20px;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+                font-family: inherit; /* 继承父字体，避免等宽字体 */
+                margin: 0; /* 移除 pre 标签默认的边距 */
+                overflow-x: auto; /* 防止长行溢出 */
+                max-width: 68%;
               }
 
               .message-time {
@@ -840,7 +837,7 @@ onUpdated(() => {
             width: 100%;
 
             .pad {
-              padding: 20px;
+              padding: 35px;
             }
 
             .thinking-process {
@@ -892,7 +889,9 @@ onUpdated(() => {
             }
 
             .answer-streaming {
-              padding: 20px;
+              background: @white;
+              border-radius: 22px;
+              padding: 35px;
               animation: fadeIn 0.5s ease;
               margin-top: 8px;
             }
@@ -985,6 +984,9 @@ onUpdated(() => {
             }
 
             .message-content {
+              background: #fff;
+              border-radius: 22px;
+              margin-bottom: 15px;
               font-size: 17px;
               :deep(p) {
                 margin: 8px 0;
@@ -1061,29 +1063,6 @@ onUpdated(() => {
     align-items: flex-start;
     max-width: 100%;
 
-    .avatar {
-      flex-shrink: 0;
-      width: 40px;
-      height: 40px;
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 15px;
-      font-weight: 600;
-      color: white;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      margin-right: 12px;
-
-      &.user-avatar {
-        background: #d7e6fe;
-      }
-
-      &.ai-avatar {
-        background: linear-gradient(135deg, #4facfe, #00f2fe);
-      }
-    }
-
     .message-info {
       flex: 1;
       display: flex;
@@ -1102,7 +1081,7 @@ onUpdated(() => {
 
     // 默认单栏布局
     .left-column {
-      width: 100%;
+      width: 83%;
       transition: width 0.3s ease;
     }
 

@@ -3,8 +3,8 @@
     <!-- 顶部区域 -->
     <div class="panel-header">
       <button class="new-chat-btn" @click="handleNewChat">
-        <span class="btn-icon">+</span>
-        <span class="btn-text">新对话</span>
+       <img src="/images/chats.png" alt="">
+        <span class="btn-text">新聊天</span>
       </button>
     </div>
 
@@ -243,13 +243,15 @@ const handleDeleteChat = (chatId: string) => {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning',
-  }).then(() => {
-    emit('delete-chat', chatId);
-    closeMenu(); // 关闭菜单
-    ElMessage.success('删除成功');
-  }).catch(() => {
-    // 用户取消删除
-  });
+  })
+    .then(() => {
+      emit('delete-chat', chatId);
+      closeMenu(); // 关闭菜单
+      ElMessage.success('删除成功');
+    })
+    .catch(() => {
+      // 用户取消删除
+    });
 };
 
 // ✅ 修改：使用 Element Plus 的 MessageBox 替换原生 confirm
@@ -262,14 +264,16 @@ const handleClearAllHistory = () => {
       cancelButtonText: '取消',
       type: 'warning',
       customClass: 'clear-history-dialog', // 自定义类名，方便样式调整
-    }
-  ).then(() => {
-    emit('clear-history');
-    closeMenu(); // 关闭菜单
-    ElMessage.success('已清空所有历史记录');
-  }).catch(() => {
-    // 用户取消操作
-  });
+    },
+  )
+    .then(() => {
+      emit('clear-history');
+      closeMenu(); // 关闭菜单
+      ElMessage.success('已清空所有历史记录');
+    })
+    .catch(() => {
+      // 用户取消操作
+    });
 };
 
 // 切换收藏状态
@@ -368,9 +372,9 @@ onUnmounted(() => {
 .new-chat-btn {
   width: 100%;
   height: 44px;
-  border: 2px solid #8287a4;
+  border: 2px solid #1c73eb;
   background: #fff;
-  color: #333;
+  color: #1C73EB;
   border-radius: 20px;
   font-size: 15px;
   font-weight: 500;
@@ -385,11 +389,6 @@ onUnmounted(() => {
 .new-chat-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 6px 16px rgba(24, 144, 255, 0.3);
-}
-
-.btn-icon {
-  font-size: 23px;
-  font-weight: 300;
 }
 
 .btn-text {

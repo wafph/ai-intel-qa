@@ -20,11 +20,8 @@
         <!-- 用户消息 -->
         <div v-if="item.role === 'user'" class="message-user">
           <div class="message-header">
-            <div class="avatar user-avatar">
-              <div><img src="/images/user.svg" alt="" /></div>
-            </div>
             <div class="message-info">
-              <pre class="message-content">{{ item.content }}</pre>
+              <pre class="message-content user-message-content">{{ item.content }}</pre>
               <div class="message-time">{{ formatTime(item.timestamp) }}</div>
             </div>
           </div>
@@ -33,9 +30,6 @@
         <!-- AI回复消息 -->
         <div v-else class="message-assistant">
           <div class="message-header">
-            <div class="avatar ai-avatar">
-              <div>AI</div>
-            </div>
             <div class="message-info">
               <!-- 思考过程 -->
               <div
@@ -573,24 +567,28 @@ onUnmounted(() => {
         .message-header {
           flex-direction: row-reverse;
 
-          .avatar {
-            margin-left: 12px;
-            margin-right: 0;
-
-            img {
-              width: 80%;
-              height: 80%;
-            }
-          }
-
           .message-info {
             align-items: flex-end;
+            margin-right: 30px;
 
             .message-content {
-              background: #d7e6fe;
+              background: #1c73eb;
+              color: @white;
+              border-radius: 22px;
+              padding: 12px 20px;
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            }
+
+            .user-message-content {
+              white-space: pre-wrap;
+              word-break: break-word;
               border-radius: 12px;
               padding: 12px 20px;
               box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+              font-family: inherit; /* 继承父字体，避免等宽字体 */
+              margin: 0; /* 移除 pre 标签默认的边距 */
+              overflow-x: auto; /* 防止长行溢出 */
+              max-width: 68%;
             }
 
             .message-time {
@@ -652,8 +650,9 @@ onUnmounted(() => {
           }
 
           .answer-streaming {
-            padding: 20px;
-            border-radius: 8px;
+            background: @white;
+            border-radius: 22px;
+            padding: 35px;
             animation: fadeIn 0.5s ease;
             margin-top: 8px;
           }
@@ -746,10 +745,13 @@ onUnmounted(() => {
           }
 
           .message-content {
+            background: #fff;
+            border-radius: 22px;
             font-size: 17px;
             padding: 12px 17px;
             line-height: 1.6;
             word-break: break-word;
+            width: 85%;
 
             :deep(p) {
               margin: 8px 0;
@@ -814,7 +816,9 @@ onUnmounted(() => {
 }
 
 .search-results-container {
-  width: 100%;
+  width: 85%;
+  border-radius: 22px;
+  background: @white;
   margin-bottom: 20px;
 }
 
@@ -972,35 +976,6 @@ onUnmounted(() => {
   display: flex;
   align-items: flex-start;
   max-width: 100%;
-
-  .avatar {
-    flex-shrink: 0;
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 15px;
-    font-weight: 600;
-    color: white;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    margin-right: 12px;
-
-    &.user-avatar {
-      background: #d7e6fe;
-
-      img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-      }
-    }
-
-    &.ai-avatar {
-      background: linear-gradient(135deg, #4facfe, #00f2fe);
-    }
-  }
 
   .message-info {
     flex: 1;
