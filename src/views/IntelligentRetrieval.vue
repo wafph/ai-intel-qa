@@ -105,13 +105,16 @@
                         <span class="update-date"
                           >更新日期：{{ formatUpdateDate(source.update_date_time) }}</span
                         >
-                        <!-- 修改这里：添加点击事件 -->
+                        <!-- 修改这里：添加点击事件和禁用状态 -->
                         <a
                           class="view-detail"
                           href="javascript:;"
-                          @click.prevent="handleViewPdf(source.file_id)"
+                          @click.prevent="
+                            handleViewDocument(source.file_id, source.title)
+                          "
+                          :class="{ disabled: isDownloading[source.file_id] }"
                         >
-                          查看详情 →
+                          {{ isDownloading[source.file_id] ? '加载中...' : '查看详情 →' }}
                         </a>
                       </div>
                     </div>
@@ -215,7 +218,7 @@ const pdfViewerUrl = ref('');
 const paginationStates = reactive<
   Record<string, { currentPage: number; pageSize: number }>
 >({});
-
+const isDownloading = reactive<Record<string, boolean>>({});
 // ✅ 新增：展开状态管理
 const expandedStates = reactive<Record<string, boolean>>({});
 
@@ -305,8 +308,13 @@ const shouldShowExpand = (source: SourceInfo) => {
   return content.length > 150;
 };
 
-// ✅ 修改：查看 PDF 的方法（使用 iframe）
-const handleViewPdf = async (fileId: string) => {
+const handleViewDocument = async (fileId: string, title: string) => {
+  // 防止重复点击
+  if (isDownloading[fileId]) return;
+  
+  // 设置加载状态
+  isDownloading[fileId] = true;
+  
   try {
     // 1. 先调用 POST 接口
     const postResponse = await fetch('http://1.94.244.72:11328/download', {
@@ -315,7 +323,7 @@ const handleViewPdf = async (fileId: string) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        file_ids: [fileId],
+        file_ids: [fileId]
       }),
     });
 
@@ -323,31 +331,78 @@ const handleViewPdf = async (fileId: string) => {
       throw new Error(`POST 请求失败: ${postResponse.status}`);
     }
 
-    // 2. 调用 GET 接口获取 PDF 文件
-    const pdfResponse = await fetch(`http://1.94.244.72:11328/download/${fileId}`, {
+    // 2. 调用 GET 接口获取文件
+    const fileResponse = await fetch(`http://1.94.244.72:11328/download/${fileId}`, {
       method: 'GET',
       headers: {
-        Accept: 'application/pdf',
+        'Accept': '*/*',
       },
     });
 
-    if (!pdfResponse.ok) {
-      throw new Error(`GET 请求失败: ${pdfResponse.status}`);
+    if (!fileResponse.ok) {
+      throw new Error(`GET 请求失败: ${fileResponse.status}`);
     }
 
-    // 3. 获取 PDF 文件数据
-    const pdfBlob = await pdfResponse.blob();
-
-    // 4. 创建 Blob URL
-    pdfViewerUrl.value = window.URL.createObjectURL(pdfBlob);
-    showPdfViewer.value = true;
+    // 3. 获取文件内容和类型
+    const contentType = fileResponse.headers.get('content-type') || '';
+    const fileBlob = await fileResponse.blob();
+    
+    // 4. 根据文件类型处理
+    if (isPdfFile(fileId, contentType)) {
+      // PDF 文件：显示预览弹框
+      const pdfUrl = window.URL.createObjectURL(fileBlob);
+      pdfViewerUrl.value = pdfUrl;
+      showPdfViewer.value = true;
+    } else {
+      // 其他格式：直接下载
+      downloadFile(fileBlob, title, fileId);
+    }
+    
   } catch (error) {
-    console.error('获取 PDF 失败:', error);
-    alert('获取 PDF 文件失败，请稍后重试');
+    console.error('获取文档失败:', error);
+    alert('获取文档失败，请稍后重试');
+  } finally {
+    // 清除加载状态
+    isDownloading[fileId] = false;
   }
 };
 
-// ✅ 新增：关闭 PDF 查看器
+// ✅ 新增：判断是否为 PDF 文件
+const isPdfFile = (fileName: string, contentType: string): boolean => {
+  const lowerFileName = fileName.toLowerCase();
+  return (
+    lowerFileName.endsWith('.pdf') ||
+    contentType.includes('pdf') ||
+    contentType.includes('application/pdf')
+  );
+};
+
+// ✅ 新增：下载文件
+const downloadFile = (fileBlob: Blob, fileName: string, fileId: string) => {
+  // 尝试从 fileId 中提取文件扩展名
+  const extension = extractFileExtension(fileId);
+  const fullFileName = extension ? `${fileName}.${extension}` : fileName;
+  
+  const url = window.URL.createObjectURL(fileBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fullFileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+};
+
+// ✅ 新增：从 fileId 提取文件扩展名
+const extractFileExtension = (fileId: string): string => {
+  const parts = fileId.split('.');
+  if (parts.length > 1) {
+    return parts[parts.length - 1];
+  }
+  return '';
+};
+
+// ✅ 修改：关闭 PDF 查看器
 const closePdfViewer = () => {
   if (pdfViewerUrl.value) {
     window.URL.revokeObjectURL(pdfViewerUrl.value);
@@ -355,6 +410,7 @@ const closePdfViewer = () => {
   }
   showPdfViewer.value = false;
 };
+
 // ✅ 新增：切换展开状态
 const toggleExpand = (chunkId: string) => {
   expandedStates[chunkId] = !expandedStates[chunkId];
@@ -1124,6 +1180,14 @@ onUnmounted(() => {
 .pdf-iframe {
   flex: 1;
   width: 100%;
+}
+
+.view-detail {
+  &.disabled {
+    color: #999;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
 }
 
 @keyframes slideIn {
