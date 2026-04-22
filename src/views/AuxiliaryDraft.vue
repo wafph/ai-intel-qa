@@ -457,7 +457,7 @@ onUnmounted(() => {
             width: 100%;
 
             .pad {
-              padding: 20px 40px;
+              padding: 20px 30px;
             }
 
             .thinking-process {
@@ -493,7 +493,7 @@ onUnmounted(() => {
             .answer-streaming {
               background: @white;
               border-radius: 22px;
-              padding: 20px 40px;
+              padding: 20px 30px;
               border-radius: 8px;
               animation: fadeIn 0.5s ease;
               margin-top: 8px;

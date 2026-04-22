@@ -981,7 +981,7 @@ onUpdated(() => {
             width: 100%;
 
             .pad {
-              padding:20px 40px;
+              padding: 20px 40px;
             }
 
             .thinking-process {
@@ -1035,9 +1035,10 @@ onUpdated(() => {
             .answer-streaming {
               background: @white;
               border-radius: 22px;
-              padding: 35px;
+              padding: 20px 40px;
               animation: fadeIn 0.5s ease;
-              margin-top: 8px;
+              margin-bottom: 15px;
+              line-height: 1.6;
             }
 
             .typing-container {
@@ -1132,7 +1133,7 @@ onUpdated(() => {
               border-radius: 22px;
               margin-bottom: 15px;
               font-size: 17px;
-
+              line-height: 1.6;
               :deep(code) {
                 background: #f5f5f5;
                 padding: 2px 4px;
