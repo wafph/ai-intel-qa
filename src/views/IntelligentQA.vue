@@ -103,7 +103,12 @@
                         plain
                         @click="toggleAndScrollToSources(item.id)"
                       >
-                        来源<el-icon class="el-icon--right"><ArrowRight /></el-icon>
+                        {{ sourcesVisible[item.id] ? '隐藏来源' : '查看来源' }}
+                        <el-icon class="el-icon--right">
+                          <component
+                            :is="sourcesVisible[item.id] ? ArrowUp : ArrowRight"
+                          />
+                        </el-icon>
                       </el-button>
                       <!-- 复制按钮 -->
                       <div
@@ -230,7 +235,13 @@
                       @click="toggleSourceItem(item.id, sourceIndex)"
                     >
                       <div class="title-content">
-                        <strong>{{ source.title }}</strong>
+                        <!-- ✅ 修改：给标题添加点击事件 -->
+                        <strong
+                          @click.stop="handleSourceTitleClick(source, $event)"
+                          class="source-title-clickable"
+                        >
+                          {{ source.title }}
+                        </strong>
                         <span class="source-score"
                           >匹配度:
                           {{ (parseFloat(source.score) * 100).toFixed(1) }}%</span
@@ -268,6 +279,26 @@
         </div>
       </div>
     </div>
+
+    <!-- ✅ 新增：PDF 预览弹框 -->
+    <div v-if="showPdfViewer" class="pdf-viewer-modal" @click.self="closePdfViewer">
+      <div class="pdf-viewer-container">
+        <div class="pdf-viewer-header">
+          <span>{{ currentPdfTitle }}</span>
+          <button class="close-btn" @click="closePdfViewer">×</button>
+        </div>
+        <iframe
+          v-if="pdfViewerUrl"
+          :src="pdfViewerUrl"
+          class="pdf-iframe"
+          frameborder="0"
+        ></iframe>
+        <div v-else class="loading-pdf">
+          <div class="loading-spinner"></div>
+          <p>正在加载 PDF...</p>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -275,7 +306,7 @@
 import { ref, watch, nextTick, onMounted, onUnmounted, onUpdated, reactive } from 'vue';
 import MarkdownIt from 'markdown-it';
 import { ElMessage } from 'element-plus';
-
+import { ArrowRight, ArrowUp } from '@element-plus/icons-vue';
 // 状态变量
 const displayAnswer = ref<string>('');
 const typingSpeed = 20; // 打字速度（毫秒）
@@ -289,9 +320,15 @@ const emit = defineEmits(['regenerate']);
 const sourcesVisible = ref<Record<string, boolean>>({});
 const sourceCollapsed = ref<Record<string, boolean>>({});
 
+// ✅ 新增：PDF 预览相关状态
+const showPdfViewer = ref(false);
+const pdfViewerUrl = ref('');
+const currentPdfTitle = ref('');
+
 // 存储每个消息的左边栏和右边栏的DOM引用
 const leftColumnRefs = reactive<Record<string, HTMLElement>>({});
 const rightColumnRefs = reactive<Record<string, HTMLElement>>({});
+
 // 设置左边栏引用
 const setLeftColumnRef = (el: any, messageId: string) => {
   if (el && el instanceof HTMLElement) {
@@ -304,6 +341,7 @@ const setRightColumnRef = (el: any, messageId: string) => {
     rightColumnRefs[messageId] = el;
   }
 };
+
 // 获取右边栏样式
 const getRightColumnStyle = (messageId: string) => {
   const leftColumn = leftColumnRefs[messageId];
@@ -411,6 +449,110 @@ const copySource = async (source: any) => {
   } catch (err) {
     console.error('复制失败:', err);
   }
+};
+
+// ✅ 新增：处理来源标题点击
+const handleSourceTitleClick = async (source: any, event: Event) => {
+  event.stopPropagation(); // 阻止事件冒泡，避免触发父元素的折叠/展开
+
+  try {
+    const fileId = source.file_id || source.id; // 根据实际字段调整
+    if (!fileId) {
+      console.error('未找到文件 ID');
+      return;
+    }
+
+    // 1. 先调用 POST 接口
+    const postResponse = await fetch('http://1.94.244.72:11328/download', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        file_ids: [fileId],
+      }),
+    });
+
+    if (!postResponse.ok) {
+      throw new Error(`POST 请求失败: ${postResponse.status}`);
+    }
+
+    // 2. 调用 GET 接口获取文件
+    const fileResponse = await fetch(`http://1.94.244.72:11328/download/${fileId}`, {
+      method: 'GET',
+      headers: {
+        Accept: '*/*',
+      },
+    });
+
+    if (!fileResponse.ok) {
+      throw new Error(`GET 请求失败: ${fileResponse.status}`);
+    }
+
+    // 3. 获取文件内容和类型
+    const contentType = fileResponse.headers.get('content-type') || '';
+    const fileBlob = await fileResponse.blob();
+
+    // 4. 根据文件类型处理
+    if (isPdfFile(fileId, contentType)) {
+      // PDF 文件：显示预览弹框
+      const pdfUrl = window.URL.createObjectURL(fileBlob);
+      pdfViewerUrl.value = pdfUrl;
+      currentPdfTitle.value = source.title || 'PDF 预览';
+      showPdfViewer.value = true;
+    } else {
+      // 其他格式：直接下载
+      downloadFile(fileBlob, source.title || 'document', fileId);
+    }
+  } catch (error) {
+    console.error('获取文档失败:', error);
+    ElMessage.error('获取文档失败，请稍后重试');
+  }
+};
+
+// ✅ 新增：判断是否为 PDF 文件
+const isPdfFile = (fileName: string, contentType: string): boolean => {
+  const lowerFileName = fileName.toLowerCase();
+  return (
+    lowerFileName.endsWith('.pdf') ||
+    contentType.includes('pdf') ||
+    contentType.includes('application/pdf')
+  );
+};
+
+// ✅ 新增：下载文件
+const downloadFile = (fileBlob: Blob, fileName: string, fileId: string) => {
+  // 尝试从 fileId 中提取文件扩展名
+  const extension = extractFileExtension(fileId);
+  const fullFileName = extension ? `${fileName}.${extension}` : fileName;
+
+  const url = window.URL.createObjectURL(fileBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fullFileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+};
+
+// ✅ 新增：从 fileId 提取文件扩展名
+const extractFileExtension = (fileId: string): string => {
+  const parts = fileId.split('.');
+  if (parts.length > 1) {
+    return parts[parts.length - 1];
+  }
+  return '';
+};
+
+// ✅ 新增：关闭 PDF 查看器
+const closePdfViewer = () => {
+  if (pdfViewerUrl.value) {
+    window.URL.revokeObjectURL(pdfViewerUrl.value);
+    pdfViewerUrl.value = '';
+  }
+  showPdfViewer.value = false;
+  currentPdfTitle.value = '';
 };
 
 // 点击来源按钮时显示参考来源面板
@@ -1230,6 +1372,103 @@ onUpdated(() => {
   }
 }
 
+// ✅ 新增：PDF 预览弹框样式
+.pdf-viewer-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+}
+
+.pdf-viewer-container {
+  width: 90%;
+  height: 90%;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.pdf-viewer-header {
+  padding: 16px 20px;
+  background: #f5f5f5;
+  border-bottom: 1px solid #e8e8e8;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  color: #333;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0 8px;
+  transition: color 0.2s;
+
+  &:hover {
+    color: #333;
+  }
+}
+
+.pdf-iframe {
+  flex: 1;
+  width: 100%;
+  border: none;
+}
+
+.loading-pdf {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+
+  .loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+  }
+
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+}
+
+// ✅ 新增：可点击的来源标题样式
+.source-title-clickable {
+  cursor: pointer;
+  color: #409eff;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  transition: text-decoration-color 0.3s ease;
+
+  &:hover {
+    text-decoration-color: #409eff;
+  }
+}
+
 .vote-container {
   display: inline-flex;
   align-items: center;
@@ -1284,7 +1523,7 @@ onUpdated(() => {
     left: 50%;
     transform: translateX(-50%);
     background-color: white;
-    color: blacck;
+    color: black;
     font-size: 12px;
     padding: 4px 8px;
     border-radius: 4px;

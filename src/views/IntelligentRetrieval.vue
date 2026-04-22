@@ -84,7 +84,13 @@
                       :key="source.chunk_id || idx"
                       class="search-result-item"
                     >
-                      <h3 class="source-title">{{ source.subtitle }}</h3>
+                      <h3 class="source-title">
+                        {{ source.subtitle
+                        }}<el-button type="primary" plain round class="source-score"
+                          >匹配度:
+                          {{ (parseFloat(source.score) * 100).toFixed(1) }}%</el-button
+                        >
+                      </h3>
                       <div class="result-content-wrapper">
                         <div
                           class="result-content"
@@ -311,10 +317,10 @@ const shouldShowExpand = (source: SourceInfo) => {
 const handleViewDocument = async (fileId: string, title: string) => {
   // 防止重复点击
   if (isDownloading[fileId]) return;
-  
+
   // 设置加载状态
   isDownloading[fileId] = true;
-  
+
   try {
     // 1. 先调用 POST 接口
     const postResponse = await fetch('http://1.94.244.72:11328/download', {
@@ -323,7 +329,7 @@ const handleViewDocument = async (fileId: string, title: string) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        file_ids: [fileId]
+        file_ids: [fileId],
       }),
     });
 
@@ -335,7 +341,7 @@ const handleViewDocument = async (fileId: string, title: string) => {
     const fileResponse = await fetch(`http://1.94.244.72:11328/download/${fileId}`, {
       method: 'GET',
       headers: {
-        'Accept': '*/*',
+        Accept: '*/*',
       },
     });
 
@@ -346,7 +352,7 @@ const handleViewDocument = async (fileId: string, title: string) => {
     // 3. 获取文件内容和类型
     const contentType = fileResponse.headers.get('content-type') || '';
     const fileBlob = await fileResponse.blob();
-    
+
     // 4. 根据文件类型处理
     if (isPdfFile(fileId, contentType)) {
       // PDF 文件：显示预览弹框
@@ -357,7 +363,6 @@ const handleViewDocument = async (fileId: string, title: string) => {
       // 其他格式：直接下载
       downloadFile(fileBlob, title, fileId);
     }
-    
   } catch (error) {
     console.error('获取文档失败:', error);
     alert('获取文档失败，请稍后重试');
@@ -382,7 +387,7 @@ const downloadFile = (fileBlob: Blob, fileName: string, fileId: string) => {
   // 尝试从 fileId 中提取文件扩展名
   const extension = extractFileExtension(fileId);
   const fullFileName = extension ? `${fileName}.${extension}` : fileName;
-  
+
   const url = window.URL.createObjectURL(fileBlob);
   const a = document.createElement('a');
   a.href = url;
@@ -958,6 +963,11 @@ onUnmounted(() => {
 .search-result-item {
   padding: 20px;
   border-bottom: 1px solid #f0f0f0;
+
+  .source-title {
+    display: flex;
+    justify-content: space-between;
+  }
 
   &:last-child {
     border-bottom: none;
