@@ -24,8 +24,8 @@ export interface ChatSession {
   messages: ChatMessage[];
   isCollected?: boolean;
   menuType: string;
+  conversationUuid?: string; // 新增：用于后端API的会话UUID
 }
-
 
 export interface HistoryItem {
   id: string;
@@ -37,20 +37,20 @@ export interface HistoryItem {
   menuType: string;
 }
 export interface StreamChunk {
-  event: string
+  event: string;
   data: {
-    text?: string
-    reasoning_content?: string
-    [key: string]: any
-  }
+    text?: string;
+    reasoning_content?: string;
+    [key: string]: any;
+  };
 }
 
 export interface SourceInfo {
   file_id: string;
   chunk_id: string;
-  title: string;        // 文件标题
-  content: string;      // 切片内容
-  subtitle: string;     // 子标题
+  title: string; // 文件标题
+  content: string; // 切片内容
+  subtitle: string; // 子标题
   update_date_time: string; // 更新时间
   tags: string;
   repo_id: string;

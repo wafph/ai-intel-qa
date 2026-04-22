@@ -106,6 +106,7 @@ interface StreamChunk {
 // 状态管理
 const activeTab = ref<string>('智能问答');
 const activeChatId = ref<string>('');
+const currentConversationUuid = ref<string>('');
 
 // 流式相关状态
 const isStreaming = ref<boolean>(false);
@@ -119,13 +120,14 @@ const currentChatData = computed(() => {
   if (!activeChatId.value) return null;
   return chatStore.getChatSession(activeChatId.value) || null;
 });
+
 // 判断是否显示完整布局
 const showFullLayout = computed(() => {
-  // 这些页面不显示完整布局
   const excludeRoutes = ['/feedback', '/my-collections'];
   return !excludeRoutes.includes(route.path);
 });
-// 过滤后的历史记录（只显示当前菜单的历史记录）
+
+// 过滤后的历史记录
 const filteredHistory = computed(() => {
   return chatStore.historyList.filter((item: any) => item.menuType === activeTab.value);
 });
@@ -158,19 +160,25 @@ const inputPlaceholder = computed(() => {
   }
 });
 
+// ✅ 生成UUID的函数
+const generateUUID = (): string => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
 // 方法
 const handleTabChange = (tabName: string) => {
-  // 1. 中止当前正在进行的请求
   if (isStreaming.value) {
     stopStream();
   }
 
-  // 2. 重置流式状态
   resetStreamState();
   activeTab.value = tabName;
   chatStore.setCurrentActiveTab(tabName);
 
-  // 根据标签导航到对应的路由
   const tabToRouteMap: Record<string, string> = {
     智能问答: '/intelligent-qa',
     智能检索: '/intelligent-retrieval',
@@ -187,21 +195,31 @@ const handleTabChange = (tabName: string) => {
     (item: any) => item.menuType === tabName,
   );
   if (historyForTab.length > 0) {
-    // 检查当前选中的对话是否属于当前菜单
     const currentChatBelongsToTab = historyForTab.some(
       (item: any) => item.id === activeChatId.value,
     );
 
     if (!currentChatBelongsToTab) {
       activeChatId.value = historyForTab[0].id;
+
+      // ✅ 获取选中对话的UUID
+      const chat = chatStore.getChatSession(historyForTab[0].id);
+      if (chat && (chat as any).conversationUuid) {
+        currentConversationUuid.value = (chat as any).conversationUuid;
+      }
     }
   } else {
     activeChatId.value = '';
   }
 };
+
 const handleNewChat = () => {
   const newChatId = Date.now().toString();
   activeChatId.value = newChatId;
+
+  // 为新对话生成新的UUID
+  currentConversationUuid.value = generateUUID();
+
   const chatTitle = activeTab.value;
 
   const newSession: ChatSession = {
@@ -211,6 +229,7 @@ const handleNewChat = () => {
     type: activeTab.value as any,
     messages: [],
     menuType: activeTab.value,
+    conversationUuid: currentConversationUuid.value, // ✅ 保存UUID到对话数据
   };
 
   const newHistory: HistoryItem = {
@@ -227,12 +246,27 @@ const handleNewChat = () => {
 
   scrollToBottom();
 };
+
 const handleSelectChat = (chatId: string) => {
   if (isStreaming.value) {
     stopStream();
   }
 
   activeChatId.value = chatId;
+  const chat = chatStore.getChatSession(chatId);
+  if (chat && (chat as any).conversationUuid) {
+    currentConversationUuid.value = (chat as any).conversationUuid;
+  } else {
+    // 如果是旧数据没有UUID，则生成一个新的
+    currentConversationUuid.value = generateUUID();
+
+    // 更新旧数据的UUID
+    if (chat) {
+      (chat as any).conversationUuid = currentConversationUuid.value;
+      chatStore.saveToLocalStorage();
+    }
+  }
+
   resetStreamState();
   scrollToBottom();
 };
@@ -242,6 +276,10 @@ const handleDeleteChat = (chatId: string) => {
   if (activeChatId.value === chatId) {
     if (chatStore.historyList.length > 0) {
       activeChatId.value = chatStore.historyList[0].id;
+      const chat = chatStore.getChatSession(chatStore.historyList[0].id);
+      if (chat && (chat as any).conversationUuid) {
+        currentConversationUuid.value = (chat as any).conversationUuid;
+      }
     } else {
       activeChatId.value = '';
     }
@@ -249,7 +287,6 @@ const handleDeleteChat = (chatId: string) => {
 };
 
 const handleClearHistory = () => {
-  // 清空所有历史记录，不区分菜单类型
   chatStore.historyList = [];
   chatStore.chatSessions = {};
   chatStore.saveToLocalStorage();
@@ -270,6 +307,11 @@ const handleSendMessage = async (content: string) => {
 
   const chat = chatStore.getChatSession(activeChatId.value!);
   if (!chat) return;
+  if (!currentConversationUuid.value) {
+    currentConversationUuid.value = generateUUID();
+    // 更新对话数据中的UUID
+    (chat as any).conversationUuid = currentConversationUuid.value;
+  }
 
   // 添加用户消息
   const userMessage: ChatMessage = {
@@ -299,20 +341,18 @@ const handleSendMessage = async (content: string) => {
     id: aiMessageId,
     role: 'assistant',
     content: '',
-    reasoning: '', // 初始化 reasoning 字段为空字符串
+    reasoning: '',
     timestamp: new Date(),
     streaming: true,
   };
   chat.messages.push(aiMessage);
   currentStreamingMessageId = aiMessageId;
 
-  // 重置流式状态
   resetStreamState();
 
   // 开始流式输出
   await startStream(content, aiMessageId);
 
-  // 保存历史
   chatStore.saveToLocalStorage();
   scrollToBottom();
 };
@@ -337,23 +377,32 @@ const startStream = async (queryText: string, messageId: string) => {
       throw new Error('未找到认证token，请先登录');
     }
 
-    // 根据当前选项卡选择不同的API接口
-    const urlqa =
-      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/60a15b33-e781-4d5d-88d3-5ed90054d9b0/conversations/cccbd7f6-cdbd-44a8-9458-8d8767683249?version=1776836351895';
-    const urlDraf =
-      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/agents/fe7b5350-c3ee-41d4-b5d5-ecc6c26d33b3/conversations/48c6d6f4-1c9b-4d5a-9620-9891f25f9afb?version=1776825707705';
-    const urlreview =
-      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/32dd3ef3-2bfb-4ad7-a448-811ddd37924a/conversations/57859d42-70e7-4998-9998-184832f8d6fb?version=1776051927454';
-    const urlSearch =
-      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/c206107e-ec31-47d8-9aaf-5c1262931168/conversations/9f57de87-98d4-432c-9e14-5e338fbc830b?version=1776669038280';
-    var apiUrl =
-      activeTab.value === '智能问答'
-        ? urlqa
-        : activeTab.value === '辅助起草'
-          ? urlDraf
-          : activeTab.value === '合规审核'
-            ? urlreview
-            : urlSearch;
+    // 使用动态UUID替换所有API URL中的UUID
+    const baseUrls = {
+      qa: '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/60a15b33-e781-4d5d-88d3-5ed90054d9b0/conversations/',
+      draf: '/api1/v1/1725c43e3fa54828a078fce60f5a3773/agents/fe7b5350-c3ee-41d4-b5d5-ecc6c26d33b3/conversations/',
+      review:
+        '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/32dd3ef3-2bfb-4ad7-a448-811ddd37924a/conversations/',
+      search:
+        '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/c206107e-ec31-47d8-9aaf-5c1262931168/conversations/',
+    };
+
+    const version1 = '?version=1776836351895';
+    const version2 = '?version=1776825707705';
+    const version3 = '?version=1776051927454';
+    const version4 = '?version=1776669038280';
+
+    // 根据当前选项卡选择不同的API接口，并注入动态UUID
+    let apiUrl = '';
+    if (activeTab.value === '智能问答') {
+      apiUrl = baseUrls.qa + currentConversationUuid.value + version1;
+    } else if (activeTab.value === '辅助起草') {
+      apiUrl = baseUrls.draf + currentConversationUuid.value + version2;
+    } else if (activeTab.value === '合规审核') {
+      apiUrl = baseUrls.review + currentConversationUuid.value + version3;
+    } else {
+      apiUrl = baseUrls.search + currentConversationUuid.value + version4;
+    }
 
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -576,6 +625,7 @@ const stopStream = () => {
   resetStreamState();
   chatStore.saveToLocalStorage();
 };
+
 // 重置流式状态
 const resetStreamState = () => {
   currentReasoning.value = '';
