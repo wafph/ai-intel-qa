@@ -493,6 +493,7 @@ onUnmounted(() => {
             .answer-streaming {
               background: @white;
               border-radius: 22px;
+              line-height: 1.6;
               padding: 20px 30px;
               border-radius: 8px;
               animation: fadeIn 0.5s ease;

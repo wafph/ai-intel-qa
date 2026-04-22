@@ -339,7 +339,7 @@ const startStream = async (queryText: string, messageId: string) => {
 
     // 根据当前选项卡选择不同的API接口
     const urlqa =
-      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/60a15b33-e781-4d5d-88d3-5ed90054d9b0/conversations/038c2b65-c535-4b6c-9bda-4d00149e5040?version=1776773091779';
+      '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/60a15b33-e781-4d5d-88d3-5ed90054d9b0/conversations/cccbd7f6-cdbd-44a8-9458-8d8767683249?version=1776836351895';
     const urlDraf =
       '/api1/v1/1725c43e3fa54828a078fce60f5a3773/agents/fe7b5350-c3ee-41d4-b5d5-ecc6c26d33b3/conversations/48c6d6f4-1c9b-4d5a-9620-9891f25f9afb?version=1776825707705';
     const urlreview =
