@@ -468,7 +468,7 @@ onUnmounted(() => {
             width: 100%;
 
             .pad {
-              padding: 12px 35px;
+              padding: 20px 40px;
             }
 
             .thinking-process {
@@ -515,8 +515,10 @@ onUnmounted(() => {
             }
 
             .answer-streaming {
+              background: @white;
+              border-radius: 22px;
+              padding: 20px 40px;
               border-radius: 8px;
-              padding: 20px;
               animation: fadeIn 0.5s ease;
               margin-top: 8px;
             }
@@ -529,7 +531,7 @@ onUnmounted(() => {
             .typing-text {
               display: inline;
               line-height: 1.6;
-              font-size: 14px;
+              font-size: 17px;
               color: #333;
 
               :deep(p) {
@@ -615,10 +617,6 @@ onUnmounted(() => {
               line-height: 1.6;
               word-break: break-word;
               margin-bottom: 15px;
-
-              :deep(p) {
-                margin: 8px 0;
-              }
 
               :deep(code) {
                 background: #f5f5f5;

@@ -981,7 +981,7 @@ onUpdated(() => {
             width: 100%;
 
             .pad {
-              padding: 35px;
+              padding:20px 40px;
             }
 
             .thinking-process {
@@ -1132,9 +1132,6 @@ onUpdated(() => {
               border-radius: 22px;
               margin-bottom: 15px;
               font-size: 17px;
-              :deep(p) {
-                margin: 8px 0;
-              }
 
               :deep(code) {
                 background: #f5f5f5;

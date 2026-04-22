@@ -594,10 +594,6 @@ onUnmounted(() => {
               line-height: 1.6;
               word-break: break-word;
 
-              :deep(p) {
-                margin: 8px 0;
-              }
-
               :deep(code) {
                 background: #f5f5f5;
                 padding: 2px 4px;
