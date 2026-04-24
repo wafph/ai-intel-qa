@@ -145,6 +145,7 @@ const updateActiveTabFromRoute = () => {
   if (matchedTab && activeTab.value !== matchedTab) {
     activeTab.value = matchedTab;
     chatStore.setCurrentActiveTab(matchedTab);
+    resetCurrentChat();
   }
 };
 
@@ -169,13 +170,23 @@ const generateUUID = (): string => {
   });
 };
 
-// 方法
+// 重置当前对话（核心方法）
+const resetCurrentChat = () => {
+  activeChatId.value = '';
+  currentConversationUuid.value = '';
+  currentReasoning.value = '';
+  currentAnswer.value = '';
+  currentStreamingMessageId = null;
+};
+
 const handleTabChange = (tabName: string) => {
   if (isStreaming.value) {
     stopStream();
   }
 
   resetStreamState();
+  resetCurrentChat();
+
   activeTab.value = tabName;
   chatStore.setCurrentActiveTab(tabName);
 
@@ -216,8 +227,6 @@ const handleTabChange = (tabName: string) => {
 const handleNewChat = () => {
   const newChatId = Date.now().toString();
   activeChatId.value = newChatId;
-
-  // 为新对话生成新的UUID
   currentConversationUuid.value = generateUUID();
 
   const chatTitle = activeTab.value;
@@ -229,7 +238,7 @@ const handleNewChat = () => {
     type: activeTab.value as any,
     messages: [],
     menuType: activeTab.value,
-    conversationUuid: currentConversationUuid.value, // ✅ 保存UUID到对话数据
+    conversationUuid: currentConversationUuid.value,
   };
 
   const newHistory: HistoryItem = {
@@ -243,7 +252,6 @@ const handleNewChat = () => {
 
   chatStore.addChatSession(newSession);
   chatStore.addHistoryItem(newHistory);
-
   scrollToBottom();
 };
 
@@ -254,13 +262,11 @@ const handleSelectChat = (chatId: string) => {
 
   activeChatId.value = chatId;
   const chat = chatStore.getChatSession(chatId);
+
   if (chat && (chat as any).conversationUuid) {
     currentConversationUuid.value = (chat as any).conversationUuid;
   } else {
-    // 如果是旧数据没有UUID，则生成一个新的
     currentConversationUuid.value = generateUUID();
-
-    // 更新旧数据的UUID
     if (chat) {
       (chat as any).conversationUuid = currentConversationUuid.value;
       chatStore.saveToLocalStorage();
@@ -655,9 +661,7 @@ watch(
 // 生命周期
 onMounted(() => {
   chatStore.loadFromLocalStorage();
-  if (chatStore.historyList.length > 0) {
-    activeChatId.value = chatStore.historyList[0].id;
-  }
+
   updateActiveTabFromRoute();
 });
 

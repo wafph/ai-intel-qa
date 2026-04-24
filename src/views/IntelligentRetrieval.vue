@@ -1,7 +1,7 @@
 <template>
   <div class="intelligent-qa">
     <!-- 头部区域 -->
-    <div class="qa-header" v-if="!loading && chatData?.messages?.length === 0">
+    <div class="qa-header"  v-if="!loading && (!chatData?.messages || chatData.messages.length === 0)">
       <h1>我是智能检索助手，很高兴见到你</h1>
       <p>你可以使用自然语言提问，我来精准回答</p>
     </div>

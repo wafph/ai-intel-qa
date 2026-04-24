@@ -1,7 +1,7 @@
 <template>
   <div class="intelligent-qa">
     <!-- 头部区域 -->
-    <div class="qa-header" v-if="!loading && chatData?.messages?.length === 0">
+    <div class="qa-header"  v-if="!loading && (!chatData?.messages || chatData.messages.length === 0)">
       <h1>智能合规审核，守护业务合规底线</h1>
       <p>以科技赋能合规管理，自动校验，高效守护业务规范</p>
     </div>
