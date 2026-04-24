@@ -1,15 +1,20 @@
 <template>
-    <div class="history-panel">
+  <div class="history-panel" :class="{ 'is-collapsed': collapsed }">
     <!-- 顶部区域 -->
+    <div class="logo" v-show="!collapsed">
+      <img src="/images/logos.png" alt="Logo" />
+      <span>AI+规章制度智能体</span>
+    </div>
+
     <div class="panel-header">
-      <button class="new-chat-btn" @click="handleNewChat">
+      <button class="new-chat-btn" v-show="!collapsed" @click="handleNewChat">
         <img src="/images/chats.png" alt="" />
         <span class="btn-text">新聊天</span>
       </button>
     </div>
 
     <!-- 历史列表 -->
-    <div class="history-list">
+    <div class="history-list" v-show="!collapsed">
       <div class="list-header">
         <h3>历史对话</h3>
         <button
@@ -65,9 +70,7 @@
               class="item-menu-container"
               @click.stop
             >
-              <button class="menu-toggle-btn" @click="toggleMenu(history.id)">
-                ⋮
-              </button>
+              <button class="menu-toggle-btn" @click="toggleMenu(history.id)">⋮</button>
 
               <div v-if="visibleMenuId === history.id" class="dropdown-menu">
                 <button
@@ -77,7 +80,7 @@
                 >
                   <span class="menu-icon">★</span>
                   <span class="menu-text">
-                    {{ history.isCollected ? "取消收藏" : "收藏" }}
+                    {{ history.isCollected ? '取消收藏' : '收藏' }}
                   </span>
                 </button>
 
@@ -93,7 +96,7 @@
     </div>
 
     <!-- 右下角个人中心 -->
-    <div class="user-center-bottom">
+    <div class="user-center-bottom" v-show="!collapsed">
       <div
         class="user-info-container"
         @click="toggleUserMenu"
@@ -105,7 +108,7 @@
           class="user-avatar"
         />
         <div class="user-details">
-          <span class="user-name">{{ user.name || "用户" }}</span>
+          <span class="user-name">{{ user.name || '用户' }}</span>
         </div>
         <i class="arrow-icon" :class="{ rotated: showUserMenu }">▼</i>
       </div>
@@ -134,6 +137,7 @@ interface Props {
   historyList: any[];
   activeChatId: string | null;
   user: any;
+  collapsed?: boolean; // 新增折叠状态
 }
 
 const props = defineProps<Props>();
@@ -144,6 +148,7 @@ const emit = defineEmits<{
   'clear-history': [];
   'toggle-favorite': [chatId: string];
   'switch-tab': [tabName: string];
+  'toggle-collapse': [];
 }>();
 
 const router = useRouter();
@@ -156,10 +161,6 @@ const filteredHistory = computed(() => {
   return props.historyList || [];
 });
 
-/**
- * ✅ 修复后的日期格式化函数
- * 通过“日期归零法”严格比较年月日，避免跨日误判
- */
 const formatRelativeTime = (timestamp: number | string) => {
   if (typeof timestamp === 'string') {
     return timestamp;
@@ -352,6 +353,38 @@ onUnmounted(() => {
   overflow: hidden;
   position: relative;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+  transition: width 0.3s ease; /* 添加过渡动画 */
+
+  .logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: black;
+    font-size: 20px;
+    font-weight: 600;
+    text-decoration: none;
+    height: 70px;
+    box-shadow: 0 2px 8px rgba(24, 144, 255, 0.2);
+    z-index: 100;
+
+    span {
+      margin-right: 20px;
+    }
+  }
+
+  .logo img {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    object-fit: contain;
+    background: white;
+    padding: 4px;
+  }
+
+  &.is-collapsed {
+    width: 0; /* 折叠后的宽度 */
+  }
 }
 
 .panel-header {
@@ -475,7 +508,6 @@ onUnmounted(() => {
   color: #8c8c8c;
   font-weight: 500;
   background: #fafafa;
-  // border-left: 3px solid #1890ff;
   margin: 8px 0 4px 0;
   position: sticky;
   top: 60px;
@@ -493,7 +525,7 @@ onUnmounted(() => {
   transition: all 0.2s;
   border-left: 3px solid transparent;
   position: relative;
-  min-height: 60px; // 调整高度，因为不显示预览了
+  min-height: 60px;
 }
 
 .history-item:hover {
@@ -516,7 +548,7 @@ onUnmounted(() => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px; // 调整间距
+  gap: 6px;
 }
 
 .item-title {
@@ -526,7 +558,7 @@ onUnmounted(() => {
   line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap; /* 关键：强制不换行 */
+  white-space: nowrap;
   display: block;
 }
 
@@ -537,7 +569,6 @@ onUnmounted(() => {
   transition: opacity 0.2s;
 }
 
-// 移除item-preview相关样式
 .item-meta {
   display: flex;
   justify-content: space-between;

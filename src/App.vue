@@ -1,25 +1,32 @@
 <template>
   <template v-if="showFullLayout">
     <div class="app-container">
-      <!-- 顶部菜单 -->
-      <HeaderMenu :active-tab="activeTab" @tab-change="handleTabChange" />
+      <!-- 左侧侧边栏 -->
+      <HistoryPanel
+        :history-list="filteredHistory"
+        :active-chat-id="activeChatId"
+        :user="userStore.user"
+        :collapsed="sidebarCollapsed"
+        @select-chat="handleSelectChat"
+        @new-chat="handleNewChat"
+        @delete-chat="handleDeleteChat"
+        @clear-history="handleClearHistory"
+        @toggle-favorite="handleToggleFavorite"
+      />
 
-      <div class="main-layout">
-        <!-- 左侧历史对话面板 -->
-        <HistoryPanel
-          :history-list="filteredHistory"
-          :active-chat-id="activeChatId"
-          :user="userStore.user"
-          @select-chat="handleSelectChat"
-          @new-chat="handleNewChat"
-          @delete-chat="handleDeleteChat"
-          @clear-history="handleClearHistory"
-          @toggle-favorite="handleToggleFavorite"
+      <!-- 右侧主内容区 -->
+      <div class="main-content">
+        <!-- 顶部菜单 -->
+        <HeaderMenu 
+          :active-tab="activeTab" 
+          :collapsed="sidebarCollapsed"
+          @tab-change="handleTabChange" 
+          @toggle-sidebar="toggleSidebar"
         />
 
-        <!-- 右侧主内容区域 -->
+        <!-- 内容区域 -->
         <div class="content-area">
-          <!-- 路由视图区域（替换原有的动态组件区域） -->
+          <!-- 路由视图区域 -->
           <div class="dynamic-content">
             <router-view
               v-if="activeTab"
@@ -81,6 +88,9 @@ const chatStore = useChatStore();
 const userStore = useUserStore();
 const router = useRouter();
 const route = useRoute();
+
+// 侧边栏折叠状态
+const sidebarCollapsed = ref(false);
 
 // 定义类型接口
 interface StreamChunk {
@@ -177,6 +187,11 @@ const resetCurrentChat = () => {
   currentReasoning.value = '';
   currentAnswer.value = '';
   currentStreamingMessageId = null;
+};
+
+// 切换侧边栏折叠状态
+const toggleSidebar = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value;
 };
 
 const handleTabChange = (tabName: string) => {
@@ -385,12 +400,12 @@ const startStream = async (queryText: string, messageId: string) => {
 
     // 使用动态UUID替换所有API URL中的UUID
     const baseUrls = {
-      qa: '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/60a15b33-e781-4d5d-88d3-5ed90054d9b0/conversations/',
-      draf: '/api1/v1/1725c43e3fa54828a078fce60f5a3773/agents/fe7b5350-c3ee-41d4-b5d5-ecc6c26d33b3/conversations/',
+      qa: '/v1/1725c43e3fa54828a078fce60f5a3773/workflows/60a15b33-e781-4d5d-88d3-5ed90054d9b0/conversations/',
+      draf: '/v1/1725c43e3fa54828a078fce60f5a3773/agents/fe7b5350-c3ee-41d4-b5d5-ecc6c26d33b3/conversations/',
       review:
-        '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/32dd3ef3-2bfb-4ad7-a448-811ddd37924a/conversations/',
+        '/v1/1725c43e3fa54828a078fce60f5a3773/workflows/32dd3ef3-2bfb-4ad7-a448-811ddd37924a/conversations/',
       search:
-        '/api1/v1/1725c43e3fa54828a078fce60f5a3773/workflows/c206107e-ec31-47d8-9aaf-5c1262931168/conversations/',
+        '/v1/1725c43e3fa54828a078fce60f5a3773/workflows/c206107e-ec31-47d8-9aaf-5c1262931168/conversations/',
     };
 
     const version1 = '?version=1776836351895';
@@ -677,18 +692,16 @@ onUnmounted(() => {
   width: 100vw;
   height: 100vh;
   display: flex;
-  flex-direction: column;
-  background: #ffffff;
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    sans-serif;
   overflow: hidden;
+  background: #ffffff;
 }
 
-.main-layout {
-  display: flex;
+.main-content {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
 }
 
 .content-area {
@@ -696,7 +709,6 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
   position: relative;
 }
 

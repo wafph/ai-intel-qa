@@ -3,7 +3,7 @@ import vue from '@vitejs/plugin-vue';
 import AutoImport from 'unplugin-auto-import/vite';
 import Components from 'unplugin-vue-components/vite';
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers';
-import path from 'path'
+import path from 'path';
 export default defineConfig({
   plugins: [
     vue(),
@@ -16,8 +16,8 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src')
-    }
+      '@': path.resolve(__dirname, './src'),
+    },
   },
   css: {
     preprocessorOptions: {
@@ -33,17 +33,21 @@ export default defineConfig({
     host: '0.0.0.0',
     open: true,
     proxy: {
-      '/api1': {
+      '/v1': {
         target: 'https://837c7c7abe7f41bf93569b82d7140a7a.studio.agentarts.cn-north-4.huaweiapaas.com', // 软通后端服务器地址
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/api1/, ''), // 移除前缀
       },
       '/api2': {
         target: 'http://1.94.244.72:8000', //token获取服务器地址
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/api2/, ''), // 移除前缀
+      },
+       '/api': {
+        target: 'http://1.94.244.72:8001', // 历史记录地址
+        changeOrigin: true,
+        secure: false,
       },
     },
   },

@@ -1,10 +1,15 @@
 <template>
   <header class="header-menu">
+    <!-- 折叠按钮 -->
     <div class="header-left">
-      <div class="logo">
-        <img src="/images/logos.png" alt="Logo" />
-        <span>AI+规章制度智能体</span>
-      </div>
+      <button class="collapse-btn" @click="$emit('toggle-sidebar')">
+        <el-icon v-if="collapsed">
+          <Expand />
+        </el-icon>
+        <el-icon v-else>
+          <Fold />
+        </el-icon>
+      </button>
     </div>
 
     <nav class="nav-tabs">
@@ -22,9 +27,11 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { Expand, Fold } from '@element-plus/icons-vue';
 
 interface Props {
   activeTab: string;
+  collapsed?: boolean; // 新增折叠状态
 }
 
 interface TabItem {
@@ -53,8 +60,8 @@ const handleTabClick = (tabName: string) => {
 const props = defineProps<Props>();
 const emit = defineEmits<{
   'tab-change': [tabName: string];
+  'toggle-sidebar': []; // 新增折叠事件
 }>();
-
 
 const tabs = computed<TabItem[]>(() => {
   const allTabs = [
@@ -62,9 +69,8 @@ const tabs = computed<TabItem[]>(() => {
     { value: '智能检索', label: '智能检索' },
     { value: '辅助起草', label: '辅助起草' },
     { value: '合规审核', label: '合规审核' },
-
   ];
-  
+
   return allTabs;
 });
 </script>
@@ -78,6 +84,7 @@ const tabs = computed<TabItem[]>(() => {
   box-shadow: 0 2px 8px rgba(24, 144, 255, 0.2);
   z-index: 100;
   position: relative;
+  background: #fff; /* 添加背景色 */
 }
 
 .header-left {
@@ -86,27 +93,23 @@ const tabs = computed<TabItem[]>(() => {
   margin-right: 40px;
 }
 
-.logo {
+.collapse-btn {
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 12px;
-  color: black;
-  font-size: 20px;
-  font-weight: 600;
-  text-decoration: none;
-
-  span {
-    margin-right: 20px;
-  }
+  justify-content: center;
+  color: #606266;
+  font-size: 18px;
+  transition: all 0.3s;
 }
 
-.logo img {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  object-fit: contain;
-  background: white;
-  padding: 4px;
+.collapse-btn:hover {
+  background: #f5f7fa;
+  border-radius: 4px;
 }
 
 .nav-tabs {
@@ -117,7 +120,6 @@ const tabs = computed<TabItem[]>(() => {
 }
 
 .tab-btn {
-  /* width: 15%; */
   width: 75px;
   margin-right: 40px;
   height: 40px;
