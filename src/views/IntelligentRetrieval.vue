@@ -1,7 +1,10 @@
 <template>
   <div class="intelligent-qa">
     <!-- 头部区域 -->
-    <div class="qa-header"  v-if="!loading && (!chatData?.messages || chatData.messages.length === 0)">
+    <div
+      class="qa-header"
+      v-if="!loading && (!chatData?.messages || chatData.messages.length === 0)"
+    >
       <h1>我是智能检索助手，很高兴见到你</h1>
       <p>你可以使用自然语言提问，我来精准回答</p>
     </div>
@@ -98,30 +101,35 @@
                         >
                           {{ getDisplayContent(source) }}
                         </div>
-                        <span
-                          v-if="shouldShowExpand(source)"
-                          class="expand-toggle"
-                          @click="toggleExpand(source.chunk_id)"
-                        >
-                          {{ expandedStates[source.chunk_id] ? '收起 ↑' : '展开 ↓' }}
-                        </span>
-                      </div>
-                      <div class="result-meta">
-                        <span class="source-title">来源：{{ source.title }}</span>
-                        <span class="update-date"
-                          >更新日期：{{ formatUpdateDate(source.update_date_time) }}</span
-                        >
-                        <!-- 修改这里：添加点击事件和禁用状态 -->
-                        <a
-                          class="view-detail"
-                          href="javascript:;"
-                          @click.prevent="
-                            handleViewDocument(source.file_id, source.title)
-                          "
-                          :class="{ disabled: isDownloading[source.file_id] }"
-                        >
-                          {{ isDownloading[source.file_id] ? '加载中...' : '查看详情 →' }}
-                        </a>
+
+                        <div class="result-meta">
+                          <span
+                            v-if="shouldShowExpand(source)"
+                            class="expand-toggle"
+                            @click="toggleExpand(source.chunk_id)"
+                          >
+                            {{ expandedStates[source.chunk_id] ? '收起 ↑' : '展开 ↓' }}
+                          </span>
+                         <div>
+                           <p class="update-date"
+                            >更新日期：{{
+                              formatUpdateDate(source.update_date_time)
+                            }}</p
+                          >
+                          <a
+                            class="view-detail"
+                            href="javascript:;"
+                            @click.prevent="
+                              handleViewDocument(source.file_id, source.title)
+                            "
+                            :class="{ disabled: isDownloading[source.file_id] }"
+                          >
+                            {{
+                              isDownloading[source.file_id] ? '加载中...' : '查看详情 →'
+                            }}
+                          </a>
+                         </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -973,6 +981,26 @@ onUnmounted(() => {
 .result-content-wrapper {
   position: relative;
   margin-bottom: 15px;
+
+  .result-meta {
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    justify-content: space-between;
+    color: #666;
+    padding-top: 10px;
+    border-top: 2px dashed #e8e8e8;
+
+    .view-detail {
+      color: #1890ff;
+      text-decoration: none;
+      cursor: pointer;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
 }
 
 .result-content {
@@ -1004,34 +1032,6 @@ onUnmounted(() => {
   &:hover {
     color: #40a9ff;
     text-decoration: underline;
-  }
-}
-
-.result-meta {
-  display: flex;
-  align-items: center;
-  font-size: 14px;
-  color: #666;
-  padding-top: 10px;
-  border-top: 2px dashed #e8e8e8;
-
-  .source-title {
-    font-weight: bold;
-    margin-right: 20px;
-  }
-
-  .update-date {
-    margin-right: auto;
-  }
-
-  .view-detail {
-    color: #1890ff;
-    text-decoration: none;
-    cursor: pointer;
-
-    &:hover {
-      text-decoration: underline;
-    }
   }
 }
 
