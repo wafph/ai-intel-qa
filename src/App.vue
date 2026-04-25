@@ -49,6 +49,18 @@
               :disabled="isStreaming"
               @send="handleSendMessage"
             />
+            <!-- 流式传输控制 -->
+            <div v-if="isStreaming" class="stream-controls">
+              <el-button
+                style="padding: 10px 20px"
+                type="warning"
+                plain
+                @click="stopStream"
+              >
+                <span class="stop-icon">■</span>
+                停止生成
+              </el-button>
+            </div>
 
             <!-- ✅ 新增：仅「合规审核」页面显示 -->
             <div v-if="activeTab === '合规审核'" class="compliance-extras">
@@ -77,10 +89,10 @@
               <div class="review-dimensions">
                 <span>选择审核维度</span>
                 <el-checkbox-group v-model="selectedDimensions">
-                  <el-checkbox value ="全选" @change="handleSelectAll">全选</el-checkbox>
-                  <el-checkbox value ="合规性" >合规性</el-checkbox>
-                  <el-checkbox value ="冲突性" >冲突性 </el-checkbox>
-                  <el-checkbox value ="文本规范性" >文本规范性</el-checkbox>
+                  <el-checkbox value="全选" @change="handleSelectAll">全选</el-checkbox>
+                  <el-checkbox value="合规性">合规性</el-checkbox>
+                  <el-checkbox value="冲突性">冲突性 </el-checkbox>
+                  <el-checkbox value="文本规范性">文本规范性</el-checkbox>
                 </el-checkbox-group>
               </div>
             </div>
