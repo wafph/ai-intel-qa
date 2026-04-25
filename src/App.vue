@@ -17,10 +17,10 @@
       <!-- 右侧主内容区 -->
       <div class="main-content">
         <!-- 顶部菜单 -->
-        <HeaderMenu 
-          :active-tab="activeTab" 
+        <HeaderMenu
+          :active-tab="activeTab"
           :collapsed="sidebarCollapsed"
-          @tab-change="handleTabChange" 
+          @tab-change="handleTabChange"
           @toggle-sidebar="toggleSidebar"
         />
 
@@ -43,23 +43,46 @@
 
           <!-- 底部固定输入框 -->
           <div class="input-container">
+            <!-- 原有 ChatInput（所有页面共用，不做任何修改） -->
             <ChatInput
               :placeholder="inputPlaceholder"
               :disabled="isStreaming"
               @send="handleSendMessage"
             />
 
-            <!-- 流式传输控制 -->
-            <div v-if="isStreaming" class="stream-controls">
-              <el-button
-                style="padding: 10px 20px"
-                type="warning"
-                plain
-                @click="stopStream"
+            <!-- ✅ 新增：仅「合规审核」页面显示 -->
+            <div v-if="activeTab === '合规审核'" class="compliance-extras">
+              <el-upload
+                class="upload-demo"
+                :http-request="customUpload"
+                :show-file-list="false"
               >
-                <span class="stop-icon">■</span>
-                停止生成
-              </el-button>
+                <el-tooltip
+                  class="box-item"
+                  effect="dark"
+                  content="上传文件"
+                  placement="top"
+                >
+                  <el-icon class="icon"><Plus /></el-icon>
+                </el-tooltip>
+                <!-- <el-button type="primary">选择文件上传</el-button> -->
+              </el-upload>
+
+              <!-- 上传后显示文件名 -->
+              <div v-if="uploadedFileName" class="uploaded-file-name">
+                {{ uploadedFileName }}
+              </div>
+
+              <!-- 审核维度选择（4个多选框） -->
+              <div class="review-dimensions">
+                <span>选择审核维度</span>
+                <el-checkbox-group v-model="selectedDimensions">
+                  <el-checkbox value ="全选" @change="handleSelectAll">全选</el-checkbox>
+                  <el-checkbox value ="合规性" >合规性</el-checkbox>
+                  <el-checkbox value ="冲突性" >冲突性 </el-checkbox>
+                  <el-checkbox value ="文本规范性" >文本规范性</el-checkbox>
+                </el-checkbox-group>
+              </div>
             </div>
           </div>
         </div>
@@ -67,7 +90,6 @@
     </div>
   </template>
   <template v-else>
-    <!-- 独立页面布局 -->
     <router-view></router-view>
   </template>
 </template>
@@ -89,6 +111,8 @@ const userStore = useUserStore();
 const router = useRouter();
 const route = useRoute();
 
+const uploadedFileName = ref('');
+const selectedDimensions = ref<string[]>([]);
 // 侧边栏折叠状态
 const sidebarCollapsed = ref(false);
 
@@ -142,6 +166,73 @@ const filteredHistory = computed(() => {
   return chatStore.historyList.filter((item: any) => item.menuType === activeTab.value);
 });
 
+const customUpload = async (options: any) => {
+  const { file, onSuccess, onError } = options;
+  console.log('上传文件:', file);
+  const token = appStore.sharedDataToken;
+  if (!token) {
+    console.error('未找到认证 token');
+    onError(new Error('未找到认证 token'));
+    return;
+  }
+  const formData = new FormData();
+  formData.append('file', file); // ✅ 直接传递文件包
+  formData.append('is_image', 'false'); // ✅ 添加 is_image 参数
+
+  console.log('上传文件:', {
+    name: file.name,
+    size: file.size,
+    type: file.type,
+    is_image: false,
+  });
+
+  try {
+    const response = await fetch(
+      '/v1/1725c43e3fa54828a078fce60f5a3773/agent-runtime/upload-file?workspace_id=791044b6d56145abb6f66226b5c78784',
+      {
+        method: 'POST',
+        headers: {
+          'X-Auth-Token': token,
+          // 'Content-Type': 'application/json',
+        },
+        body: formData, // 直接发送文件二进制流
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(`上传失败: ${response.status}`);
+    }
+
+    const result = await response.json();
+    onSuccess(result, file);
+    uploadedFileName.value = file.name;
+  } catch (error) {
+    console.error('上传出错:', error);
+    onError(error);
+  }
+};
+// ✅ 新增：全选/取消全选逻辑
+const handleSelectAll = (val: boolean) => {
+  if (val) {
+    selectedDimensions.value = ['全选', '合规性', '冲突性', '文本规范性'];
+  } else {
+    selectedDimensions.value = [];
+  }
+};
+
+// ✅ 新增：同步全选状态
+watch(selectedDimensions, (newVal) => {
+  const allDims = ['合规性', '冲突性', '文本规范性'];
+  const hasAll = allDims.every((dim) => newVal.includes(dim));
+  const hasSelectedAll = newVal.includes('全选');
+
+  if (hasAll && !hasSelectedAll) {
+    selectedDimensions.value.push('全选');
+  } else if (!hasAll && hasSelectedAll) {
+    const index = selectedDimensions.value.indexOf('全选');
+    if (index > -1) selectedDimensions.value.splice(index, 1);
+  }
+});
 // 根据当前路由设置活动标签
 const updateActiveTabFromRoute = () => {
   const routeToTabMap: Record<string, string> = {
@@ -761,6 +852,54 @@ onUnmounted(() => {
   border-radius: 50%;
   background: #52c41a;
   animation: blink 1.5s infinite;
+}
+
+.compliance-extras {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.upload-demo {
+  width: 100%;
+
+  .icon {
+    position: absolute;
+    top: 60px;
+    left: 30px;
+    font-size: 25px;
+    font-weight: 1000;
+  }
+
+  .icon:hover {
+    background: #c9c7c4;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    font-size: 22px;
+  }
+}
+
+.uploaded-file-name {
+  font-size: 14px;
+  color: #666;
+  position: absolute;
+  top: 30px;
+  left: 30px;
+}
+
+.review-dimensions {
+  font-size: 14px;
+  color: #333;
+
+  .el-checkbox-group {
+    margin-top: 8px;
+  }
+
+  .el-checkbox {
+    margin-right: 12px;
+  }
 }
 
 @keyframes slideInUp {
