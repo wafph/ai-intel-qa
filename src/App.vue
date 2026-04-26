@@ -200,7 +200,7 @@ const customUpload = async (options: any) => {
 
   try {
     const response = await fetch(
-      '/v1/1725c43e3fa54828a078fce60f5a3773/agent-runtime/upload-file?workspace_id=791044b6d56145abb6f66226b5c78784',
+      'v1/1725c43e3fa54828a078fce60f5a3773/agent-runtime/upload-file?workspace_id=791044b6d56145abb6f66226b5c78784',
       {
         method: 'POST',
         headers: {
@@ -395,8 +395,8 @@ const handleSelectChat = (chatId: string) => {
   scrollToBottom();
 };
 
-const handleDeleteChat = (chatId: string) => {
-  chatStore.deleteHistoryItem(chatId);
+const handleDeleteChat =async  (chatId: string) => {
+  await chatStore.deleteConversationBySession(chatId);
   if (activeChatId.value === chatId) {
     if (chatStore.historyList.length > 0) {
       activeChatId.value = chatStore.historyList[0].id;
@@ -410,12 +410,13 @@ const handleDeleteChat = (chatId: string) => {
   }
 };
 
-const handleClearHistory = () => {
+const handleClearHistory =async () => {
   chatStore.historyList = [];
   chatStore.chatSessions = {};
   chatStore.saveToLocalStorage();
   activeChatId.value = '';
   resetStreamState();
+  await chatStore.clearAllConversations();
 };
 
 const handleToggleFavorite = (chatId: string) => {
@@ -677,7 +678,7 @@ const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
   }
 };
 
-// 完成流式输出
+// 在 App.vue 的 finishStream 函数中添加
 const finishStream = (messageId: string) => {
   isStreaming.value = false;
   currentStreamingMessageId = null;
@@ -700,6 +701,28 @@ const finishStream = (messageId: string) => {
           firstQuestion.length > 50
             ? firstQuestion.substring(0, 50) + '...'
             : firstQuestion;
+      }
+
+      // ✅ 新增：保存对话记录到服务器
+      if (chat.messages.length >= 2) {
+        const userMessage = chat.messages[chat.messages.length - 2];
+        const assistantMessage = chat.messages[chat.messages.length - 1];
+        
+        // 获取参考来源
+        let referenceSource = '';
+        if (assistantMessage.sources && assistantMessage.sources.length > 0) {
+          referenceSource = assistantMessage.sources
+            .map((source: any) => `${source.title}: ${source.content}`)
+            .join('\n');
+        }
+
+        chatStore.saveConversationToServer(
+          currentConversationUuid.value,
+          messageId,
+          userMessage,
+          assistantMessage,
+          referenceSource
+        );
       }
     }
   }

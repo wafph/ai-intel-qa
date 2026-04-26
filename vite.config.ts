@@ -44,10 +44,11 @@ export default defineConfig({
         secure: false,
         rewrite: (path) => path.replace(/^\/api2/, ''), // 移除前缀
       },
-       '/api': {
+      '/api': {
         target: 'http://1.94.244.72:8001', // 历史记录地址
         changeOrigin: true,
         secure: false,
+        rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },
   },
