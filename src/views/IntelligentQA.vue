@@ -307,6 +307,8 @@ import { ref, watch, nextTick, onMounted, onUnmounted, onUpdated, reactive } fro
 import MarkdownIt from 'markdown-it';
 import { ElMessage } from 'element-plus';
 import { ArrowRight, ArrowUp } from '@element-plus/icons-vue';
+import { useChatStore } from '@/stores/chat'; // ✅ 新增：导入 chatStore
+const chatStore = useChatStore();
 // 状态变量
 const displayAnswer = ref<string>('');
 const typingSpeed = 20; // 打字速度（毫秒）
@@ -687,11 +689,17 @@ const appendToTypingQueue = (text: string) => {
 };
 
 // 添加投票处理函数
-const handleVote = (messageId: string, voteType: 'like' | 'dislike') => {
+// IntelligentQA.vue - 修改后的 handleVote 函数
+const handleVote = async (messageId: string, voteType: 'like' | 'dislike') => {
   if (!props.chatData) return;
 
   const message = props.chatData.messages.find((msg) => msg.id === messageId);
   if (!message) return;
+
+  // 保存原来的投票状态，用于回滚
+  const originalVote = message.vote;
+  let originalLikeCount = message.likeCount || 0;
+  let originalDislikeCount = message.dislikeCount || 0;
 
   // 如果已经投过票，点击相同按钮则取消
   if (message.vote === voteType) {
@@ -722,6 +730,29 @@ const handleVote = (messageId: string, voteType: 'like' | 'dislike') => {
     } else {
       message.dislikeCount = (message.dislikeCount || 0) + 1;
     }
+  }
+
+  // ✅ 新增：调用后端接口同步点赞状态
+  const likeStatus = message.vote === 'like' ? 1 : 0;
+  const dislikeStatus = message.vote === 'dislike' ? 1 : 0;
+  
+  try {
+    const success = await chatStore.syncLikeStatus(messageId, likeStatus, dislikeStatus);
+    
+    if (!success) {
+      // 如果接口调用失败，回滚到原来的状态
+      message.vote = originalVote;
+      message.likeCount = originalLikeCount;
+      message.dislikeCount = originalDislikeCount;
+      ElMessage.error('点赞状态更新失败，请重试');
+    }
+  } catch (error) {
+    console.error('同步点赞状态失败:', error);
+    // 回滚状态
+    message.vote = originalVote;
+    message.likeCount = originalLikeCount;
+    message.dislikeCount = originalDislikeCount;
+    ElMessage.error('网络错误，请稍后重试');
   }
 };
 

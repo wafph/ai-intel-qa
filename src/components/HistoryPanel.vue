@@ -162,14 +162,24 @@ const filteredHistory = computed(() => {
 });
 
 const formatRelativeTime = (timestamp: number | string) => {
+  //  修复：正确处理数字时间戳
+  let date: Date;
+  
   if (typeof timestamp === 'string') {
-    return timestamp;
+    // 如果是字符串，尝试解析
+    date = new Date(timestamp);
+  } else {
+    // 如果是数字（时间戳），直接使用
+    date = new Date(timestamp);
+  }
+  // 检查日期是否有效
+  if (isNaN(date.getTime())) {
+    console.error('无效的日期:', timestamp);
+    return '未知时间';
   }
 
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  const date = new Date(timestamp);
   const thatDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
   const diffDays = Math.round(
@@ -202,13 +212,17 @@ const formatRelativeTime = (timestamp: number | string) => {
     .padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
 };
 
+// ✅ 修复：分组逻辑
 const groupedHistory = computed(() => {
   const groups: Record<string, any[]> = {};
 
   filteredHistory.value.forEach((item) => {
+    // ✅ 使用修复后的格式化函数
     const relativeTime = formatRelativeTime(item.time);
+    
+    // ✅ 提取日期部分用于分组
     let groupKey = '';
-
+    
     if (relativeTime.includes('今天')) {
       groupKey = '今天';
     } else if (relativeTime.includes('昨天')) {
@@ -216,10 +230,15 @@ const groupedHistory = computed(() => {
     } else if (relativeTime.includes('前天')) {
       groupKey = '前天';
     } else {
+      // 提取日期部分（YYYY-MM-DD）
       const date = new Date(item.time);
-      groupKey = `${date.getFullYear()}-${(date.getMonth() + 1)
-        .toString()
-        .padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+      if (!isNaN(date.getTime())) {
+        groupKey = `${date.getFullYear()}-${(date.getMonth() + 1)
+          .toString()
+          .padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+      } else {
+        groupKey = '未知日期';
+      }
     }
 
     if (!groups[groupKey]) {

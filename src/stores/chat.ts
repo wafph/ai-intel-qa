@@ -232,7 +232,7 @@ export const useChatStore = defineStore('chat', () => {
 
   // 接口3：查询会话列表
   const queryConversationsByFunc = async (): Promise<any> => {
-    debugger
+    debugger;
     try {
       const funcId = getFuncIdByTab(currentActiveTab.value);
 
@@ -265,14 +265,22 @@ export const useChatStore = defineStore('chat', () => {
         historyList.value = [];
         chatSessions.value = {};
 
-        // 遍历所有会话
         Object.keys(sessions).forEach((sessionUuid) => {
           const sessionData = sessions[sessionUuid];
           const conversationList = sessionData.conversation_list || [];
 
           if (conversationList.length > 0) {
-            // 创建历史记录项
             const firstQa = conversationList[0];
+
+            // ✅ 修复：确保时间转换正确
+            const createTime = new Date(firstQa.create_time).getTime();
+
+            // 检查时间是否有效
+            if (isNaN(createTime)) {
+              console.error('无效的创建时间:', firstQa.create_time);
+              return; // 跳过这个会话
+            }
+
             const historyItem: HistoryItem = {
               id: sessionUuid,
               title:
@@ -281,58 +289,69 @@ export const useChatStore = defineStore('chat', () => {
               preview:
                 firstQa.output_content.substring(0, 100) +
                 (firstQa.output_content.length > 100 ? '...' : ''),
-              timestamp: new Date(firstQa.create_time).getTime(),
+              time: new Date(firstQa.create_time).getTime(),
+              type: currentActiveTab.value, // ✅ 添加 type 字段
               menuType: currentActiveTab.value,
               isCollected: sessionData.collect_status === 1,
-              messages: [],
             };
 
-            // 创建会话消息
-            const messages: ChatMessage[] = conversationList
-              .map((qa: any) => {
-                // 用户消息
-                const userMessage: ChatMessage = {
-                  id: `user_${qa.qa_id}`,
-                  role: 'user',
-                  content: qa.input_content,
-                  timestamp: new Date(qa.input_time).getTime(),
-                  vote: null,
-                };
+            // ✅ 创建会话消息
+            const messages: ChatMessage[] = [];
 
-                // AI消息
-                const aiMessage: ChatMessage = {
-                  id: qa.qa_id,
-                  role: 'assistant',
-                  content: qa.output_content,
-                  timestamp: new Date(qa.output_time).getTime(),
-                  vote:
-                    qa.like_status === 1
-                      ? 'like'
-                      : qa.dislike_status === 1
-                        ? 'dislike'
-                        : null,
-                  sources: qa.reference_source
-                    ? [{ title: '参考来源', content: qa.reference_source }]
-                    : [],
-                };
+            conversationList.forEach((qa: any) => {
+              // 用户消息
+              const inputTime = new Date(qa.input_time).getTime();
+              const outputTime = new Date(qa.output_time).getTime();
 
-                return [userMessage, aiMessage];
-              })
-              .flat();
+              // 检查时间是否有效
+              if (isNaN(inputTime) || isNaN(outputTime)) {
+                console.error('无效的时间:', qa.input_time, qa.output_time);
+                return;
+              }
 
-            // 添加到store
-            historyList.value.push(historyItem);
+              messages.push({
+                id: `user_${qa.qa_id}`,
+                role: 'user',
+                content: qa.input_content,
+                timestamp: inputTime,
+                vote: null,
+              });
+
+              // AI消息
+              messages.push({
+                id: qa.qa_id,
+                role: 'assistant',
+                content: qa.output_content,
+                timestamp: outputTime,
+                vote:
+                  qa.like_status === 1
+                    ? 'like'
+                    : qa.dislike_status === 1
+                      ? 'dislike'
+                      : null,
+                sources: qa.reference_source
+                  ? [{ title: '参考来源', content: qa.reference_source }]
+                  : [],
+              });
+            });
+
+            // ✅ 创建会话
             chatSessions.value[sessionUuid] = {
               id: sessionUuid,
               title: historyItem.title,
+              time: createTime, // ✅ 使用正确的时间戳
+              type: currentActiveTab.value as any,
               messages: messages,
-              createdAt: new Date(conversationList[0].create_time).getTime(),
+              menuType: currentActiveTab.value,
+              conversationUuid: sessionUuid,
             };
+
+            historyList.value.push(historyItem);
           }
         });
 
-        // 按时间戳排序
-        historyList.value.sort((a, b) => b.timestamp - a.timestamp);
+        // 按时间排序
+        historyList.value.sort((a, b) => b.time - a.time);
         saveToLocalStorage();
       }
 
@@ -405,6 +424,12 @@ export const useChatStore = defineStore('chat', () => {
       }
 
       const result = await response.json();
+
+      // 检查返回结果
+      if (result.code !== 200) {
+        throw new Error(result.msg || '更新失败');
+      }
+
       console.log('点赞状态同步成功:', result);
       return true;
     } catch (error) {

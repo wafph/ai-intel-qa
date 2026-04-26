@@ -297,7 +297,7 @@ const toggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value;
 };
 
-const handleTabChange = (tabName: string) => {
+const handleTabChange = async (tabName: string) => {
   if (isStreaming.value) {
     stopStream();
   }
@@ -307,6 +307,26 @@ const handleTabChange = (tabName: string) => {
 
   activeTab.value = tabName;
   chatStore.setCurrentActiveTab(tabName);
+
+  // ✅ 切换标签时重新从服务器加载会话
+  await chatStore.queryConversationsByFunc();
+
+  const historyForTab = chatStore.historyList.filter(
+    (item: any) => item.menuType === tabName,
+  );
+
+  if (historyForTab.length > 0) {
+    activeChatId.value = historyForTab[0].id;
+
+    // ✅ 获取选中对话的UUID
+    const chat = chatStore.getChatSession(historyForTab[0].id);
+    if (chat && (chat as any).conversationUuid) {
+      currentConversationUuid.value = (chat as any).conversationUuid;
+    }
+  } else {
+    activeChatId.value = '';
+    currentConversationUuid.value = '';
+  }
 
   const tabToRouteMap: Record<string, string> = {
     智能问答: '/intelligent-qa',
@@ -319,30 +339,9 @@ const handleTabChange = (tabName: string) => {
   if (route.path !== targetRoute) {
     router.push(targetRoute);
   }
-
-  const historyForTab = chatStore.historyList.filter(
-    (item: any) => item.menuType === tabName,
-  );
-  if (historyForTab.length > 0) {
-    const currentChatBelongsToTab = historyForTab.some(
-      (item: any) => item.id === activeChatId.value,
-    );
-
-    if (!currentChatBelongsToTab) {
-      activeChatId.value = historyForTab[0].id;
-
-      // ✅ 获取选中对话的UUID
-      const chat = chatStore.getChatSession(historyForTab[0].id);
-      if (chat && (chat as any).conversationUuid) {
-        currentConversationUuid.value = (chat as any).conversationUuid;
-      }
-    }
-  } else {
-    activeChatId.value = '';
-  }
 };
 
-const handleNewChat = () => {
+const handleNewChat = async () => {
   const newChatId = Date.now().toString();
   activeChatId.value = newChatId;
   currentConversationUuid.value = generateUUID();
@@ -366,6 +365,7 @@ const handleNewChat = () => {
     type: activeTab.value as any,
     preview: '新对话',
     menuType: activeTab.value,
+    isCollected: false,
   };
 
   chatStore.addChatSession(newSession);
@@ -395,8 +395,15 @@ const handleSelectChat = (chatId: string) => {
   scrollToBottom();
 };
 
-const handleDeleteChat =async  (chatId: string) => {
+const handleDeleteChat = async (chatId: string) => {
+  // ✅ 先调用后端接口删除
   await chatStore.deleteConversationBySession(chatId);
+
+  // 从本地删除
+  chatStore.deleteHistoryItem(chatId);
+  delete chatStore.chatSessions[chatId];
+  chatStore.saveToLocalStorage();
+
   if (activeChatId.value === chatId) {
     if (chatStore.historyList.length > 0) {
       activeChatId.value = chatStore.historyList[0].id;
@@ -406,19 +413,21 @@ const handleDeleteChat =async  (chatId: string) => {
       }
     } else {
       activeChatId.value = '';
+      currentConversationUuid.value = '';
     }
   }
 };
 
-const handleClearHistory =async () => {
+const handleClearHistory = async () => {
+  // ✅ 先调用后端接口清空所有会话
+  await chatStore.clearAllConversations();
   chatStore.historyList = [];
   chatStore.chatSessions = {};
   chatStore.saveToLocalStorage();
   activeChatId.value = '';
+  currentConversationUuid.value = '';
   resetStreamState();
-  await chatStore.clearAllConversations();
 };
-
 const handleToggleFavorite = (chatId: string) => {
   chatStore.toggleCollect(chatId);
 };
@@ -707,7 +716,13 @@ const finishStream = (messageId: string) => {
       if (chat.messages.length >= 2) {
         const userMessage = chat.messages[chat.messages.length - 2];
         const assistantMessage = chat.messages[chat.messages.length - 1];
-        
+
+        // 确定点赞和点踩状态
+        let likeStatus = 0;
+        let dislikeStatus = 0;
+        if (assistantMessage.vote === 'like') likeStatus = 1;
+        if (assistantMessage.vote === 'dislike') dislikeStatus = 1;
+
         // 获取参考来源
         let referenceSource = '';
         if (assistantMessage.sources && assistantMessage.sources.length > 0) {
@@ -721,7 +736,7 @@ const finishStream = (messageId: string) => {
           messageId,
           userMessage,
           assistantMessage,
-          referenceSource
+          referenceSource,
         );
       }
     }
@@ -800,10 +815,15 @@ watch(
 );
 
 // 生命周期
-onMounted(() => {
-  chatStore.loadFromLocalStorage();
-
+onMounted(async () => {
+  // ✅ 先从服务器加载会话记录
+  await chatStore.queryConversationsByFunc();
+  // 再根据路由设置活动标签
   updateActiveTabFromRoute();
+  // 如果没有任何会话，创建新对话
+  if (chatStore.historyList.length === 0) {
+    handleNewChat();
+  }
 });
 
 onUnmounted(() => {
