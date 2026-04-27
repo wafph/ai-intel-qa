@@ -326,6 +326,8 @@ export const useChatStore = defineStore('chat', () => {
                     : qa.dislike_status === 1
                       ? 'dislike'
                       : null,
+                        likeCount: qa.like_status || 0,
+  dislikeCount: qa.dislike_status || 0,
                 sources: qa.reference_source
                   ? [{ title: '参考来源', content: qa.reference_source }]
                   : [],

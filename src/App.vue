@@ -43,10 +43,10 @@
 
           <!-- 底部固定输入框 -->
           <div class="input-container">
-            <!-- 原有 ChatInput（所有页面共用，不做任何修改） -->
             <ChatInput
               :placeholder="inputPlaceholder"
-              :disabled="isStreaming"
+              :disabled="isSendDisabled"
+              :is-compliance-mode="activeTab === '合规审核'"
               @send="handleSendMessage"
             />
             <!-- 流式传输控制 -->
@@ -122,9 +122,12 @@ const chatStore = useChatStore();
 const userStore = useUserStore();
 const router = useRouter();
 const route = useRoute();
+const inputText = ref('');
 
 const uploadedFileName = ref('');
+const uploadedFileUrl = ref(''); //  新增：存储上传后的文件URL
 const selectedDimensions = ref<string[]>([]);
+const spliceSelectedDimensions = ref<string[]>([]);
 // 侧边栏折叠状态
 const sidebarCollapsed = ref(false);
 
@@ -188,8 +191,8 @@ const customUpload = async (options: any) => {
     return;
   }
   const formData = new FormData();
-  formData.append('file', file); // ✅ 直接传递文件包
-  formData.append('is_image', 'false'); // ✅ 添加 is_image 参数
+  formData.append('file', file);
+  formData.append('is_image', 'false');
 
   console.log('上传文件:', {
     name: file.name,
@@ -205,9 +208,8 @@ const customUpload = async (options: any) => {
         method: 'POST',
         headers: {
           'X-Auth-Token': token,
-          // 'Content-Type': 'application/json',
         },
-        body: formData, // 直接发送文件二进制流
+        body: formData,
       },
     );
 
@@ -218,6 +220,8 @@ const customUpload = async (options: any) => {
     const result = await response.json();
     onSuccess(result, file);
     uploadedFileName.value = file.name;
+    console.log('上传成功:', result);
+    uploadedFileUrl.value = result?.url || file.name;
   } catch (error) {
     console.error('上传出错:', error);
     onError(error);
@@ -232,19 +236,6 @@ const handleSelectAll = (val: boolean) => {
   }
 };
 
-// ✅ 新增：同步全选状态
-watch(selectedDimensions, (newVal) => {
-  const allDims = ['合规性', '冲突性', '文本规范性'];
-  const hasAll = allDims.every((dim) => newVal.includes(dim));
-  const hasSelectedAll = newVal.includes('全选');
-
-  if (hasAll && !hasSelectedAll) {
-    selectedDimensions.value.push('全选');
-  } else if (!hasAll && hasSelectedAll) {
-    const index = selectedDimensions.value.indexOf('全选');
-    if (index > -1) selectedDimensions.value.splice(index, 1);
-  }
-});
 // 根据当前路由设置活动标签
 const updateActiveTabFromRoute = () => {
   const routeToTabMap: Record<string, string> = {
@@ -268,7 +259,10 @@ const inputPlaceholder = computed(() => {
   } else if (activeTab.value === '辅助起草') {
     return '您好，请描述你的制度要求，包括使用范围、核心条款、特殊要求等...';
   } else if (activeTab.value === '合规审核') {
-    return '您好，请输入待审核的内容';
+    if (uploadedFileName.value) {
+      return '';
+    }
+    return '请上传文件并选择审核维度'; // ✅ 提示用户不需要输入
   } else {
     return '您好，请输出待检索内容';
   }
@@ -432,8 +426,27 @@ const handleToggleFavorite = (chatId: string) => {
   chatStore.toggleCollect(chatId);
 };
 
+const isSendDisabled = computed(() => {
+  if (activeTab.value === '合规审核') {
+    // ✅ 合规审核模式：只检查文件上传和多选框选择，不检查输入框内容
+    return !uploadedFileUrl.value || selectedDimensions.value.length === 0;
+  }
+  // 其他模式：检查输入框内容和流式状态
+  return isStreaming.value;
+});
+
 const handleSendMessage = async (content: string) => {
-  if (!content.trim() || isStreaming.value) return;
+  inputText.value = content;
+  // ✅ 合规审核模式特殊处理：不检查输入框内容
+  if (activeTab.value === '合规审核') {
+    if (!uploadedFileUrl.value || selectedDimensions.value.length === 0) {
+      console.warn('合规审核需要上传文件并选择审核维度');
+      return;
+    }
+  } else {
+    // 其他模式需要输入框内容
+    if (!content.trim() || isStreaming.value) return;
+  }
 
   if (!activeChatId.value) {
     handleNewChat();
@@ -443,7 +456,6 @@ const handleSendMessage = async (content: string) => {
   if (!chat) return;
   if (!currentConversationUuid.value) {
     currentConversationUuid.value = generateUUID();
-    // 更新对话数据中的UUID
     (chat as any).conversationUuid = currentConversationUuid.value;
   }
 
@@ -451,7 +463,7 @@ const handleSendMessage = async (content: string) => {
   const userMessage: ChatMessage = {
     id: Date.now().toString(),
     role: 'user',
-    content: content.trim(),
+    content: activeTab.value === '合规审核' ? '开始合规审核' : content.trim(),
     timestamp: new Date(),
   };
 
@@ -459,13 +471,18 @@ const handleSendMessage = async (content: string) => {
 
   // 如果是第一条消息，更新标题
   if (chat.messages.length === 1) {
-    const newTitle = content.length > 20 ? content.substring(0, 20) + '...' : content;
+    const newTitle =
+      activeTab.value === '合规审核'
+        ? `审核: ${uploadedFileName.value}`
+        : content.length > 20
+          ? content.substring(0, 20) + '...'
+          : content;
     chat.title = newTitle;
 
     const historyItem = chatStore.historyList.find((h: any) => h.id === chat.id);
     if (historyItem) {
       historyItem.title = newTitle;
-      historyItem.preview = content;
+      historyItem.preview = activeTab.value === '合规审核' ? '开始合规审核' : content;
     }
   }
 
@@ -490,22 +507,35 @@ const handleSendMessage = async (content: string) => {
   chatStore.saveToLocalStorage();
   scrollToBottom();
 };
-
 // 流式请求
 const startStream = async (queryText: string, messageId: string) => {
   isStreaming.value = true;
   currentReasoning.value = '';
   currentAnswer.value = '';
-
   try {
     abortController = new AbortController();
+    if (selectedDimensions.value.includes('全选')) {
+      spliceSelectedDimensions.value = ['合规性', '冲突性', '文本规范性'];
+    }
+    let params: any = {};
 
-    const params = {
-      inputs: {
-        query: queryText,
-      },
-    };
-
+    // ✅ 合规审核特殊处理
+    if (activeTab.value === '合规审核') {
+      params = {
+        inputs: {
+          file_url: uploadedFileUrl.value,
+          query: !selectedDimensions.value.includes('全选')
+            ? selectedDimensions.value.join(',')
+            : spliceSelectedDimensions.value.join(','), // 用逗号连接多选值
+        },
+      };
+    } else {
+      params = {
+        inputs: {
+          query: queryText,
+        },
+      };
+    }
     const token = appStore.sharedDataToken;
     if (!token) {
       throw new Error('未找到认证token，请先登录');
@@ -523,7 +553,7 @@ const startStream = async (queryText: string, messageId: string) => {
 
     const version1 = '?version=1776836351895';
     const version2 = '?version=1777019540183';
-    const version3 = '?version=1776051927454';
+    const version3 = '?version=1777258599011';
     const version4 = '?version=1777097823097';
 
     // 根据当前选项卡选择不同的API接口，并注入动态UUID
@@ -671,6 +701,8 @@ const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
     scrollToBottom();
   }
 };
+
+// 新增计算属性
 
 // 在 App.vue 的 finishStream 函数中添加
 const finishStream = (messageId: string) => {

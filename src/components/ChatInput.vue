@@ -9,7 +9,7 @@
           ref="textareaRef"
           v-model="inputText"
           :placeholder="placeholder"
-          :disabled="disabled"
+          :disabled="isComplianceMode ? false : disabled"
           class="chat-textarea"
           @keydown.enter.exact.prevent="handleSend"
           @keydown.enter.shift.exact.prevent="handleNewLine"
@@ -20,10 +20,9 @@
       </div>
 
       <div class="action-buttons">
-        <button
-          v-if="!disabled"
+         <button
           class="send-btn"
-          :disabled="!inputText.trim()"
+          :disabled="isSendButtonDisabled"
           @click="handleSend"
         >
           <svg class="send-icon" viewBox="0 0 24 24" fill="currentColor">
@@ -31,7 +30,7 @@
           </svg>
         </button>
 
-        <div v-else class="loading-indicator">
+        <div v-if="disabled && !isComplianceMode" class="loading-indicator"> <!-- ✅ 修复：只在非合规审核模式下显示加载指示器 -->
           <div class="loading-spinner"></div>
         </div>
       </div>
@@ -40,16 +39,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, watch, onMounted, onUnmounted } from 'vue';
+import { ref, nextTick, watch, onMounted, computed, onUnmounted } from 'vue';
 
 interface Props {
   placeholder?: string;
   disabled?: boolean;
+  isComplianceMode?: boolean; // ✅ 新增：是否为合规审核模式
 }
+
 
 const props = withDefaults(defineProps<Props>(), {
   placeholder: '请输入内容...',
   disabled: false,
+  isComplianceMode: false, // 默认为false
 });
 
 const emit = defineEmits<{
@@ -60,10 +62,16 @@ const emit = defineEmits<{
 const inputText = ref<string>('');
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const isComposing = ref<boolean>(false);
+const isSendButtonDisabled = computed(() => {
+  if (props.disabled) return true;
+  if (props.isComplianceMode) {
+    return false;
+  }
+  return !inputText.value.trim();
+});
 
-// 方法
 const handleSend = () => {
-  if (isComposing.value || !inputText.value.trim() || props.disabled) {
+  if (isComposing.value || props.disabled) {
     return;
   }
 
