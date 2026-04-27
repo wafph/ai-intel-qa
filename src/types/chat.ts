@@ -4,7 +4,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   reasoning?: string;
-  timestamp: number;
+  timestamp: Date;
   streaming?: boolean;
   vote?: 'like' | 'dislike' | null;
   likeCount?: number;
@@ -46,13 +46,13 @@ export interface StreamChunk {
 }
 
 export interface SourceInfo {
-  file_id: string;
-  chunk_id: string;
-  title: string; // 文件标题
+  file_id?: string;
+  chunk_id?: string;
+  title?: string; // 文件标题
   content: string; // 切片内容
-  subtitle: string; // 子标题
-  update_date_time: string; // 更新时间
-  tags: string;
-  repo_id: string;
-  score: string;
+  subtitle?: string; // 子标题
+  update_date_time?: string; // 更新时间
+  tags?: string;
+  repo_id?: string;
+  score?: string;
 }

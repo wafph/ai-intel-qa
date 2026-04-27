@@ -137,15 +137,14 @@ export const useChatStore = defineStore('chat', () => {
     userMessage: ChatMessage,
     assistantMessage: ChatMessage,
     referenceSource: string = '',
+    likeStatus: number,
+    dislikeStatus: number,
   ): Promise<{ success: boolean; insertId?: string }> => {
     try {
       const funcId = getFuncIdByTab(currentActiveTab.value);
       const inputTime = formatDateTime(new Date(userMessage.timestamp));
       const outputTime = formatDateTime(new Date(assistantMessage.timestamp));
 
-      // 确定点赞和点踩状态
-      let likeStatus = 0;
-      let dislikeStatus = 0;
       if (assistantMessage.vote === 'like') likeStatus = 1;
       if (assistantMessage.vote === 'dislike') dislikeStatus = 1;
 
@@ -191,7 +190,7 @@ export const useChatStore = defineStore('chat', () => {
     }
   };
 
-  // 接口2：删除会话全部记录
+  // 接口2：删除d单条会话全部记录
   const deleteConversationBySession = async (sessionUuid: string): Promise<boolean> => {
     try {
       const funcId = getFuncIdByTab(currentActiveTab.value);
@@ -288,7 +287,7 @@ export const useChatStore = defineStore('chat', () => {
                 firstQa.output_content.substring(0, 100) +
                 (firstQa.output_content.length > 100 ? '...' : ''),
               time: new Date(firstQa.create_time).getTime(),
-              type: currentActiveTab.value, // ✅ 添加 type 字段
+              type: currentActiveTab.value as any, // ✅ 添加 type 字段
               menuType: currentActiveTab.value,
               isCollected: sessionData.collect_status === 1,
             };
@@ -311,7 +310,7 @@ export const useChatStore = defineStore('chat', () => {
                 id: `user_${qa.qa_id}`,
                 role: 'user',
                 content: qa.input_content,
-                timestamp: inputTime,
+                timestamp: inputTime as any,
                 vote: null,
               });
 
@@ -320,7 +319,7 @@ export const useChatStore = defineStore('chat', () => {
                 id: qa.qa_id,
                 role: 'assistant',
                 content: qa.output_content,
-                timestamp: outputTime,
+                timestamp: outputTime as any,
                 vote:
                   qa.like_status === 1
                     ? 'like'
@@ -478,8 +477,6 @@ export const useChatStore = defineStore('chat', () => {
 
   // 清空所有会话
   const clearAllConversations = async () => {
-    const funcId = getFuncIdByTab(currentActiveTab.value);
-
     // 获取所有会话UUID
     const sessionUuids = Object.keys(chatSessions.value);
 

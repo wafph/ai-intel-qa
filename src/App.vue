@@ -701,13 +701,6 @@ const finishStream = (messageId: string) => {
       if (chat.messages.length >= 2) {
         const userMessage = chat.messages[chat.messages.length - 2];
         const assistantMessage = chat.messages[chat.messages.length - 1];
-
-        // 确定点赞和点踩状态
-        let likeStatus = 0;
-        let dislikeStatus = 0;
-        if (assistantMessage.vote === 'like') likeStatus = 1;
-        if (assistantMessage.vote === 'dislike') dislikeStatus = 1;
-
         // 获取参考来源
         let referenceSource = '';
         if (assistantMessage.sources && assistantMessage.sources.length > 0) {
@@ -722,6 +715,8 @@ const finishStream = (messageId: string) => {
           userMessage,
           assistantMessage,
           referenceSource,
+          assistantMessage.vote === 'like' ? 1 : 0,
+          assistantMessage.vote === 'dislike' ? 1 : 0,
         );
       }
     }
