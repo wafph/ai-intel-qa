@@ -168,15 +168,6 @@
                   <el-button link type="success" plain @click="handleRestart(index)">
                     重新检索<el-icon class="el-icon--right"><ArrowRight /></el-icon>
                   </el-button>
-                  <el-button
-                    link
-                    class="btnbottom"
-                    type="primary"
-                    plain
-                    @click="handleExport"
-                  >
-                    导出
-                  </el-button>
                 </div>
               </div>
 
@@ -558,38 +549,6 @@ const handleRestart = (index: number) => {
   }
 };
 
-// ✅ 修改：导出功能 - 支持导出搜索结果
-const handleExport = () => {
-  if (!props.chatData) return;
-
-  let exportContent = '';
-
-  // 如果有搜索结果，导出搜索结果
-  const lastMessage = props.chatData.messages[props.chatData.messages.length - 1];
-  if (lastMessage && lastMessage.sources && lastMessage.sources.length > 0) {
-    exportContent = lastMessage.sources
-      .map((source: any) => {
-        return `来源：${source.title}\n子标题：${source.subtitle}\n内容：${source.content}\n更新日期：${formatUpdateDate(source.update_date_time)}\n\n`;
-      })
-      .join('---\n\n');
-  } else {
-    // 否则导出普通回复内容
-    exportContent = props.chatData.messages
-      .filter((msg: any) => msg.role === 'assistant')
-      .map((msg: any) => msg.content)
-      .join('\n\n');
-  }
-
-  const blob = new Blob([exportContent], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${props.chatData.title || '搜索结果'}.txt`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-};
 const renderMarkdown = (content: string) => {
   if (!content) return '';
   return md.render(content);

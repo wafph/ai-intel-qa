@@ -38,17 +38,11 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
-      '/api2': {
+      '/api': {
         target: 'http://1.94.244.72:8000', //token获取服务器地址
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/api2/, ''), // 移除前缀
-      },
-      '/api': {
-        target: 'http://1.94.244.72:8001', // 历史记录地址
-        changeOrigin: true,
-        secure: false,
-        rewrite: (path) => path.replace(/^\/api/, ''),
+        rewrite: (path) => path.replace(/^\/api/, ''), // 移除前缀
       },
     },
   },

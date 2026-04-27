@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 export const useAppStore = defineStore('app', () => {
   // 侧边栏折叠状态
   const sidebarCollapsed = ref(false);
@@ -67,7 +67,7 @@ export const useAppStore = defineStore('app', () => {
 
     try {
       // 1. 使用 fetch API
-      const response = await fetch('/api2/v1/x-subject-token', {
+      const response = await fetch(`${API_BASE_URL}/v1/x-subject-token`, {
         method: 'post',
         body: JSON.stringify(params),
       });

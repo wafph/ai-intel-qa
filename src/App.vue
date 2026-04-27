@@ -514,7 +514,7 @@ const startStream = async (queryText: string, messageId: string) => {
     // 使用动态UUID替换所有API URL中的UUID
     const baseUrls = {
       qa: '/v1/1725c43e3fa54828a078fce60f5a3773/workflows/60a15b33-e781-4d5d-88d3-5ed90054d9b0/conversations/',
-      draf: '/v1/1725c43e3fa54828a078fce60f5a3773/agents/fe7b5350-c3ee-41d4-b5d5-ecc6c26d33b3/conversations/',
+      draf: '/v1/1725c43e3fa54828a078fce60f5a3773/workflows/1808592a-3c09-41a1-b1b6-225c9985ee00/conversations/',
       review:
         '/v1/1725c43e3fa54828a078fce60f5a3773/workflows/32dd3ef3-2bfb-4ad7-a448-811ddd37924a/conversations/',
       search:
@@ -522,9 +522,9 @@ const startStream = async (queryText: string, messageId: string) => {
     };
 
     const version1 = '?version=1776836351895';
-    const version2 = '?version=1776825707705';
+    const version2 = '?version=1777019540183';
     const version3 = '?version=1776051927454';
-    const version4 = '?version=1776669038280';
+    const version4 = '?version=1777097823097';
 
     // 根据当前选项卡选择不同的API接口，并注入动态UUID
     let apiUrl = '';
@@ -600,15 +600,8 @@ const handleRegenerate = (content: string) => {
 
 const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
   var dataReasion;
-  if (
-    activeTab.value === '智能问答' ||
-    activeTab.value === '合规审核' ||
-    activeTab.value === '智能检索'
-  ) {
-    dataReasion = chunk.data?.reasoning_content;
-  } else {
-    dataReasion = chunk.reasoning_content;
-  }
+
+  dataReasion = chunk.data?.reasoning_content;
   // ✅ 新增：处理 workflow_finished 事件
   if (chunk.event === 'workflow_finished') {
     try {
@@ -661,15 +654,7 @@ const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
 
     // 处理回复内容 - 根据接口类型选择字段
     let replyContent: string | undefined;
-    if (
-      activeTab.value === '智能问答' ||
-      activeTab.value === '合规审核' ||
-      activeTab.value === '智能检索'
-    ) {
-      replyContent = chunk.data?.text;
-    } else {
-      replyContent = chunk?.content;
-    }
+    replyContent = chunk.data?.text;
     if (replyContent !== undefined) {
       currentAnswer.value += replyContent;
       // 更新对应的AI消息内容

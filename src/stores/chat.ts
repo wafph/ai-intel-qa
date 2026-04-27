@@ -170,7 +170,7 @@ export const useChatStore = defineStore('chat', () => {
       };
 
       console.log('保存对话记录到服务器:', payload);
-      const response = await fetch(`${API_BASE_URL}/api/save_conversation`, {
+      const response = await fetch(`${API_BASE_URL}/v1/save_conversation`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -202,8 +202,7 @@ export const useChatStore = defineStore('chat', () => {
       };
 
       console.log('删除会话记录:', payload);
-      debugger;
-      const response = await fetch(`${API_BASE_URL}/api/delete_conversation`, {
+      const response = await fetch(`${API_BASE_URL}/v1/delete_conversation`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -232,7 +231,6 @@ export const useChatStore = defineStore('chat', () => {
 
   // 接口3：查询会话列表
   const queryConversationsByFunc = async (): Promise<any> => {
-    debugger;
     try {
       const funcId = getFuncIdByTab(currentActiveTab.value);
 
@@ -242,7 +240,7 @@ export const useChatStore = defineStore('chat', () => {
 
       console.log('查询会话列表:', payload);
 
-      const response = await fetch(`${API_BASE_URL}/api/query_conversation`, {
+      const response = await fetch(`${API_BASE_URL}/v1/query_conversation`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -375,7 +373,7 @@ export const useChatStore = defineStore('chat', () => {
 
       console.log('同步收藏状态:', payload);
 
-      const response = await fetch(`${API_BASE_URL}/api/update_collect_status`, {
+      const response = await fetch(`${API_BASE_URL}/v1/update_collect_status`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -411,7 +409,7 @@ export const useChatStore = defineStore('chat', () => {
 
       console.log('同步点赞状态:', payload);
 
-      const response = await fetch(`${API_BASE_URL}/api/update_like_status`, {
+      const response = await fetch(`${API_BASE_URL}/v1/update_like_status`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
