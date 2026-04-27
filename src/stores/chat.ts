@@ -108,8 +108,7 @@ export const useChatStore = defineStore('chat', () => {
     try {
       localStorage.setItem('chatSessions', JSON.stringify(chatSessions.value));
       localStorage.setItem('historyList', JSON.stringify(historyList.value));
-    } catch (error) {
-    }
+    } catch (error) {}
   };
 
   // 从localStorage加载
@@ -124,8 +123,7 @@ export const useChatStore = defineStore('chat', () => {
       if (savedHistory) {
         historyList.value = JSON.parse(savedHistory);
       }
-    } catch (error) {
-    }
+    } catch (error) {}
   };
 
   // 接口1：保存对话记录到服务器
@@ -204,10 +202,6 @@ export const useChatStore = defineStore('chat', () => {
       if (!response.ok) {
         throw new Error(`HTTP错误! 状态: ${response.status}`);
       }
-
-      const result = await response.json();
-
-
       // 从本地删除
       deleteHistoryItem(sessionUuid);
       delete chatSessions.value[sessionUuid];
@@ -241,7 +235,6 @@ export const useChatStore = defineStore('chat', () => {
       }
 
       const result = await response.json();
-
 
       // 转换后端数据格式为前端格式
       if (result.code === 200 && result.data) {
@@ -313,8 +306,8 @@ export const useChatStore = defineStore('chat', () => {
                     : qa.dislike_status === 1
                       ? 'dislike'
                       : null,
-                        likeCount: qa.like_status || 0,
-  dislikeCount: qa.dislike_status || 0,
+                likeCount: qa.like_status || 0,
+                dislikeCount: qa.dislike_status || 0,
                 sources: qa.reference_source
                   ? [{ title: '参考来源', content: qa.reference_source }]
                   : [],
@@ -368,8 +361,6 @@ export const useChatStore = defineStore('chat', () => {
       if (!response.ok) {
         throw new Error(`HTTP错误! 状态: ${response.status}`);
       }
-
-      const result = await response.json();
       return true;
     } catch (error) {
       return false;

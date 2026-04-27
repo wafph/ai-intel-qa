@@ -99,7 +99,7 @@ const htmlToPdf = {
     exportToPdf({
       filename: title,
       elementId: 'pdfDom'
-    }).catch(console.error);
+    }).catch();
   }
 };
 
