@@ -163,7 +163,6 @@ const fetchTableData = async () => {
 
     pagination.total = 200; // 固定总条数，实际应用中应该从API获取
   } catch (error) {
-    console.error('获取客户问题数据失败:', error);
     ElMessage.error('获取客户问题数据失败');
   } finally {
     loading.value = false;

@@ -89,7 +89,6 @@ export async function exportToPdf(options: PdfOptions): Promise<void> {
     pdf.save(finalFilename);
     
   } catch (error) {
-    console.error('PDF导出失败:', error);
     throw error;
   }
 }

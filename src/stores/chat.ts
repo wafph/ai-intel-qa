@@ -109,7 +109,6 @@ export const useChatStore = defineStore('chat', () => {
       localStorage.setItem('chatSessions', JSON.stringify(chatSessions.value));
       localStorage.setItem('historyList', JSON.stringify(historyList.value));
     } catch (error) {
-      console.error('保存到localStorage失败:', error);
     }
   };
 
@@ -126,7 +125,6 @@ export const useChatStore = defineStore('chat', () => {
         historyList.value = JSON.parse(savedHistory);
       }
     } catch (error) {
-      console.error('从localStorage加载失败:', error);
     }
   };
 
@@ -167,8 +165,6 @@ export const useChatStore = defineStore('chat', () => {
         output_time: outputTime,
         collect_status: collectStatus,
       };
-
-      console.log('保存对话记录到服务器:', payload);
       const response = await fetch(`${API_BASE_URL}/v1/save_conversation`, {
         method: 'POST',
         headers: {
@@ -182,10 +178,8 @@ export const useChatStore = defineStore('chat', () => {
       }
 
       const result = await response.json();
-      console.log('对话记录保存成功:', result);
       return { success: true, insertId: result.insert_id };
     } catch (error) {
-      console.error('保存对话记录到服务器失败:', error);
       return { success: false };
     }
   };
@@ -199,8 +193,6 @@ export const useChatStore = defineStore('chat', () => {
         func_id: funcId,
         session_uuid: sessionUuid,
       };
-
-      console.log('删除会话记录:', payload);
       const response = await fetch(`${API_BASE_URL}/v1/delete_conversation`, {
         method: 'POST',
         headers: {
@@ -214,7 +206,7 @@ export const useChatStore = defineStore('chat', () => {
       }
 
       const result = await response.json();
-      console.log('会话记录删除成功:', result);
+
 
       // 从本地删除
       deleteHistoryItem(sessionUuid);
@@ -223,7 +215,6 @@ export const useChatStore = defineStore('chat', () => {
 
       return true;
     } catch (error) {
-      console.error('删除会话记录失败:', error);
       return false;
     }
   };
@@ -236,8 +227,6 @@ export const useChatStore = defineStore('chat', () => {
       const payload = {
         func_id: funcId,
       };
-
-      console.log('查询会话列表:', payload);
 
       const response = await fetch(`${API_BASE_URL}/v1/query_conversation`, {
         method: 'POST',
@@ -252,7 +241,7 @@ export const useChatStore = defineStore('chat', () => {
       }
 
       const result = await response.json();
-      console.log('会话列表查询成功:', result);
+
 
       // 转换后端数据格式为前端格式
       if (result.code === 200 && result.data) {
@@ -274,7 +263,6 @@ export const useChatStore = defineStore('chat', () => {
 
             // 检查时间是否有效
             if (isNaN(createTime)) {
-              console.error('无效的创建时间:', firstQa.create_time);
               return; // 跳过这个会话
             }
 
@@ -302,7 +290,6 @@ export const useChatStore = defineStore('chat', () => {
 
               // 检查时间是否有效
               if (isNaN(inputTime) || isNaN(outputTime)) {
-                console.error('无效的时间:', qa.input_time, qa.output_time);
                 return;
               }
 
@@ -356,7 +343,6 @@ export const useChatStore = defineStore('chat', () => {
 
       return result;
     } catch (error) {
-      console.error('查询会话列表失败:', error);
       return null;
     }
   };
@@ -371,9 +357,6 @@ export const useChatStore = defineStore('chat', () => {
         session_uuid: sessionUuid,
         collect_status: isCollected ? 1 : 0,
       };
-
-      console.log('同步收藏状态:', payload);
-
       const response = await fetch(`${API_BASE_URL}/v1/update_collect_status`, {
         method: 'POST',
         headers: {
@@ -387,10 +370,8 @@ export const useChatStore = defineStore('chat', () => {
       }
 
       const result = await response.json();
-      console.log('收藏状态同步成功:', result);
       return true;
     } catch (error) {
-      console.error('同步收藏状态失败:', error);
       return false;
     }
   };
@@ -407,9 +388,6 @@ export const useChatStore = defineStore('chat', () => {
         like_status: likeStatus,
         dislike_status: dislikeStatus,
       };
-
-      console.log('同步点赞状态:', payload);
-
       const response = await fetch(`${API_BASE_URL}/v1/update_like_status`, {
         method: 'POST',
         headers: {
@@ -428,11 +406,8 @@ export const useChatStore = defineStore('chat', () => {
       if (result.code !== 200) {
         throw new Error(result.msg || '更新失败');
       }
-
-      console.log('点赞状态同步成功:', result);
       return true;
     } catch (error) {
-      console.error('同步点赞状态失败:', error);
       return false;
     }
   };

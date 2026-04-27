@@ -363,7 +363,6 @@ const handleViewDocument = async (fileId: string, title: string) => {
       downloadFile(fileBlob, title, fileId);
     }
   } catch (error) {
-    console.error('获取文档失败:', error);
     alert('获取文档失败，请稍后重试');
   } finally {
     // 清除加载状态

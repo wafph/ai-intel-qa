@@ -174,7 +174,6 @@ const formatRelativeTime = (timestamp: number | string) => {
   }
   // 检查日期是否有效
   if (isNaN(date.getTime())) {
-    console.error('无效的日期:', timestamp);
     return '未知时间';
   }
 

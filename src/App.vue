@@ -183,24 +183,14 @@ const filteredHistory = computed(() => {
 
 const customUpload = async (options: any) => {
   const { file, onSuccess, onError } = options;
-  console.log('上传文件:', file);
   const token = appStore.sharedDataToken;
   if (!token) {
-    console.error('未找到认证 token');
     onError(new Error('未找到认证 token'));
     return;
   }
   const formData = new FormData();
   formData.append('file', file);
   formData.append('is_image', 'false');
-
-  console.log('上传文件:', {
-    name: file.name,
-    size: file.size,
-    type: file.type,
-    is_image: false,
-  });
-
   try {
     const response = await fetch(
       'v1/1725c43e3fa54828a078fce60f5a3773/agent-runtime/upload-file?workspace_id=791044b6d56145abb6f66226b5c78784',
@@ -220,10 +210,8 @@ const customUpload = async (options: any) => {
     const result = await response.json();
     onSuccess(result, file);
     uploadedFileName.value = file.name;
-    console.log('上传成功:', result);
     uploadedFileUrl.value = result?.url || file.name;
   } catch (error) {
-    console.error('上传出错:', error);
     onError(error);
   }
 };
@@ -264,7 +252,7 @@ const inputPlaceholder = computed(() => {
     }
     return '请上传文件并选择审核维度'; // ✅ 提示用户不需要输入
   } else {
-    return '您好，请输出待检索内容';
+    return '请输入你的内容';
   }
 });
 
@@ -440,7 +428,6 @@ const handleSendMessage = async (content: string) => {
   // ✅ 合规审核模式特殊处理：不检查输入框内容
   if (activeTab.value === '合规审核') {
     if (!uploadedFileUrl.value || selectedDimensions.value.length === 0) {
-      console.warn('合规审核需要上传文件并选择审核维度');
       return;
     }
   } else {
@@ -604,16 +591,13 @@ const startStream = async (queryText: string, messageId: string) => {
             const parsed: StreamChunk = JSON.parse(data);
             await processStreamChunk(parsed, messageId);
           } catch (error) {
-            console.error('解析流数据失败:', error, '原始数据:', data);
           }
         }
       }
     }
   } catch (error: any) {
     if (error.name === 'AbortError') {
-      console.log('流式请求被取消');
     } else {
-      console.error('流式请求失败:', error);
       handleStreamError(messageId, error.message);
     }
   } finally {
@@ -655,12 +639,10 @@ const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
           const message = chat.messages.find((m: any) => m.id === messageId);
           if (message) {
             message.sources = sources;
-            console.log('已保存来源信息:', sources);
           }
         }
       }
     } catch (error) {
-      console.error('解析 workflow_finished 失败:', error);
     }
     return; // 处理完后返回，不再走下面的逻辑
   }

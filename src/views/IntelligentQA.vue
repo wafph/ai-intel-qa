@@ -424,7 +424,6 @@ const copyToClipboard = async (text: string) => {
     }
     return true;
   } catch (error) {
-    console.error('复制失败:', error);
     return false;
   }
 };
@@ -449,7 +448,6 @@ const copySource = async (source: any) => {
     await navigator.clipboard.writeText(text);
     ElMessage.success('已复制来源片段');
   } catch (err) {
-    console.error('复制失败:', err);
   }
 };
 
@@ -460,7 +458,6 @@ const handleSourceTitleClick = async (source: any, event: Event) => {
   try {
     const fileId = source.file_id || source.id; // 根据实际字段调整
     if (!fileId) {
-      console.error('未找到文件 ID');
       return;
     }
 
@@ -507,7 +504,6 @@ const handleSourceTitleClick = async (source: any, event: Event) => {
       downloadFile(fileBlob, source.title || 'document', fileId);
     }
   } catch (error) {
-    console.error('获取文档失败:', error);
     ElMessage.error('获取文档失败，请稍后重试');
   }
 };
@@ -747,7 +743,6 @@ const handleVote = async (messageId: string, voteType: 'like' | 'dislike') => {
       ElMessage.error('点赞状态更新失败，请重试');
     }
   } catch (error) {
-    console.error('同步点赞状态失败:', error);
     // 回滚状态
     message.vote = originalVote;
     message.likeCount = originalLikeCount;
