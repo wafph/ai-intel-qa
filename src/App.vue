@@ -279,50 +279,6 @@ const toggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value;
 };
 
-const handleTabChange = async (tabName: string) => {
-  if (isStreaming.value) {
-    stopStream();
-  }
-
-  resetStreamState();
-  resetCurrentChat();
-
-  activeTab.value = tabName;
-  chatStore.setCurrentActiveTab(tabName);
-
-  // ✅ 切换标签时重新从服务器加载会话
-  await chatStore.queryConversationsByFunc();
-
-  const historyForTab = chatStore.historyList.filter(
-    (item: any) => item.menuType === tabName,
-  );
-
-  if (historyForTab.length > 0) {
-    activeChatId.value = historyForTab[0].id;
-
-    // ✅ 获取选中对话的UUID
-    const chat = chatStore.getChatSession(historyForTab[0].id);
-    if (chat && (chat as any).conversationUuid) {
-      currentConversationUuid.value = (chat as any).conversationUuid;
-    }
-  } else {
-    activeChatId.value = '';
-    currentConversationUuid.value = '';
-  }
-
-  const tabToRouteMap: Record<string, string> = {
-    智能问答: '/intelligent-qa',
-    智能检索: '/intelligent-retrieval',
-    辅助起草: '/auxiliary-draft',
-    合规审核: '/compliance-review',
-  };
-
-  const targetRoute = tabToRouteMap[tabName] || '/intelligent-qa';
-  if (route.path !== targetRoute) {
-    router.push(targetRoute);
-  }
-};
-
 const handleNewChat = async () => {
   const newChatId = Date.now().toString();
   activeChatId.value = newChatId;
@@ -590,8 +546,7 @@ const startStream = async (queryText: string, messageId: string) => {
           try {
             const parsed: StreamChunk = JSON.parse(data);
             await processStreamChunk(parsed, messageId);
-          } catch (error) {
-          }
+          } catch (error) {}
         }
       }
     }
@@ -614,24 +569,33 @@ const handleRegenerate = (content: string) => {
 
 const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
   var dataReasion;
-
   dataReasion = chunk.data?.reasoning_content;
-  // ✅ 新增：处理 workflow_finished 事件
   if (chunk.event === 'workflow_finished') {
     try {
       const outputs = chunk.data?.outputs;
       if (outputs && outputs.user_fields && outputs.user_fields.data_json) {
-        const sources = outputs.user_fields.data_json.map((item: any) => ({
-          file_id: item.file_id,
-          chunk_id: item.chunk_id,
-          title: item.title, // 文件标题
-          content: item.content, // 切片内容
-          subtitle: item.subtitle, // 子标题
-          update_date_time: item.update_date_time, // 更新时间
-          tags: item.tags,
-          repo_id: item.repo_id,
-          score: item.score,
-        }));
+        const dataJson = outputs.user_fields.data_json;
+
+        // ✅ 修改：处理 data_json 数组
+        const sources = dataJson.map((item: any) => {
+          const score = item.score ? parseFloat(item.score) : 0;
+
+          return {
+            file_id: item.file_id,
+            chunk_id: item.chunk_id,
+            title: item.title,
+            content: item.content,
+            subtitle: item.subtitle,
+            update_date_time: item.update_date_time,
+            tags: item.tags,
+            repo_id: item.repo_id,
+            score: score, // 转换为数字
+            match_score: score, // 保存 match_score
+          };
+        });
+
+        // ✅ 修改：将整个 data_json 转为字符串作为 referenceSource
+        const referenceSource = JSON.stringify(dataJson);
 
         // 将来源信息保存到当前消息
         const chat = chatStore.getChatSession(activeChatId.value!);
@@ -639,13 +603,41 @@ const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
           const message = chat.messages.find((m: any) => m.id === messageId);
           if (message) {
             message.sources = sources;
+
+            // 计算并保存最高匹配度
+            if (sources.length > 0) {
+              const maxScore = Math.max(...sources.map((s: any) => s.score || 0));
+              message.match_score = maxScore;
+            }
+
+            // ✅ 新增：保存 reference_source 到消息对象，用于后续保存到数据库
+            (message as any).reference_source = referenceSource;
           }
+        }
+
+        // ✅ 新增：保存对话到数据库（包含完整的 reference_source）
+        if (chat.messages.length >= 2) {
+          const userMessage = chat.messages[chat.messages.length - 2];
+          const assistantMessage = chat.messages[chat.messages.length - 1];
+
+          // 调用保存接口
+          await chatStore.saveConversationToServer(
+            currentConversationUuid.value,
+            messageId,
+            userMessage,
+            assistantMessage,
+            referenceSource, // ✅ 传递完整的 reference_source
+            assistantMessage.vote === 'like' ? 1 : 0,
+            assistantMessage.vote === 'dislike' ? 1 : 0,
+          );
         }
       }
     } catch (error) {
+      console.error('处理来源数据失败:', error);
     }
-    return; // 处理完后返回，不再走下面的逻辑
+    return;
   }
+
   if (chunk.event === 'message') {
     // 处理推理过程
     if (dataReasion !== undefined) {
@@ -687,6 +679,7 @@ const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
 // 新增计算属性
 
 // 在 App.vue 的 finishStream 函数中添加
+// App.vue - 修改 finishStream 函数
 const finishStream = (messageId: string) => {
   isStreaming.value = false;
   currentStreamingMessageId = null;
@@ -711,24 +704,27 @@ const finishStream = (messageId: string) => {
             : firstQuestion;
       }
 
-      // ✅ 新增：保存对话记录到服务器
+      // ✅ 修改：获取 reference_source
+      let referenceSource = '';
+      if ((message as any).reference_source) {
+        // 如果已经设置了 reference_source，直接使用
+        referenceSource = (message as any).reference_source;
+      } else if (message.sources && message.sources.length > 0) {
+        // 否则从 sources 构建
+        referenceSource = JSON.stringify(message.sources);
+      }
+
+      // ✅ 保存对话记录到服务器
       if (chat.messages.length >= 2) {
         const userMessage = chat.messages[chat.messages.length - 2];
         const assistantMessage = chat.messages[chat.messages.length - 1];
-        // 获取参考来源
-        let referenceSource = '';
-        if (assistantMessage.sources && assistantMessage.sources.length > 0) {
-          referenceSource = assistantMessage.sources
-            .map((source: any) => `${source.title}: ${source.content}`)
-            .join('\n');
-        }
-
+        
         chatStore.saveConversationToServer(
           currentConversationUuid.value,
           messageId,
           userMessage,
           assistantMessage,
-          referenceSource,
+          referenceSource, // ✅ 传递 reference_source
           assistantMessage.vote === 'like' ? 1 : 0,
           assistantMessage.vote === 'dislike' ? 1 : 0,
         );
@@ -741,7 +737,6 @@ const finishStream = (messageId: string) => {
   chatStore.saveToLocalStorage();
   scrollToBottom();
 };
-
 // 处理流式错误
 const handleStreamError = (messageId: string, errorMessage: string) => {
   const chat = chatStore.getChatSession(activeChatId.value!);
@@ -802,23 +797,35 @@ const scrollToBottom = () => {
 // 监听路由变化
 watch(
   () => route.path,
-  () => {
+  async (newPath) => {
+    console.log('路由变化:', newPath);
+    
+    // 更新活动标签
     updateActiveTabFromRoute();
+    
+    // ✅ 重要：重新加载当前菜单的数据
+    await chatStore.queryConversationsByFunc();
+    
+    // 重置当前聊天会话
+    resetCurrentChat();
   },
   { immediate: true },
 );
 
 // 生命周期
 onMounted(async () => {
-  // ✅ 先从服务器加载会话记录
-  await chatStore.queryConversationsByFunc();
-  // 再根据路由设置活动标签
+  // ✅ 修复顺序：先根据路由更新标签
   updateActiveTabFromRoute();
+  
+  // ✅ 然后从服务器加载当前菜单的会话记录
+  await chatStore.queryConversationsByFunc();
+  
   // 如果没有任何会话，创建新对话
   if (chatStore.historyList.length === 0) {
     handleNewChat();
   }
 });
+
 
 onUnmounted(() => {
   if (isStreaming.value) {

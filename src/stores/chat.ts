@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import type { ChatSession, HistoryItem, ChatMessage } from '../types/chat';
+import type { ChatSession, HistoryItem, ChatMessage, SourceInfo } from '../types/chat';
 
 // API基础配置
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
@@ -108,7 +108,9 @@ export const useChatStore = defineStore('chat', () => {
     try {
       localStorage.setItem('chatSessions', JSON.stringify(chatSessions.value));
       localStorage.setItem('historyList', JSON.stringify(historyList.value));
-    } catch (error) {}
+    } catch (error) {
+      console.error('保存到localStorage失败:', error);
+    }
   };
 
   // 从localStorage加载
@@ -123,7 +125,9 @@ export const useChatStore = defineStore('chat', () => {
       if (savedHistory) {
         historyList.value = JSON.parse(savedHistory);
       }
-    } catch (error) {}
+    } catch (error) {
+      console.error('从localStorage加载失败:', error);
+    }
   };
 
   // 接口1：保存对话记录到服务器
@@ -132,7 +136,7 @@ export const useChatStore = defineStore('chat', () => {
     qaId: string,
     userMessage: ChatMessage,
     assistantMessage: ChatMessage,
-    referenceSource: string = '',
+    referenceSource: string = '', // ✅ 接收完整的 reference_source
     likeStatus: number,
     dislikeStatus: number,
   ): Promise<{ success: boolean; insertId?: string }> => {
@@ -143,6 +147,20 @@ export const useChatStore = defineStore('chat', () => {
 
       if (assistantMessage.vote === 'like') likeStatus = 1;
       if (assistantMessage.vote === 'dislike') dislikeStatus = 1;
+
+      // ✅ 修改：从 assistantMessage 中获取匹配度
+      let matchScore = 0;
+      if (assistantMessage.sources && assistantMessage.sources.length > 0) {
+        const scores = assistantMessage.sources.map((source) => {
+          if (source.score) {
+            return typeof source.score === 'number'
+              ? source.score
+              : parseFloat(source.score);
+          }
+          return 0;
+        });
+        matchScore = Math.max(...scores);
+      }
 
       // 确定收藏状态
       const collectStatus = historyList.value.find((item: any) => item.id === sessionUuid)
@@ -156,14 +174,47 @@ export const useChatStore = defineStore('chat', () => {
         qa_id: qaId,
         input_content: userMessage.content,
         output_content: assistantMessage.content || '',
-        reference_source: referenceSource,
+        reference_source: referenceSource, // ✅ 使用传入的 reference_source
         like_status: likeStatus,
         dislike_status: dislikeStatus,
         input_time: inputTime,
         output_time: outputTime,
         collect_status: collectStatus,
+        match_score: matchScore,
       };
+
+      console.log('保存对话记录到服务器:', payload);
       const response = await fetch(`${API_BASE_URL}/v1/save_conversation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP错误! 状态: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('对话记录保存成功:', result);
+      return { success: true, insertId: result.insert_id };
+    } catch (error) {
+      console.error('保存对话记录到服务器失败:', error);
+      return { success: false };
+    }
+  };
+
+  // 接口2：删除单条会话全部记录
+  const deleteConversationBySession = async (sessionUuid: string): Promise<boolean> => {
+    try {
+      const funcId = getFuncIdByTab(currentActiveTab.value);
+
+      const payload = {
+        func_id: funcId,
+        session_uuid: sessionUuid,
+      };
+
+      console.log('删除会话记录:', payload);
+      const response = await fetch(`${API_BASE_URL}/v1/delete_conversation`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -176,32 +227,8 @@ export const useChatStore = defineStore('chat', () => {
       }
 
       const result = await response.json();
-      return { success: true, insertId: result.insert_id };
-    } catch (error) {
-      return { success: false };
-    }
-  };
+      console.log('会话记录删除成功:', result);
 
-  // 接口2：删除d单条会话全部记录
-  const deleteConversationBySession = async (sessionUuid: string): Promise<boolean> => {
-    try {
-      const funcId = getFuncIdByTab(currentActiveTab.value);
-
-      const payload = {
-        func_id: funcId,
-        session_uuid: sessionUuid,
-      };
-      const response = await fetch(`${API_BASE_URL}/v1/delete_conversation`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP错误! 状态: ${response.status}`);
-      }
       // 从本地删除
       deleteHistoryItem(sessionUuid);
       delete chatSessions.value[sessionUuid];
@@ -209,6 +236,7 @@ export const useChatStore = defineStore('chat', () => {
 
       return true;
     } catch (error) {
+      console.error('删除会话记录失败:', error);
       return false;
     }
   };
@@ -221,6 +249,8 @@ export const useChatStore = defineStore('chat', () => {
       const payload = {
         func_id: funcId,
       };
+
+      console.log('查询会话列表:', payload);
 
       const response = await fetch(`${API_BASE_URL}/v1/query_conversation`, {
         method: 'POST',
@@ -235,6 +265,7 @@ export const useChatStore = defineStore('chat', () => {
       }
 
       const result = await response.json();
+      console.log('会话列表查询成功:', result);
 
       // 转换后端数据格式为前端格式
       if (result.code === 200 && result.data) {
@@ -256,6 +287,7 @@ export const useChatStore = defineStore('chat', () => {
 
             // 检查时间是否有效
             if (isNaN(createTime)) {
+              console.error('无效的创建时间:', firstQa.create_time);
               return; // 跳过这个会话
             }
 
@@ -275,14 +307,14 @@ export const useChatStore = defineStore('chat', () => {
 
             // ✅ 创建会话消息
             const messages: ChatMessage[] = [];
-
+            // chat.ts - 修改 queryConversationsByFunc 函数
             conversationList.forEach((qa: any) => {
               // 用户消息
               const inputTime = new Date(qa.input_time).getTime();
               const outputTime = new Date(qa.output_time).getTime();
 
-              // 检查时间是否有效
               if (isNaN(inputTime) || isNaN(outputTime)) {
+                console.error('无效的时间:', qa.input_time, qa.output_time);
                 return;
               }
 
@@ -294,7 +326,45 @@ export const useChatStore = defineStore('chat', () => {
                 vote: null,
               });
 
-              // AI消息
+              // ✅ AI消息 - 从数据库获取数据
+              const matchScore = qa.match_score || 0;
+
+              // ✅ 修改：解析 reference_source
+              let sources = [];
+              try {
+                if (qa.reference_source) {
+                  // 尝试解析 reference_source
+                  const parsedSources = JSON.parse(qa.reference_source);
+                  if (Array.isArray(parsedSources)) {
+                    sources = parsedSources.map((item: any) => ({
+                      file_id: item.file_id,
+                      chunk_id: item.chunk_id,
+                      title: item.title,
+                      content: item.content,
+                      subtitle: item.subtitle,
+                      update_date_time: item.update_date_time,
+                      tags: item.tags,
+                      repo_id: item.repo_id,
+                      score: item.score || 0,
+                      match_score: item.match_score || item.score || 0,
+                    }));
+                  }
+                }
+              } catch (error) {
+                console.error('解析 reference_source 失败:', error);
+                // 回退方案：如果解析失败，使用简单的参考来源
+                if (qa.reference_source && typeof qa.reference_source === 'string') {
+                  sources = [
+                    {
+                      title: '参考来源',
+                      content: qa.reference_source,
+                      score: matchScore,
+                      match_score: matchScore,
+                    },
+                  ];
+                }
+              }
+
               messages.push({
                 id: qa.qa_id,
                 role: 'assistant',
@@ -308,9 +378,8 @@ export const useChatStore = defineStore('chat', () => {
                       : null,
                 likeCount: qa.like_status || 0,
                 dislikeCount: qa.dislike_status || 0,
-                sources: qa.reference_source
-                  ? [{ title: '参考来源', content: qa.reference_source }]
-                  : [],
+                sources: sources, // ✅ 使用解析后的 sources
+                match_score: matchScore,
               });
             });
 
@@ -336,6 +405,7 @@ export const useChatStore = defineStore('chat', () => {
 
       return result;
     } catch (error) {
+      console.error('查询会话列表失败:', error);
       return null;
     }
   };
@@ -350,6 +420,9 @@ export const useChatStore = defineStore('chat', () => {
         session_uuid: sessionUuid,
         collect_status: isCollected ? 1 : 0,
       };
+
+      console.log('同步收藏状态:', payload);
+
       const response = await fetch(`${API_BASE_URL}/v1/update_collect_status`, {
         method: 'POST',
         headers: {
@@ -361,8 +434,12 @@ export const useChatStore = defineStore('chat', () => {
       if (!response.ok) {
         throw new Error(`HTTP错误! 状态: ${response.status}`);
       }
+
+      const result = await response.json();
+      console.log('收藏状态同步成功:', result);
       return true;
     } catch (error) {
+      console.error('同步收藏状态失败:', error);
       return false;
     }
   };
@@ -379,6 +456,9 @@ export const useChatStore = defineStore('chat', () => {
         like_status: likeStatus,
         dislike_status: dislikeStatus,
       };
+
+      console.log('同步点赞状态:', payload);
+
       const response = await fetch(`${API_BASE_URL}/v1/update_like_status`, {
         method: 'POST',
         headers: {
@@ -397,8 +477,11 @@ export const useChatStore = defineStore('chat', () => {
       if (result.code !== 200) {
         throw new Error(result.msg || '更新失败');
       }
+
+      console.log('点赞状态同步成功:', result);
       return true;
     } catch (error) {
+      console.error('同步点赞状态失败:', error);
       return false;
     }
   };

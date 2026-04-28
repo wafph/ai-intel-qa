@@ -82,16 +82,19 @@
                 >
                   <div class="search-results-box">
                     <!-- 搜索结果列表 -->
+
                     <div
-                      v-for="(source, idx) in paginatedSources(item)"
-                      :key="source.chunk_id || idx"
-                      class="search-result-item"
+                    v-for="(source, idx) in paginatedSources(item)"
+                    :key="source.chunk_id || idx"
+                    class="search-result-item"
                     >
                       <h3 class="source-title">
                         {{ source.subtitle
-                        }}<el-button type="primary" plain round class="source-score"
-                          >匹配度:
-                          {{ (parseFloat(source.score) * 100).toFixed(1) }}%</el-button
+                        }}<el-button type="primary" plain round class="source-score">
+                          匹配度:
+                          {{
+                            formatScore(source.match_score || source.score)
+                          }}%</el-button
                         >
                       </h3>
                       <div class="result-content-wrapper">
@@ -110,25 +113,23 @@
                           >
                             {{ expandedStates[source.chunk_id] ? '收起 ↑' : '展开 ↓' }}
                           </span>
-                         <div>
-                           <p class="update-date"
-                            >更新日期：{{
-                              formatUpdateDate(source.update_date_time)
-                            }}</p
-                          >
-                          <a
-                            class="view-detail"
-                            href="javascript:;"
-                            @click.prevent="
-                              handleViewDocument(source.file_id, source.title)
-                            "
-                            :class="{ disabled: isDownloading[source.file_id] }"
-                          >
-                            {{
-                              isDownloading[source.file_id] ? '加载中...' : '查看详情 →'
-                            }}
-                          </a>
-                         </div>
+                          <div>
+                            <p class="update-date">
+                              更新日期：{{ formatUpdateDate(source.update_date_time) }}
+                            </p>
+                            <a
+                              class="view-detail"
+                              href="javascript:;"
+                              @click.prevent="
+                                handleViewDocument(source.file_id, source.title)
+                              "
+                              :class="{ disabled: isDownloading[source.file_id] }"
+                            >
+                              {{
+                                isDownloading[source.file_id] ? '加载中...' : '查看详情 →'
+                              }}
+                            </a>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -460,6 +461,28 @@ const paginatedSources = (item: ChatMessage) => {
   const endIndex = startIndex + state.pageSize;
 
   return item.sources.slice(startIndex, endIndex);
+};
+
+// IntelligentQA.vue 和 IntelligentRetrieval.vue 中的 formatScore 函数
+const formatScore = (score: number | string | undefined): string => {
+  if (score === undefined || score === null) return '0.0';
+
+  let numScore: number;
+  if (typeof score === 'number') {
+    numScore = score;
+  } else {
+    numScore = parseFloat(score);
+  }
+
+  if (isNaN(numScore)) return '0.0';
+
+  // 如果 score 已经是百分比（大于1），直接显示
+  if (numScore > 1) {
+    return numScore.toFixed(1);
+  }
+
+  // 否则乘以100
+  return (numScore * 100).toFixed(1);
 };
 
 // 将文本追加到打字机队列

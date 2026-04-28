@@ -1,7 +1,10 @@
 <template>
   <div class="intelligent-qa">
     <!-- 头部区域 -->
-    <div class="qa-header" v-if="!loading && (!chatData?.messages || chatData.messages.length === 0)">
+    <div
+      class="qa-header"
+      v-if="!loading && (!chatData?.messages || chatData.messages.length === 0)"
+    >
       <h1>我是问答助手，很高兴见到你</h1>
       <p>你可以使用自然语言提问，我来精准回答</p>
     </div>
@@ -242,9 +245,9 @@
                         >
                           {{ source.title }}
                         </strong>
-                        <span class="source-score"
-                          >匹配度:
-                          {{ (parseFloat(source.score) * 100).toFixed(1) }}%</span
+                        <span class="source-score">
+                          匹配度:
+                          {{ formatScore(source.match_score || source.score) }}%</span
                         >
                       </div>
                       <span class="collapse-icon">
@@ -405,6 +408,28 @@ const showCopied = ref(false);
 const copiedMessageId = ref<string | null>(null);
 let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
+// IntelligentQA.vue - formatScore 函数
+const formatScore = (score: number | string | undefined): string => {
+  if (score === undefined || score === null) return '0.0';
+  
+  let numScore: number;
+  if (typeof score === 'number') {
+    numScore = score;
+  } else {
+    numScore = parseFloat(score);
+  }
+  
+  if (isNaN(numScore)) return '0.0';
+  
+  // 如果 score 已经是百分比（大于1），直接显示
+  if (numScore > 1) {
+    return numScore.toFixed(1);
+  }
+  
+  // 否则乘以100
+  return (numScore * 100).toFixed(1);
+};
+
 // 复制文本到剪贴板的函数
 const copyToClipboard = async (text: string) => {
   try {
@@ -447,8 +472,7 @@ const copySource = async (source: any) => {
   try {
     await navigator.clipboard.writeText(text);
     ElMessage.success('已复制来源片段');
-  } catch (err) {
-  }
+  } catch (err) {}
 };
 
 // ✅ 新增：处理来源标题点击
@@ -731,10 +755,10 @@ const handleVote = async (messageId: string, voteType: 'like' | 'dislike') => {
   // ✅ 新增：调用后端接口同步点赞状态
   const likeStatus = message.vote === 'like' ? 1 : 0;
   const dislikeStatus = message.vote === 'dislike' ? 1 : 0;
-  
+
   try {
     const success = await chatStore.syncLikeStatus(messageId, likeStatus, dislikeStatus);
-    
+
     if (!success) {
       // 如果接口调用失败，回滚到原来的状态
       message.vote = originalVote;
