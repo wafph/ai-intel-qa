@@ -1,21 +1,21 @@
 <template>
   <div class="intelligent-qa">
-    <!-- 头部区域 -->
+    <!-- 头部区域 - 只在完全没有数据时显示 -->
     <div
       class="qa-header"
-      v-if="!loading && (!chatData?.messages || chatData.messages.length === 0)"
+      v-if="!hasMessages && !loading"
     >
       <h1>我是问答助手，很高兴见到你</h1>
       <p>你可以使用自然语言提问，我来精准回答</p>
     </div>
 
-    <!-- 历史对话列表 -->
+    <!-- 历史对话列表 - 只要有消息就显示 -->
     <div
       class="conversation-history"
-      v-if="chatData?.messages && chatData?.messages?.length > 0"
+      v-if="hasMessages"
     >
       <div
-        v-for="(item, index) in chatData.messages || []"
+        v-for="(item, index) in chatData?.messages || []"
         :key="item.id"
         :class="[
           'history-item',
@@ -283,6 +283,12 @@
       </div>
     </div>
 
+    <!-- 加载状态 -->
+    <div v-if="loading" class="loading-state">
+      <div class="loading-spinner"></div>
+      <p>正在加载对话...</p>
+    </div>
+
     <!-- ✅ 新增：PDF 预览弹框 -->
     <div v-if="showPdfViewer" class="pdf-viewer-modal" @click.self="closePdfViewer">
       <div class="pdf-viewer-container">
@@ -306,12 +312,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted, onUnmounted, onUpdated, reactive } from 'vue';
+import { ref, watch, computed, nextTick, onMounted, onUnmounted, onUpdated, reactive } from 'vue';
 import MarkdownIt from 'markdown-it';
 import { ElMessage } from 'element-plus';
 import { ArrowRight, ArrowUp } from '@element-plus/icons-vue';
-import { useChatStore } from '@/stores/chat'; // ✅ 新增：导入 chatStore
+import { useChatStore } from '@/stores/chat';
 const chatStore = useChatStore();
+
 // 状态变量
 const displayAnswer = ref<string>('');
 const typingSpeed = 20; // 打字速度（毫秒）
@@ -395,6 +402,27 @@ const props = withDefaults(defineProps<Props>(), {
   currentAnswer: '',
   currentStreamingMessageId: null,
 });
+
+// ✅ 新增：计算属性判断是否有消息
+const hasMessages = computed(() => {
+  return props.chatData?.messages && props.chatData.messages.length > 0;
+});
+
+
+// ✅ 新增：监听 chatData 变化，打印调试信息
+watch(
+  () => props.chatData,
+  (newChatData) => {
+    console.log('IntelligentQA received chatData:', newChatData);
+    if (newChatData) {
+      console.log('Messages count:', newChatData.messages?.length || 0);
+      if (newChatData.messages && newChatData.messages.length > 0) {
+        console.log('First message:', newChatData.messages[0]);
+      }
+    }
+  },
+  { immediate: true, deep: true }
+);
 
 // Markdown渲染器
 const md = new MarkdownIt({
@@ -708,13 +736,28 @@ const appendToTypingQueue = (text: string) => {
   }
 };
 
-// 添加投票处理函数
-// IntelligentQA.vue - 修改后的 handleVote 函数
 const handleVote = async (messageId: string, voteType: 'like' | 'dislike') => {
-  if (!props.chatData) return;
+  if (!props.chatData) {
+    console.error('chatData is null');
+    return;
+  }
 
   const message = props.chatData.messages.find((msg) => msg.id === messageId);
-  if (!message) return;
+  if (!message) {
+    console.error('Message not found:', messageId);
+    return;
+  }
+
+  // ✅ 关键修复：从 chatData 中获取 sessionUuid
+  const sessionUuid = (props.chatData as any).conversationUuid || (props.chatData as any).id;
+  
+  if (!sessionUuid) {
+    console.error('No sessionUuid found in chatData:', props.chatData);
+    ElMessage.error('无法获取会话ID，请刷新页面重试');
+    return;
+  }
+
+  console.log('Vote request - sessionUuid:', sessionUuid, 'messageId:', messageId);
 
   // 保存原来的投票状态，用于回滚
   const originalVote = message.vote;
@@ -752,12 +795,13 @@ const handleVote = async (messageId: string, voteType: 'like' | 'dislike') => {
     }
   }
 
-  // ✅ 新增：调用后端接口同步点赞状态
+  // ✅ 修复：调用后端接口同步点赞状态，传递正确的 sessionUuid
   const likeStatus = message.vote === 'like' ? 1 : 0;
   const dislikeStatus = message.vote === 'dislike' ? 1 : 0;
 
   try {
-    const success = await chatStore.syncLikeStatus(messageId, likeStatus, dislikeStatus);
+    // ✅ 传递 sessionUuid 参数
+    const success = await chatStore.syncLikeStatus(messageId, likeStatus, dislikeStatus, sessionUuid);
 
     if (!success) {
       // 如果接口调用失败，回滚到原来的状态
@@ -767,6 +811,7 @@ const handleVote = async (messageId: string, voteType: 'like' | 'dislike') => {
       ElMessage.error('点赞状态更新失败，请重试');
     }
   } catch (error) {
+    console.error('Vote error:', error);
     // 回滚状态
     message.vote = originalVote;
     message.likeCount = originalLikeCount;
@@ -1056,10 +1101,6 @@ onUpdated(() => {
               color: #fa8c16;
               text-transform: uppercase;
               letter-spacing: 0.5px;
-            }
-
-            .thinking-icon {
-              font-size: 16px;
             }
 
             .thinking-content {
@@ -1501,6 +1542,31 @@ onUpdated(() => {
     100% {
       transform: rotate(360deg);
     }
+  }
+}
+
+// ✅ 新增：加载状态样式
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px;
+  
+  .loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #409eff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+  }
+  
+  p {
+    color: #666;
+    font-size: 16px;
   }
 }
 

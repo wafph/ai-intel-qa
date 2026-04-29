@@ -29,7 +29,7 @@
           <!-- 路由视图区域 -->
           <div class="dynamic-content">
             <router-view
-              v-if="activeTab"
+              v-if="activeTab && currentChatData"
               :key="activeChatId"
               :chat-data="currentChatData"
               :streaming="isStreaming"
@@ -143,8 +143,30 @@ let currentStreamingMessageId: string | null = null;
 
 // 计算属性
 const currentChatData = computed(() => {
-  if (!activeChatId.value) return null;
-  return chatStore.getChatSession(activeChatId.value) || null;
+  if (!activeChatId.value) {
+    console.log('No active chat ID');
+    return null;
+  }
+
+  const session = chatStore.getChatSession(activeChatId.value);
+
+  if (!session) {
+    console.log('Session not found for ID:', activeChatId.value);
+    return null;
+  }
+
+  console.log('Current chat data:', {
+    id: session.id,
+    title: session.title,
+    messageCount: session.messages?.length || 0,
+    hasMessages: session.messages && session.messages.length > 0,
+  });
+
+  // ✅ 返回一个新的对象引用，确保响应式更新
+  return {
+    ...session,
+    messages: session.messages ? [...session.messages] : [],
+  };
 });
 
 // 判断是否显示完整布局
@@ -201,7 +223,6 @@ const handleSelectAll = (val: boolean) => {
   }
 };
 
-// 根据当前路由设置活动标签
 const updateActiveTabFromRoute = () => {
   const routeToTabMap: Record<string, string> = {
     '/intelligent-qa': '智能问答',
@@ -288,30 +309,77 @@ const handleNewChat = async () => {
   scrollToBottom();
 };
 
-// ✅ 修改：点击会话时才加载完整历史
+// 修改 handleSelectChat 函数，确保能正确加载会话
 const handleSelectChat = async (chatId: string) => {
   if (isStreaming.value) {
     stopStream();
   }
 
-  activeChatId.value = chatId;
-  const chat = chatStore.getChatSession(chatId);
+  // 先清空，再设置，确保触发响应式更新
+  activeChatId.value = '';
+  await nextTick();
 
-  if (chat && (chat as any).conversationUuid) {
-    currentConversationUuid.value = (chat as any).conversationUuid;
-  } else {
-    currentConversationUuid.value = generateUUID();
-    if (chat) {
-      (chat as any).conversationUuid = currentConversationUuid.value;
-      chatStore.saveToLocalStorage();
+  const session = chatStore.getChatSession(chatId);
+
+  if (!session) {
+    console.error('Session not found:', chatId);
+
+    // ✅ 新增：如果会话不存在，尝试从服务器加载
+    console.log('尝试从服务器加载会话:', chatId);
+    try {
+      const funcId = chatStore.getFuncIdByTab(activeTab.value);
+      const messages = await chatStore.querySessionHistory(chatId, funcId);
+
+      if (messages && messages.length > 0) {
+        // 创建新的会话对象
+        const newSession: ChatSession = {
+          id: chatId,
+          title: '从收藏加载的会话',
+          time: Date.now(),
+          type: activeTab.value as any,
+          messages: messages,
+          menuType: activeTab.value,
+          conversationUuid: chatId,
+        };
+
+        chatStore.addChatSession(newSession);
+        console.log('会话已从服务器加载');
+      } else {
+        console.error('无法从服务器加载会话');
+        return;
+      }
+    } catch (error) {
+      console.error('加载会话失败:', error);
+      return;
     }
   }
 
-  // ✅ 关键修改：点击会话时加载完整历史
-  if (chat && (!chat.messages || chat.messages.length === 0)) {
-    console.log('加载会话完整历史:', chatId);
-    await chatStore.loadSessionHistory(chatId);
+  // 设置当前会话UUID
+  if (session && !(session as any).conversationUuid) {
+    (session as any).conversationUuid = chatId;
+    chatStore.saveToLocalStorage();
   }
+
+  currentConversationUuid.value = chatId;
+
+  // 加载会话历史
+  if (session && (!session.messages || session.messages.length === 0)) {
+    console.log('Loading session history for:', chatId);
+
+    try {
+      const success = await chatStore.loadSessionHistory(chatId);
+      if (success) {
+        console.log('Session history loaded successfully');
+      } else {
+        console.warn('Failed to load session history');
+      }
+    } catch (error) {
+      console.error('Error loading session history:', error);
+    }
+  }
+
+  // 设置 activeChatId，这会触发 IntelligentQA.vue 的重新渲染
+  activeChatId.value = chatId;
 
   resetStreamState();
   scrollToBottom();
@@ -470,7 +538,7 @@ const startStream = async (queryText: string, messageId: string) => {
     const version1 = '?version=1776836351895';
     const version2 = '?version=1777019540183';
     const version3 = '?version=1777258599011';
-    const version4 = '?version=1777097823097';
+    const version4 = '?version=1777432604064';
 
     let apiUrl = '';
     if (activeTab.value === '智能问答') {
@@ -634,6 +702,32 @@ const processStreamChunk = async (chunk: any, messageId: string) => {
   }
 };
 
+const handleTabChange = (tab: string) => {
+  console.log('切换菜单:', tab);
+
+  // 更新当前激活的标签
+  activeTab.value = tab;
+  chatStore.setCurrentActiveTab(tab);
+
+  // 重置当前聊天
+  resetCurrentChat();
+
+  // ✅ 关键：切换菜单时重新加载对应功能的会话列表
+  chatStore.queryConversationsByFunc();
+
+  // 更新路由
+  const routeMap: Record<string, string> = {
+    智能问答: '/intelligent-qa',
+    智能检索: '/intelligent-retrieval',
+    辅助起草: '/auxiliary-draft',
+    合规审核: '/compliance-review',
+  };
+
+  const targetRoute = routeMap[tab];
+  if (targetRoute && route.path !== targetRoute) {
+    router.push(targetRoute);
+  }
+};
 const finishStream = (messageId: string) => {
   isStreaming.value = false;
   currentStreamingMessageId = null;
@@ -667,7 +761,7 @@ const finishStream = (messageId: string) => {
       if (chat.messages.length >= 2) {
         const userMessage = chat.messages[chat.messages.length - 2];
         const assistantMessage = chat.messages[chat.messages.length - 1];
-        
+
         chatStore.saveConversationToServer(
           currentConversationUuid.value,
           messageId,
@@ -744,11 +838,11 @@ watch(
   () => route.path,
   async (newPath) => {
     console.log('路由变化:', newPath);
-    
+
     updateActiveTabFromRoute();
-    
+
     await chatStore.queryConversationsByFunc();
-    
+
     resetCurrentChat();
   },
   { immediate: true },
@@ -757,9 +851,9 @@ watch(
 // 生命周期
 onMounted(async () => {
   updateActiveTabFromRoute();
-  
+
   await chatStore.queryConversationsByFunc();
-  
+
   if (chatStore.historyList.length === 0) {
     handleNewChat();
   }
@@ -771,6 +865,7 @@ onUnmounted(() => {
   }
 });
 </script>
+
 <style lang="less" scoped>
 .app-container {
   width: 100vw;

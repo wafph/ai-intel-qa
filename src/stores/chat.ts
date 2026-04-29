@@ -9,8 +9,8 @@ export const useChatStore = defineStore('chat', () => {
   const chatSessions = ref<Record<string, ChatSession>>({});
   const historyList = ref<HistoryItem[]>([]);
   const currentActiveTab = ref<string>('智能问答');
-  const currentConversationUuid = ref<string>(''); // 当前会话UUID
-  const loadingSessionIds = ref<Set<string>>(new Set()); // 正在加载的会话ID集合
+  const currentConversationUuid = ref<string>('');
+  const loadingSessionIds = ref<Set<string>>(new Set());
 
   // 获取功能ID映射
   const getFuncIdByTab = (tab: string): string => {
@@ -280,7 +280,7 @@ export const useChatStore = defineStore('chat', () => {
             lastMessageTime: lastMessageTime,
           };
 
-          // ✅ 修改：不立即加载完整历史，只创建空消息数组
+          // 创建会话对象（初始为空消息）
           const session: ChatSession = {
             id: sessionUuid,
             title: sessionTitle,
@@ -306,66 +306,6 @@ export const useChatStore = defineStore('chat', () => {
     } catch (error) {
       console.error('查询会话列表失败:', error);
       return null;
-    }
-  };
-
-  // 查询单个会话的完整历史
-  const querySessionHistory = async (sessionUuid: string, funcId: string): Promise<ChatMessage[]> => {
-    try {
-      console.log('查询会话完整历史:', sessionUuid, funcId);
-      const url = `${API_BASE_URL}/v1/chat/history?functionId=${funcId}&sessionId=${sessionUuid}`;
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP错误! 状态: ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log('会话历史查询结果:', result);
-
-      const messages: ChatMessage[] = [];
-      
-      if (result && Array.isArray(result)) {
-        result.forEach((qa: any) => {
-          // 用户消息
-          messages.push({
-            id: `user_${qa.qaId}`,
-            role: 'user',
-            content: qa.questionContent,
-            timestamp: new Date(qa.questionTime).getTime(),
-            vote: null,
-          });
-
-          // AI消息
-          const sources = qa.answer?.data_json || [];
-          const matchScore = sources.length > 0 
-            ? Math.max(...sources.map((s: any) => parseFloat(s.score || '0')))
-            : 0;
-
-          messages.push({
-            id: qa.qaId,
-            role: 'assistant',
-            content: qa.answer?.responseContent || '',
-            timestamp: new Date(qa.answerTime).getTime(),
-            vote: qa.likeStatus === 1 ? 'like' : (qa.dislikeStatus === 1 ? 'dislike' : null),
-            likeCount: qa.likeStatus || 0,
-            dislikeCount: qa.dislikeStatus || 0,
-            sources: sources,
-            match_score: matchScore,
-          });
-        });
-      }
-
-      return messages;
-    } catch (error) {
-      console.error('查询会话历史失败:', error);
-      return [];
     }
   };
 
@@ -423,7 +363,7 @@ export const useChatStore = defineStore('chat', () => {
   ): Promise<boolean> => {
     try {
       const funcId = getFuncIdByTab(currentActiveTab.value);
-      const qaId = ''; // 需要传入具体的qaId
+      const qaId = '';
 
       const payload = {
         sessionId: sessionUuid,
@@ -433,7 +373,7 @@ export const useChatStore = defineStore('chat', () => {
       };
 
       console.log('同步收藏状态:', payload);
-      const response = await fetch(`${API_BASE_URL}/v1/chat/status`, {
+      const response = await fetch(`${API_BASE_URL}/v1/chat/favorite`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -455,44 +395,51 @@ export const useChatStore = defineStore('chat', () => {
   };
 
   // 接口7：更新点赞/点踩状态
-  const syncLikeStatus = async (
-    qaId: string,
-    likeStatus: number,
-    dislikeStatus: number,
-  ): Promise<boolean> => {
-    try {
-      const funcId = getFuncIdByTab(currentActiveTab.value);
-      const sessionUuid = currentConversationUuid.value;
+// 接口7：更新点赞/点踩状态
+const syncLikeStatus = async (
+  qaId: string,
+  likeStatus: number,
+  dislikeStatus: number,
+  sessionUuid: string, // ✅ 新增：接收 sessionUuid 参数
+): Promise<boolean> => {
+  try {
+    const funcId = getFuncIdByTab(currentActiveTab.value);
+    
+    // ✅ 修复：使用传入的 sessionUuid，而不是 currentConversationUuid.value
+    const payload = {
+      sessionId: sessionUuid, // 使用传入的 sessionUuid
+      functionId: funcId,
+      qaId: qaId,
+      likeStatus: likeStatus,
+      dislikeStatus: dislikeStatus,
+    };
 
-      const payload = {
-        sessionId: sessionUuid,
-        functionId: funcId,
-        qaId: qaId,
-        likeStatus: likeStatus,
-        dislikeStatus: dislikeStatus,
-      };
+    console.log('同步点赞状态:', payload);
+    
+    // ✅ 修复：确保 URL 正确
+    const url = `${API_BASE_URL}/v1/chat/status`;
+    console.log('请求URL:', url);
+    
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
 
-      console.log('同步点赞状态:', payload);
-      const response = await fetch(`${API_BASE_URL}/v1/chat/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP错误! 状态: ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log('点赞状态同步成功:', result);
-      return true;
-    } catch (error) {
-      console.error('同步点赞状态失败:', error);
-      return false;
+    if (!response.ok) {
+      throw new Error(`HTTP错误! 状态: ${response.status}, URL: ${url}`);
     }
-  };
+
+    const result = await response.json();
+    console.log('点赞状态同步成功:', result);
+    return true;
+  } catch (error) {
+    console.error('同步点赞状态失败:', error);
+    return false;
+  }
+};
 
   // 更新消息的点赞状态
   const updateMessageVote = (
@@ -511,48 +458,75 @@ export const useChatStore = defineStore('chat', () => {
     // 更新点赞/点踩计数
     if (vote === 'like') {
       message.likeCount = (message.likeCount || 0) + 1;
-      message.dislikeCount = 0; // 清除点踩
+      message.dislikeCount = 0;
     } else if (vote === 'dislike') {
       message.dislikeCount = (message.dislikeCount || 0) + 1;
-      message.likeCount = 0; // 清除点赞
+      message.likeCount = 0;
     } else {
-      // 取消投票
       message.likeCount = 0;
       message.dislikeCount = 0;
     }
 
     saveToLocalStorage();
 
-    // 同步到服务器（接口7）
+    // 同步到服务器
     const likeStatus = vote === 'like' ? 1 : 0;
     const dislikeStatus = vote === 'dislike' ? 1 : 0;
     syncLikeStatus(messageId, likeStatus, dislikeStatus);
   };
 
-  // 删除会话（本地删除，因为没有删除接口）
-  const deleteConversationBySession = async (sessionUuid: string): Promise<boolean> => {
-    try {
-      // 由于没有删除接口，我们只做本地删除
+  // 删除会话
+// 删除会话（调用后端接口）
+const deleteConversationBySession = async (sessionUuid: string): Promise<boolean> => {
+  try {
+    const funcId = getFuncIdByTab(currentActiveTab.value);
+    
+    console.log('删除会话:', sessionUuid, '功能ID:', funcId);
+    
+    // ✅ 调用后端删除接口
+    const url = `${API_BASE_URL}/v1/chat/history?functionId=${funcId}&sessionId=${sessionUuid}`;
+    console.log('删除请求URL:', url);
+    
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP错误! 状态: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('删除会话结果:', result);
+    
+    // 假设后端返回格式：{ code: 0, msg: 'success' }
+    if (result && result.code === 0) {
+      // 从本地删除
       deleteHistoryItem(sessionUuid);
       delete chatSessions.value[sessionUuid];
       saveToLocalStorage();
       
-      console.log('会话已本地删除:', sessionUuid);
+      console.log('会话已成功删除:', sessionUuid);
       return true;
-    } catch (error) {
-      console.error('删除会话失败:', error);
+    } else {
+      console.error('删除会话失败:', result.msg || '未知错误');
       return false;
     }
-  };
+  } catch (error) {
+    console.error('删除会话失败:', error);
+    return false;
+  }
+};
 
-  // 加载会话列表（初始化时调用）
+  // 加载会话列表
   const loadConversations = async () => {
     await queryConversationsByFunc();
   };
 
   // 清空所有会话
   const clearAllConversations = async () => {
-    // 获取所有会话UUID
     const sessionUuids = Object.keys(chatSessions.value);
 
     for (const sessionUuid of sessionUuids) {
@@ -560,47 +534,160 @@ export const useChatStore = defineStore('chat', () => {
     }
   };
 
-  // ✅ 新增：加载单个会话的完整历史
-  const loadSessionHistory = async (sessionUuid: string): Promise<boolean> => {
-    try {
-      // 如果已经在加载中，则返回
-      if (loadingSessionIds.value.has(sessionUuid)) {
-        return false;
-      }
+// 在 chat.ts 中添加或修改以下方法
 
-      loadingSessionIds.value.add(sessionUuid);
-
-      const funcId = getFuncIdByTab(currentActiveTab.value);
-      const session = chatSessions.value[sessionUuid];
-      
-      if (!session) {
-        loadingSessionIds.value.delete(sessionUuid);
-        return false;
-      }
-
-      // 如果已经有消息，则不需要重新加载
-      if (session.messages && session.messages.length > 0) {
-        loadingSessionIds.value.delete(sessionUuid);
-        return true;
-      }
-
-      const messages = await querySessionHistory(sessionUuid, funcId);
-      
-      if (messages && messages.length > 0) {
-        session.messages = messages;
-        saveToLocalStorage();
-        loadingSessionIds.value.delete(sessionUuid);
-        return true;
-      }
-
-      loadingSessionIds.value.delete(sessionUuid);
+// 修改 loadSessionHistory 方法，确保能正确加载会话
+const loadSessionHistory = async (sessionUuid: string): Promise<boolean> => {
+  try {
+    if (loadingSessionIds.value.has(sessionUuid)) {
+      console.log('Already loading session:', sessionUuid);
       return false;
-    } catch (error) {
-      console.error('加载会话历史失败:', error);
+    }
+
+    loadingSessionIds.value.add(sessionUuid);
+
+    const funcId = getFuncIdByTab(currentActiveTab.value);
+    const session = chatSessions.value[sessionUuid];
+    
+    if (!session) {
+      console.error('Session not found:', sessionUuid);
       loadingSessionIds.value.delete(sessionUuid);
       return false;
     }
-  };
+
+    // 如果已经有消息，则不需要重新加载
+    if (session.messages && session.messages.length > 0) {
+      console.log('Session already has messages:', session.messages.length);
+      loadingSessionIds.value.delete(sessionUuid);
+      return true;
+    }
+
+    console.log('Fetching history for session:', sessionUuid, 'with funcId:', funcId);
+    const messages = await querySessionHistory(sessionUuid, funcId);
+    
+    if (messages && messages.length > 0) {
+      console.log('Received messages:', messages.length);
+      
+      // 创建新的会话对象，确保响应式更新
+      const updatedSession = {
+        ...session,
+        messages: [...messages]
+      };
+      
+      // 直接替换整个会话对象
+      chatSessions.value = {
+        ...chatSessions.value,
+        [sessionUuid]: updatedSession
+      };
+      
+      saveToLocalStorage();
+      loadingSessionIds.value.delete(sessionUuid);
+      return true;
+    } else {
+      console.warn('No messages found for session:', sessionUuid);
+    }
+
+    loadingSessionIds.value.delete(sessionUuid);
+    return false;
+  } catch (error) {
+    console.error('加载会话历史失败:', error);
+    loadingSessionIds.value.delete(sessionUuid);
+    return false;
+  }
+};
+
+// 确保 querySessionHistory 方法能正确处理后端返回的数据
+const querySessionHistory = async (sessionUuid: string, funcId: string): Promise<ChatMessage[]> => {
+  try {
+    console.log('查询会话完整历史:', sessionUuid, funcId);
+    const url = `${API_BASE_URL}/v1/chat/history?functionId=${funcId}&sessionId=${sessionUuid}`;
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP错误! 状态: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('会话历史查询结果:', result);
+
+    const messages: ChatMessage[] = [];
+    
+    // ✅ 关键修改：适应新的数据结构
+    if (result && result.code === 0 && result.data && Array.isArray(result.data.historyJson)) {
+      const historyJson = result.data.historyJson;
+      
+      historyJson.forEach((qa: any) => {
+        // 用户消息
+        messages.push({
+          id: `user_${qa.qaId}`,
+          role: 'user',
+          content: qa.questionContent,
+          timestamp: new Date(qa.questionTime).getTime(),
+          vote: null,
+        });
+
+        // AI消息
+        const sources = qa.answer?.data_json || [];
+        const matchScore = sources.length > 0 
+          ? Math.max(...sources.map((s: any) => parseFloat(s.score || '0')))
+          : 0;
+
+        messages.push({
+          id: qa.qaId,
+          role: 'assistant',
+          content: qa.answer?.responseContent || '',
+          timestamp: new Date(qa.answerTime).getTime(),
+          vote: qa.likeStatus === 1 ? 'like' : (qa.dislikeStatus === 1 ? 'dislike' : null),
+          likeCount: qa.likeStatus || 0,
+          dislikeCount: qa.dislikeStatus || 0,
+          sources: sources,
+          match_score: matchScore,
+        });
+      });
+    } else if (result && result.code === 0 && result.data && Array.isArray(result.data)) {
+      // 兼容旧的数据结构
+      result.data.forEach((qa: any) => {
+        messages.push({
+          id: `user_${qa.qaId}`,
+          role: 'user',
+          content: qa.questionContent,
+          timestamp: new Date(qa.questionTime).getTime(),
+          vote: null,
+        });
+
+        const sources = qa.answer?.data_json || [];
+        const matchScore = sources.length > 0 
+          ? Math.max(...sources.map((s: any) => parseFloat(s.score || '0')))
+          : 0;
+
+        messages.push({
+          id: qa.qaId,
+          role: 'assistant',
+          content: qa.answer?.responseContent || '',
+          timestamp: new Date(qa.answerTime).getTime(),
+          vote: qa.likeStatus === 1 ? 'like' : (qa.dislikeStatus === 1 ? 'dislike' : null),
+          likeCount: qa.likeStatus || 0,
+          dislikeCount: qa.dislikeStatus || 0,
+          sources: sources,
+          match_score: matchScore,
+        });
+      });
+    } else {
+      console.error('返回的数据格式不正确:', result);
+    }
+
+    return messages;
+  } catch (error) {
+    console.error('查询会话历史失败:', error);
+    return [];
+  }
+};
 
   return {
     chatSessions,
@@ -630,7 +717,7 @@ export const useChatStore = defineStore('chat', () => {
     deleteConversationBySession,
     loadConversations,
     clearAllConversations,
-    loadSessionHistory, // ✅ 新增：暴露加载单个会话历史的方法
-    getFuncIdByTab, // ✅ 暴露getFuncIdByTab方法
+    loadSessionHistory,
+    getFuncIdByTab,
   };
 });
