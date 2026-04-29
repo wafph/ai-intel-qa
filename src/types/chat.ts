@@ -4,7 +4,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   reasoning?: string;
-  timestamp: Date;
+  timestamp: number;
   streaming?: boolean;
   vote?: 'like' | 'dislike' | null;
   likeCount?: number;

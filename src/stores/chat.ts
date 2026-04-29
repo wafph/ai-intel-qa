@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import type { ChatSession, HistoryItem, ChatMessage, SourceInfo } from '../types/chat';
+import type { ChatSession, HistoryItem, ChatMessage } from '../types/chat';
 
 // API基础配置 - 使用新接口地址
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
@@ -137,7 +137,6 @@ export const useChatStore = defineStore('chat', () => {
     qaId: string,
     userMessage: ChatMessage,
     assistantMessage: ChatMessage,
-    referenceSource: string = '',
     likeStatus: number,
     dislikeStatus: number,
   ): Promise<{ success: boolean; insertId?: string }> => {
@@ -472,7 +471,7 @@ const syncLikeStatus = async (
     // 同步到服务器
     const likeStatus = vote === 'like' ? 1 : 0;
     const dislikeStatus = vote === 'dislike' ? 1 : 0;
-    syncLikeStatus(messageId, likeStatus, dislikeStatus);
+    syncLikeStatus(messageId, likeStatus, dislikeStatus, sessionId);
   };
 
   // 删除会话

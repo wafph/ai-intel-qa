@@ -449,7 +449,7 @@ const handleSendMessage = async (content: string) => {
     id: Date.now().toString(),
     role: 'user',
     content: activeTab.value === '合规审核' ? '开始合规审核' : content.trim(),
-    timestamp: new Date(),
+    timestamp: new Date() as any,
   };
 
   chat.messages.push(userMessage);
@@ -478,7 +478,7 @@ const handleSendMessage = async (content: string) => {
     role: 'assistant',
     content: '',
     reasoning: '',
-    timestamp: new Date(),
+    timestamp: new Date() as any,
     streaming: true,
   };
   chat.messages.push(aiMessage);
@@ -537,7 +537,7 @@ const startStream = async (queryText: string, messageId: string) => {
 
     const version1 = '?version=1776836351895';
     const version2 = '?version=1777019540183';
-    const version3 = '?version=1777258599011';
+    const version3 = '?version=1777363853468';
     const version4 = '?version=1777432604064';
 
     let apiUrl = '';
@@ -659,7 +659,6 @@ const processStreamChunk = async (chunk: any, messageId: string) => {
             messageId,
             userMessage,
             assistantMessage,
-            referenceSource,
             assistantMessage.vote === 'like' ? 1 : 0,
             assistantMessage.vote === 'dislike' ? 1 : 0,
           );
@@ -749,28 +748,6 @@ const finishStream = (messageId: string) => {
           firstQuestion.length > 50
             ? firstQuestion.substring(0, 50) + '...'
             : firstQuestion;
-      }
-
-      let referenceSource = '';
-      if ((message as any).reference_source) {
-        referenceSource = (message as any).reference_source;
-      } else if (message.sources && message.sources.length > 0) {
-        referenceSource = JSON.stringify(message.sources);
-      }
-
-      if (chat.messages.length >= 2) {
-        const userMessage = chat.messages[chat.messages.length - 2];
-        const assistantMessage = chat.messages[chat.messages.length - 1];
-
-        chatStore.saveConversationToServer(
-          currentConversationUuid.value,
-          messageId,
-          userMessage,
-          assistantMessage,
-          referenceSource,
-          assistantMessage.vote === 'like' ? 1 : 0,
-          assistantMessage.vote === 'dislike' ? 1 : 0,
-        );
       }
     }
   }

@@ -93,7 +93,7 @@
                         }}<el-button type="primary" plain round class="source-score">
                           匹配度:
                           {{
-                            formatScore(source.match_score || source.score)
+                            formatScore(source.score)
                           }}%</el-button
                         >
                       </h3>
