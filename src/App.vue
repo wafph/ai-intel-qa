@@ -810,29 +810,75 @@ const scrollToBottom = () => {
   });
 };
 
-// 监听路由变化
+// 修改路由监听器
 watch(
-  () => route.path,
+  () => route.fullPath,
   async (newPath) => {
     console.log('路由变化:', newPath);
-
+    
+    // 更新活动标签
     updateActiveTabFromRoute();
-
+    
+    // 加载当前菜单的会话列表
     await chatStore.queryConversationsByFunc();
-
-    resetCurrentChat();
+    
+    // ✅ 关键修复：检查是否有会话ID参数（从收藏页面跳转过来）
+    const sessionId = route.query.id as string;
+    const fromCollections = route.query.from === 'collections';
+    
+    if (sessionId && fromCollections) {
+      // 从收藏页面跳转过来，直接加载该会话
+      console.log('从收藏页面跳转到会话:', sessionId);
+      await handleSelectChat(sessionId);
+    } else if (sessionId) {
+      // 普通路由带会话ID
+      await handleSelectChat(sessionId);
+    } else {
+      // 没有会话ID，重置当前聊天
+      resetCurrentChat();
+      
+      // 如果是默认菜单且没有会话，新建一个
+      if (route.path === '/intelligent-qa' && chatStore.historyList.length === 0) {
+        handleNewChat();
+      }
+    }
   },
   { immediate: true },
 );
 
-// 生命周期
+// 修改 onMounted 钩子
 onMounted(async () => {
+  console.log('App mounted, route path:', route.path);
+  
+  // 更新活动标签
   updateActiveTabFromRoute();
-
+  
+  // 加载会话列表
   await chatStore.queryConversationsByFunc();
-
-  if (chatStore.historyList.length === 0) {
+  
+  // 检查是否有会话ID参数
+  const sessionId = route.query.id as string;
+  const fromCollections = route.query.from === 'collections';
+  
+  if (sessionId && fromCollections) {
+    // 从收藏页面跳转过来
+    console.log('从收藏页面跳转到会话:', sessionId);
+    await handleSelectChat(sessionId);
+  } else if (sessionId) {
+    // 普通路由带会话ID
+    await handleSelectChat(sessionId);
+  } else if (chatStore.historyList.length === 0) {
+    // 没有会话，新建一个
     handleNewChat();
+  } else {
+    // 激活第一个会话
+    if (chatStore.historyList.length > 0) {
+      activeChatId.value = chatStore.historyList[0].id;
+      const chat = chatStore.getChatSession(chatStore.historyList[0].id);
+      if (chat && (chat as any).conversationUuid) {
+        currentConversationUuid.value = (chat as any).conversationUuid;
+      }
+    }
   }
 });
 
