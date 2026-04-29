@@ -18,25 +18,33 @@ export interface ChatMessage {
 }
 
 export interface ChatSession {
-  id: string;
-  title: string;
-  time: number;
+  id: string; // sessionId
+  title: string; // sessionTitle
+  time: number; // 时间戳
   type: '智能问答' | '智能检索' | '辅助起草' | '合规审核';
   messages: ChatMessage[];
   isCollected?: boolean;
-  menuType: string;
-  conversationUuid?: string; // 新增：用于后端API的会话UUID
+  menuType: string; // 菜单类型
+  conversationUuid: string; // sessionUuid
+  sessionTitle?: string; // 会话标题
+  historyCount?: number; // 历史记录数量
+  lastMessageTime?: string; // 最后消息时间
 }
 
+// types/chat.ts
 export interface HistoryItem {
   id: string;
   title: string;
   time: number;
   type: '智能问答' | '智能检索' | '辅助起草' | '合规审核';
   preview: string;
-  isCollected?: boolean;
+  isCollected: boolean;
   menuType: string;
+  sessionTitle?: string;
+  historyCount?: number;
+  lastMessageTime?: string;
 }
+
 export interface StreamChunk {
   event: string;
   data: {
