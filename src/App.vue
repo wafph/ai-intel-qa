@@ -77,7 +77,6 @@
                 >
                   <el-icon class="icon"><Plus /></el-icon>
                 </el-tooltip>
-                <!-- <el-button type="primary">选择文件上传</el-button> -->
               </el-upload>
 
               <!-- 上传后显示文件名 -->
@@ -125,32 +124,10 @@ const route = useRoute();
 const inputText = ref('');
 
 const uploadedFileName = ref('');
-const uploadedFileUrl = ref(''); //  新增：存储上传后的文件URL
+const uploadedFileUrl = ref('');
 const selectedDimensions = ref<string[]>([]);
 const spliceSelectedDimensions = ref<string[]>([]);
-// 侧边栏折叠状态
 const sidebarCollapsed = ref(false);
-
-// 定义类型接口
-interface StreamChunk {
-  event: string;
-  reasoning_content?: string;
-  content?: string;
-  data?: {
-    text?: string;
-    reasoning_content?: string;
-    content?: string;
-    index?: number;
-    outputs?: any;
-    node_id?: string;
-    node_type?: string;
-    node_name?: string;
-    workflow_id?: string;
-    workflow_name?: string;
-    createdTime?: number;
-  };
-  createdTime?: number;
-}
 
 // 状态管理
 const activeTab = ref<string>('智能问答');
@@ -178,7 +155,7 @@ const showFullLayout = computed(() => {
 
 // 过滤后的历史记录
 const filteredHistory = computed(() => {
-  return chatStore.historyList.filter((item: any) => item.menuType === activeTab.value);
+  return chatStore.filteredHistory;
 });
 
 const customUpload = async (options: any) => {
@@ -215,7 +192,7 @@ const customUpload = async (options: any) => {
     onError(error);
   }
 };
-// ✅ 新增：全选/取消全选逻辑
+
 const handleSelectAll = (val: boolean) => {
   if (val) {
     selectedDimensions.value = ['全选', '合规性', '冲突性', '文本规范性'];
@@ -250,13 +227,13 @@ const inputPlaceholder = computed(() => {
     if (uploadedFileName.value) {
       return '';
     }
-    return '请上传文件并选择审核维度'; // ✅ 提示用户不需要输入
+    return '请上传文件并选择审核维度';
   } else {
     return '请输入你的内容';
   }
 });
 
-// ✅ 生成UUID的函数
+// 生成UUID的函数
 const generateUUID = (): string => {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
     const r = (Math.random() * 16) | 0;
@@ -265,7 +242,7 @@ const generateUUID = (): string => {
   });
 };
 
-// 重置当前对话（核心方法）
+// 重置当前对话
 const resetCurrentChat = () => {
   activeChatId.value = '';
   currentConversationUuid.value = '';
@@ -311,7 +288,8 @@ const handleNewChat = async () => {
   scrollToBottom();
 };
 
-const handleSelectChat = (chatId: string) => {
+// ✅ 修改：点击会话时才加载完整历史
+const handleSelectChat = async (chatId: string) => {
   if (isStreaming.value) {
     stopStream();
   }
@@ -329,18 +307,18 @@ const handleSelectChat = (chatId: string) => {
     }
   }
 
+  // ✅ 关键修改：点击会话时加载完整历史
+  if (chat && (!chat.messages || chat.messages.length === 0)) {
+    console.log('加载会话完整历史:', chatId);
+    await chatStore.loadSessionHistory(chatId);
+  }
+
   resetStreamState();
   scrollToBottom();
 };
 
 const handleDeleteChat = async (chatId: string) => {
-  // ✅ 先调用后端接口删除
   await chatStore.deleteConversationBySession(chatId);
-
-  // 从本地删除
-  chatStore.deleteHistoryItem(chatId);
-  delete chatStore.chatSessions[chatId];
-  chatStore.saveToLocalStorage();
 
   if (activeChatId.value === chatId) {
     if (chatStore.historyList.length > 0) {
@@ -357,7 +335,6 @@ const handleDeleteChat = async (chatId: string) => {
 };
 
 const handleClearHistory = async () => {
-  // ✅ 先调用后端接口清空所有会话
   await chatStore.clearAllConversations();
   chatStore.historyList = [];
   chatStore.chatSessions = {};
@@ -366,28 +343,25 @@ const handleClearHistory = async () => {
   currentConversationUuid.value = '';
   resetStreamState();
 };
+
 const handleToggleFavorite = (chatId: string) => {
   chatStore.toggleCollect(chatId);
 };
 
 const isSendDisabled = computed(() => {
   if (activeTab.value === '合规审核') {
-    // ✅ 合规审核模式：只检查文件上传和多选框选择，不检查输入框内容
     return !uploadedFileUrl.value || selectedDimensions.value.length === 0;
   }
-  // 其他模式：检查输入框内容和流式状态
   return isStreaming.value;
 });
 
 const handleSendMessage = async (content: string) => {
   inputText.value = content;
-  // ✅ 合规审核模式特殊处理：不检查输入框内容
   if (activeTab.value === '合规审核') {
     if (!uploadedFileUrl.value || selectedDimensions.value.length === 0) {
       return;
     }
   } else {
-    // 其他模式需要输入框内容
     if (!content.trim() || isStreaming.value) return;
   }
 
@@ -450,6 +424,7 @@ const handleSendMessage = async (content: string) => {
   chatStore.saveToLocalStorage();
   scrollToBottom();
 };
+
 // 流式请求
 const startStream = async (queryText: string, messageId: string) => {
   isStreaming.value = true;
@@ -462,14 +437,13 @@ const startStream = async (queryText: string, messageId: string) => {
     }
     let params: any = {};
 
-    // ✅ 合规审核特殊处理
     if (activeTab.value === '合规审核') {
       params = {
         inputs: {
           file_url: uploadedFileUrl.value,
           query: !selectedDimensions.value.includes('全选')
             ? selectedDimensions.value.join(',')
-            : spliceSelectedDimensions.value.join(','), // 用逗号连接多选值
+            : spliceSelectedDimensions.value.join(','),
         },
       };
     } else {
@@ -484,7 +458,6 @@ const startStream = async (queryText: string, messageId: string) => {
       throw new Error('未找到认证token，请先登录');
     }
 
-    // 使用动态UUID替换所有API URL中的UUID
     const baseUrls = {
       qa: '/v1/1725c43e3fa54828a078fce60f5a3773/workflows/60a15b33-e781-4d5d-88d3-5ed90054d9b0/conversations/',
       draf: '/v1/1725c43e3fa54828a078fce60f5a3773/workflows/1808592a-3c09-41a1-b1b6-225c9985ee00/conversations/',
@@ -499,7 +472,6 @@ const startStream = async (queryText: string, messageId: string) => {
     const version3 = '?version=1777258599011';
     const version4 = '?version=1777097823097';
 
-    // 根据当前选项卡选择不同的API接口，并注入动态UUID
     let apiUrl = '';
     if (activeTab.value === '智能问答') {
       apiUrl = baseUrls.qa + currentConversationUuid.value + version1;
@@ -544,7 +516,7 @@ const startStream = async (queryText: string, messageId: string) => {
           if (data === '[DONE]') continue;
 
           try {
-            const parsed: StreamChunk = JSON.parse(data);
+            const parsed: any = JSON.parse(data);
             await processStreamChunk(parsed, messageId);
           } catch (error) {}
         }
@@ -562,12 +534,12 @@ const startStream = async (queryText: string, messageId: string) => {
 
 const handleRegenerate = (content: string) => {
   if (isStreaming.value) {
-    stopStream(); // 停止当前生成
+    stopStream();
   }
-  handleSendMessage(content); // 重新发送原问题
+  handleSendMessage(content);
 };
 
-const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
+const processStreamChunk = async (chunk: any, messageId: string) => {
   var dataReasion;
   dataReasion = chunk.data?.reasoning_content;
   if (chunk.event === 'workflow_finished') {
@@ -576,7 +548,6 @@ const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
       if (outputs && outputs.user_fields && outputs.user_fields.data_json) {
         const dataJson = outputs.user_fields.data_json;
 
-        // ✅ 修改：处理 data_json 数组
         const sources = dataJson.map((item: any) => {
           const score = item.score ? parseFloat(item.score) : 0;
 
@@ -589,44 +560,38 @@ const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
             update_date_time: item.update_date_time,
             tags: item.tags,
             repo_id: item.repo_id,
-            score: score, // 转换为数字
-            match_score: score, // 保存 match_score
+            score: score,
+            match_score: score,
           };
         });
 
-        // ✅ 修改：将整个 data_json 转为字符串作为 referenceSource
         const referenceSource = JSON.stringify(dataJson);
 
-        // 将来源信息保存到当前消息
         const chat = chatStore.getChatSession(activeChatId.value!);
         if (chat) {
           const message = chat.messages.find((m: any) => m.id === messageId);
           if (message) {
             message.sources = sources;
 
-            // 计算并保存最高匹配度
             if (sources.length > 0) {
               const maxScore = Math.max(...sources.map((s: any) => s.score || 0));
               message.match_score = maxScore;
             }
 
-            // ✅ 新增：保存 reference_source 到消息对象，用于后续保存到数据库
             (message as any).reference_source = referenceSource;
           }
         }
 
-        // ✅ 新增：保存对话到数据库（包含完整的 reference_source）
-        if (chat.messages.length >= 2) {
+        if (chat && chat.messages.length >= 2) {
           const userMessage = chat.messages[chat.messages.length - 2];
           const assistantMessage = chat.messages[chat.messages.length - 1];
 
-          // 调用保存接口
           await chatStore.saveConversationToServer(
             currentConversationUuid.value,
             messageId,
             userMessage,
             assistantMessage,
-            referenceSource, // ✅ 传递完整的 reference_source
+            referenceSource,
             assistantMessage.vote === 'like' ? 1 : 0,
             assistantMessage.vote === 'dislike' ? 1 : 0,
           );
@@ -639,29 +604,23 @@ const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
   }
 
   if (chunk.event === 'message') {
-    // 处理推理过程
     if (dataReasion !== undefined) {
       const reasoning = dataReasion;
-      // 3.1 更新临时状态（用于UI即时响应）
       currentReasoning.value += reasoning;
 
-      // 3.2 【关键修改】将推理内容持久化到当前消息对象
       const chat = chatStore.getChatSession(activeChatId.value!);
       if (chat) {
         const message = chat.messages.find((m: any) => m.id === messageId);
         if (message) {
-          // 累加 reasoning 内容到消息对象本身
           message.reasoning = (message.reasoning || '') + reasoning;
         }
       }
     }
 
-    // 处理回复内容 - 根据接口类型选择字段
     let replyContent: string | undefined;
     replyContent = chunk.data?.text;
     if (replyContent !== undefined) {
       currentAnswer.value += replyContent;
-      // 更新对应的AI消息内容
       const chat = chatStore.getChatSession(activeChatId.value!);
       if (chat) {
         const message = chat.messages.find((m: any) => m.id === messageId);
@@ -670,16 +629,11 @@ const processStreamChunk = async (chunk: StreamChunk, messageId: string) => {
         }
       }
     }
-    // 触发视图更新
     await nextTick();
     scrollToBottom();
   }
 };
 
-// 新增计算属性
-
-// 在 App.vue 的 finishStream 函数中添加
-// App.vue - 修改 finishStream 函数
 const finishStream = (messageId: string) => {
   isStreaming.value = false;
   currentStreamingMessageId = null;
@@ -692,7 +646,6 @@ const finishStream = (messageId: string) => {
     if (message) {
       message.streaming = false;
 
-      // 更新历史记录预览
       const historyItem = chatStore.historyList.find(
         (h: any) => h.id === activeChatId.value,
       );
@@ -704,17 +657,13 @@ const finishStream = (messageId: string) => {
             : firstQuestion;
       }
 
-      // ✅ 修改：获取 reference_source
       let referenceSource = '';
       if ((message as any).reference_source) {
-        // 如果已经设置了 reference_source，直接使用
         referenceSource = (message as any).reference_source;
       } else if (message.sources && message.sources.length > 0) {
-        // 否则从 sources 构建
         referenceSource = JSON.stringify(message.sources);
       }
 
-      // ✅ 保存对话记录到服务器
       if (chat.messages.length >= 2) {
         const userMessage = chat.messages[chat.messages.length - 2];
         const assistantMessage = chat.messages[chat.messages.length - 1];
@@ -724,7 +673,7 @@ const finishStream = (messageId: string) => {
           messageId,
           userMessage,
           assistantMessage,
-          referenceSource, // ✅ 传递 reference_source
+          referenceSource,
           assistantMessage.vote === 'like' ? 1 : 0,
           assistantMessage.vote === 'dislike' ? 1 : 0,
         );
@@ -732,12 +681,11 @@ const finishStream = (messageId: string) => {
     }
   }
 
-  // 重置流式状态
   resetStreamState();
   chatStore.saveToLocalStorage();
   scrollToBottom();
 };
-// 处理流式错误
+
 const handleStreamError = (messageId: string, errorMessage: string) => {
   const chat = chatStore.getChatSession(activeChatId.value!);
   if (chat) {
@@ -752,7 +700,6 @@ const handleStreamError = (messageId: string, errorMessage: string) => {
   resetStreamState();
 };
 
-// 停止流式输出
 const stopStream = () => {
   if (abortController) {
     abortController.abort();
@@ -777,14 +724,12 @@ const stopStream = () => {
   chatStore.saveToLocalStorage();
 };
 
-// 重置流式状态
 const resetStreamState = () => {
   currentReasoning.value = '';
   currentAnswer.value = '';
   abortController = null;
 };
 
-// 工具函数
 const scrollToBottom = () => {
   nextTick(() => {
     const container = document.querySelector('.dynamic-content');
@@ -800,13 +745,10 @@ watch(
   async (newPath) => {
     console.log('路由变化:', newPath);
     
-    // 更新活动标签
     updateActiveTabFromRoute();
     
-    // ✅ 重要：重新加载当前菜单的数据
     await chatStore.queryConversationsByFunc();
     
-    // 重置当前聊天会话
     resetCurrentChat();
   },
   { immediate: true },
@@ -814,18 +756,14 @@ watch(
 
 // 生命周期
 onMounted(async () => {
-  // ✅ 修复顺序：先根据路由更新标签
   updateActiveTabFromRoute();
   
-  // ✅ 然后从服务器加载当前菜单的会话记录
   await chatStore.queryConversationsByFunc();
   
-  // 如果没有任何会话，创建新对话
   if (chatStore.historyList.length === 0) {
     handleNewChat();
   }
 });
-
 
 onUnmounted(() => {
   if (isStreaming.value) {
@@ -833,7 +771,6 @@ onUnmounted(() => {
   }
 });
 </script>
-
 <style lang="less" scoped>
 .app-container {
   width: 100vw;
