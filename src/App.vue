@@ -11,6 +11,7 @@
         @new-chat="handleNewChat"
         @delete-chat="handleDeleteChat"
         @clear-history="handleClearHistory"
+        @update-title="handleUpdateTitle"
         @toggle-favorite="handleToggleFavorite"
       />
 
@@ -737,7 +738,6 @@ const queryConversationsForCurrentRoute = async () => {
   }
 };
 
-
 watch(
   () => route.fullPath,
   async () => {
@@ -760,6 +760,18 @@ watch(
   },
   { immediate: false },
 );
+
+const handleUpdateTitle = async (chatId: string, newTitle: string) => {
+  try {
+    const success = await chatStore.updateSessionTitle(chatId, newTitle);
+    if (success) {
+      console.log('标题更新成功:', chatId, newTitle);
+      ElMessage.success('标题修改成功');
+    } else {
+      ElMessage.error('标题更新失败');
+    }
+  } catch {}
+};
 
 onMounted(async () => {
   await queryConversationsForCurrentRoute();

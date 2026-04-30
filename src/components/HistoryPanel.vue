@@ -50,6 +50,7 @@
             @click="handleSelectChat(history.id)"
           >
             <div class="item-content">
+              <!-- ✅ 修改：标题可编辑 -->
               <div class="item-title">
                 <span
                   v-if="history.isCollected && hoveredItemId === history.id"
@@ -57,8 +58,25 @@
                 >
                   ★
                 </span>
-                {{ history.title }}
+
+                <!-- ✅ 编辑模式：显示输入框 -->
+                <el-input
+                  v-if="editingId === history.id"
+                  v-model="editingTitle"
+                  size="small"
+                  class="title-input"
+                  @blur="saveTitle(history.id)"
+                  @keyup.enter="saveTitle(history.id)"
+                  @keyup.esc="cancelEdit"
+                  ref="titleInputRef"
+                />
+
+                <!-- ✅ 查看模式：显示文本 -->
+                <span v-else @dblclick="startEdit(history.id, history.title)">
+                  {{ history.title }}
+                </span>
               </div>
+
               <div class="item-meta">
                 <span class="item-type">{{ history.type }}</span>
                 <span class="item-time">{{ history.formattedTime }}</span>
@@ -82,6 +100,15 @@
                   <span class="menu-text">
                     {{ history.isCollected ? '取消收藏' : '收藏' }}
                   </span>
+                </button>
+
+                <!-- ✅ 修改：点击修改标题直接进入编辑模式 -->
+                <button
+                  class="menu-item edit"
+                  @click="startEdit(history.id, history.title)"
+                >
+                  <span class="menu-icon">✏️</span>
+                  <span class="menu-text">修改</span>
                 </button>
 
                 <button class="menu-item delete" @click="handleDeleteChat(history.id)">
@@ -129,15 +156,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessageBox, ElMessage } from 'element-plus';
+import type { FormInstance } from 'element-plus';
 
 interface Props {
   historyList: any[];
   activeChatId: string | null;
   user: any;
-  collapsed?: boolean; // 新增折叠状态
+  collapsed?: boolean;
 }
 
 const props = defineProps<Props>();
@@ -149,6 +177,7 @@ const emit = defineEmits<{
   'toggle-favorite': [chatId: string];
   'switch-tab': [tabName: string];
   'toggle-collapse': [];
+  'update-title': [chatId: string, newTitle: string]; // ✅ 新增事件
 }>();
 
 const router = useRouter();
@@ -157,22 +186,26 @@ const showUserMenu = ref(false);
 const hoveredItemId = ref<string | null>(null);
 const visibleMenuId = ref<string | null>(null);
 
+// ✅ 新增：编辑标题相关状态
+const editingId = ref<string | null>(null);
+const editingTitle = ref('');
+const titleInputRef = ref<FormInstance>();
+
+// 计算属性
 const filteredHistory = computed(() => {
   return props.historyList || [];
 });
 
+// 格式化相对时间
 const formatRelativeTime = (timestamp: number | string) => {
-  //  修复：正确处理数字时间戳
   let date: Date;
-  
+
   if (typeof timestamp === 'string') {
-    // 如果是字符串，尝试解析
     date = new Date(timestamp);
   } else {
-    // 如果是数字（时间戳），直接使用
     date = new Date(timestamp);
   }
-  // 检查日期是否有效
+
   if (isNaN(date.getTime())) {
     return '未知时间';
   }
@@ -211,17 +244,15 @@ const formatRelativeTime = (timestamp: number | string) => {
     .padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
 };
 
-// ✅ 修复：分组逻辑
+// 分组逻辑
 const groupedHistory = computed(() => {
   const groups: Record<string, any[]> = {};
 
   filteredHistory.value.forEach((item) => {
-    // ✅ 使用修复后的格式化函数
     const relativeTime = formatRelativeTime(item.time);
-    
-    // ✅ 提取日期部分用于分组
+
     let groupKey = '';
-    
+
     if (relativeTime.includes('今天')) {
       groupKey = '今天';
     } else if (relativeTime.includes('昨天')) {
@@ -229,7 +260,6 @@ const groupedHistory = computed(() => {
     } else if (relativeTime.includes('前天')) {
       groupKey = '前天';
     } else {
-      // 提取日期部分（YYYY-MM-DD）
       const date = new Date(item.time);
       if (!isNaN(date.getTime())) {
         groupKey = `${date.getFullYear()}-${(date.getMonth() + 1)
@@ -255,16 +285,19 @@ const groupedHistory = computed(() => {
   }));
 });
 
+// 选择聊天
 const handleSelectChat = (chatId: string) => {
   emit('select-chat', chatId);
   closeMenu();
 };
 
+// 新建聊天
 const handleNewChat = () => {
   emit('new-chat');
   closeMenu();
 };
 
+// 删除聊天
 const handleDeleteChat = (chatId: string) => {
   ElMessageBox.confirm('确定要删除这条对话记录吗？', '提示', {
     confirmButtonText: '确定',
@@ -303,6 +336,42 @@ const handleToggleFavorite = (chatId: string) => {
   closeMenu();
 };
 
+// ✅ 新增：开始编辑标题
+const startEdit = (chatId: string, currentTitle: string) => {
+  editingId.value = chatId;
+  editingTitle.value = currentTitle;
+  closeMenu();
+
+  // 自动聚焦输入框
+  nextTick(() => {
+    const input = titleInputRef.value?.inputRef;
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  });
+};
+
+// ✅ 新增：保存标题
+const saveTitle = (chatId: string) => {
+  if (!editingTitle.value.trim()) {
+    ElMessage.warning('标题不能为空');
+    return;
+  }
+
+  if (editingId.value === chatId) {
+    emit('update-title', chatId, editingTitle.value.trim());
+    cancelEdit();
+  }
+};
+
+// ✅ 新增：取消编辑
+const cancelEdit = () => {
+  editingId.value = null;
+  editingTitle.value = '';
+};
+
+// 鼠标事件处理
 const handleMouseEnter = (itemId: string) => {
   hoveredItemId.value = itemId;
 };
@@ -329,6 +398,7 @@ const handleClickOutsideMenu = (event: MouseEvent) => {
   }
 };
 
+// 用户菜单处理
 const toggleUserMenu = () => {
   showUserMenu.value = !showUserMenu.value;
 };
@@ -854,5 +924,51 @@ onUnmounted(() => {
   height: 1px;
   background: #e9ecef;
   margin: 8px 0;
+}
+
+/* 在 HistoryPanel.vue 的 style 部分添加 */
+.title-input {
+  width: 100%;
+  margin: -4px 0;
+}
+
+.title-input :deep(.el-input__wrapper) {
+  padding: 0 8px;
+  height: 28px;
+  line-height: 28px;
+}
+
+.title-input :deep(.el-input__inner) {
+  height: 28px;
+  line-height: 28px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.item-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: #333;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+  cursor: pointer;
+  padding: 2px 0;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.item-title:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.item-title span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
