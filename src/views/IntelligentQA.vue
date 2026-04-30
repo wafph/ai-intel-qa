@@ -1,19 +1,13 @@
 <template>
   <div class="intelligent-qa">
     <!-- 头部区域 - 只在完全没有数据时显示 -->
-    <div
-      class="qa-header"
-      v-if="!hasMessages && !loading"
-    >
+    <div class="qa-header" v-if="!hasMessages && !loading">
       <h1>我是问答助手，很高兴见到你</h1>
       <p>你可以使用自然语言提问，我来精准回答</p>
     </div>
 
     <!-- 历史对话列表 - 只要有消息就显示 -->
-    <div
-      class="conversation-history"
-      v-if="hasMessages"
-    >
+    <div class="conversation-history" v-if="hasMessages">
       <div
         v-for="(item, index) in chatData?.messages || []"
         :key="item.id"
@@ -44,7 +38,7 @@
             <div class="left-column" :ref="(el) => setLeftColumnRef(el, item.id)">
               <div class="message-header">
                 <div class="message-info">
-                  <!-- 【核心修改点】始终显示"思考过程"部分，只要消息中存在 reasoning 内容 -->
+                  <!-- 始终显示"思考过程"部分，只要消息中存在 reasoning 内容 -->
                   <div
                     v-if="item.reasoning && item.reasoning.trim() !== ''"
                     class="thinking-process"
@@ -54,7 +48,6 @@
                       <span>思考过程</span>
                     </div>
                     <div class="thinking-content">
-                      <!-- 可以在显示前处理重复内容 -->
                       {{ removeDuplicateReasoning(item.reasoning) }}
                     </div>
                   </div>
@@ -139,7 +132,7 @@
                         >
                       </div>
 
-                      <!-- 点赞按钮 -->
+                      <!-- ✅ 点赞按钮 - 保留原有功能 -->
                       <div
                         class="vote-container"
                         style="display: inline-block; margin-left: 20px"
@@ -161,12 +154,15 @@
                         />
                         <span
                           class="vote-count"
-                          :style="{ color: item.vote === 'like' ? '#409eff' : '#999' }"
+                          :style="{
+                            color: item.vote === 'like' ? '#409eff' : '#999',
+                          }"
                         >
                           {{ item.likeCount || 0 }}
                         </span>
                       </div>
 
+                      <!-- ✅ 点踩按钮 - 保留原有功能，但添加弹窗 -->
                       <div
                         class="vote-container"
                         style="display: inline-block; margin-left: 20px"
@@ -186,14 +182,16 @@
                         />
                         <span
                           class="vote-count"
-                          :style="{ color: item.vote === 'dislike' ? '#f56c6c' : '#999' }"
+                          :style="{
+                            color: item.vote === 'dislike' ? '#f56c6c' : '#999',
+                          }"
                         >
                           {{ item.dislikeCount || 0 }}
                         </span>
                       </div>
                       <el-button
                         link
-                        class="btnbottom"
+                        class="btn-bottom"
                         type="success"
                         plain
                         @click="handleRestart(index)"
@@ -238,7 +236,7 @@
                       @click="toggleSourceItem(item.id, sourceIndex)"
                     >
                       <div class="title-content">
-                        <!-- ✅ 修改：给标题添加点击事件 -->
+                        <!-- ✅ 给标题添加点击事件 -->
                         <strong
                           @click.stop="handleSourceTitleClick(source, $event)"
                           class="source-title-clickable"
@@ -262,7 +260,8 @@
                       <div class="source-content">{{ source.content }}</div>
                       <div class="source-footer">
                         <span class="source-date">
-                          更新时间: {{ formatSourceDate(source.update_date_time) }}
+                          更新时间:
+                          {{ formatSourceDate(source.update_date_time) }}
                         </span>
                         <el-button
                           link
@@ -289,6 +288,58 @@
       <p>正在加载对话...</p>
     </div>
 
+    <!-- ✅ 新增：点踩反馈弹窗 -->
+    <el-dialog
+      v-model="feedbackDialogVisible"
+      title="分享反馈"
+      width="600px"
+      :close-on-click-modal="false"
+      class="dialogfoot"
+      destroy-on-close
+    >
+      <!-- ✅ 单选按钮组 -->
+      <el-radio-group v-model="feedbackReason" class="feedback-radio-group">
+        <el-radio
+          v-for="opt in feedbackOptions"
+          :key="opt.value"
+          :label="opt.value"
+          class="feedback-radio"
+        >
+          <span class="radio-text">{{ opt.label }}</span>
+        </el-radio>
+      </el-radio-group>
+
+      <!-- ✅ 其他情况显示输入框 -->
+      <el-input
+        v-if="feedbackReason === 'other'"
+        v-model="feedbackDetail"
+        type="textarea"
+        :rows="3"
+        placeholder="请输入其他原因"
+        maxlength="500"
+        show-word-limit
+        style="margin-top: 16px"
+      />
+
+      <template #footer>
+        <el-button
+          class="btn"
+          style="padding: 16px 25px; border-radius: 20px"
+          @click="feedbackDialogVisible = false"
+          >取消</el-button
+        >
+        <el-button
+          class="btn"
+          type="primary"
+          :loading="submitting"
+          @click="submitDislikeFeedback"
+          style="padding: 16px 25px; background: #191919; border-radius: 20px"
+        >
+          提交
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- ✅ 新增：PDF 预览弹框 -->
     <div v-if="showPdfViewer" class="pdf-viewer-modal" @click.self="closePdfViewer">
       <div class="pdf-viewer-container">
@@ -312,12 +363,31 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, nextTick, onMounted, onUnmounted, onUpdated, reactive } from 'vue';
+import {
+  ref,
+  watch,
+  computed,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  onUpdated,
+  reactive,
+} from 'vue';
 import MarkdownIt from 'markdown-it';
 import { ElMessage } from 'element-plus';
 import { ArrowRight, ArrowUp } from '@element-plus/icons-vue';
 import { useChatStore } from '@/stores/chat';
 const chatStore = useChatStore();
+
+// ✅ 新增：导入需要的图标
+// import {
+//   WarningFilled,
+//   CircleCloseFilled,
+//   Clock,
+//   ChatLineRound,
+//   Lock,
+//   MoreFilled,
+// } from '@element-plus/icons-vue';
 
 // 状态变量
 const displayAnswer = ref<string>('');
@@ -327,7 +397,7 @@ let currentTypingIndex = 0;
 const loading = ref(false);
 const isTyping = ref(false);
 const emit = defineEmits(['regenerate']);
-
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 // 新增：控制参考来源的显示状态和单个来源项的折叠状态
 const sourcesVisible = ref<Record<string, boolean>>({});
 const sourceCollapsed = ref<Record<string, boolean>>({});
@@ -403,11 +473,27 @@ const props = withDefaults(defineProps<Props>(), {
   currentStreamingMessageId: null,
 });
 
+// ✅ 新增：点踩反馈相关状态
+const feedbackDialogVisible = ref(false);
+const currentDislikeMessage = ref<ChatMessage | null>(null);
+const submitting = ref(false);
+const feedbackReason = ref('');
+const feedbackDetail = ref('');
+
+// ✅ 新增：反馈选项配置
+const feedbackOptions = ref([
+  { label: '不正确或不完整', value: 'incorrect_or_incomplete' },
+  { label: '与期望不符', value: 'not_as_expected' },
+  { label: '速度慢或存在问题', value: 'slow_or_problematic' },
+  { label: '风格或语气', value: 'style_or_tone' },
+  { label: '安全或法律疑虑', value: 'security_or_legal' },
+  { label: '其他', value: 'other' },
+]);
+
 // ✅ 新增：计算属性判断是否有消息
 const hasMessages = computed(() => {
   return props.chatData?.messages && props.chatData.messages.length > 0;
 });
-
 
 // ✅ 新增：监听 chatData 变化，打印调试信息
 watch(
@@ -421,7 +507,7 @@ watch(
       }
     }
   },
-  { immediate: true, deep: true }
+  { immediate: true, deep: true },
 );
 
 // Markdown渲染器
@@ -439,21 +525,21 @@ let copyTimer: ReturnType<typeof setTimeout> | null = null;
 // IntelligentQA.vue - formatScore 函数
 const formatScore = (score: number | string | undefined): string => {
   if (score === undefined || score === null) return '0.0';
-  
+
   let numScore: number;
   if (typeof score === 'number') {
     numScore = score;
   } else {
     numScore = parseFloat(score);
   }
-  
+
   if (isNaN(numScore)) return '0.0';
-  
+
   // 如果 score 已经是百分比（大于1），直接显示
   if (numScore > 1) {
     return numScore.toFixed(1);
   }
-  
+
   // 否则乘以100
   return (numScore * 100).toFixed(1);
 };
@@ -723,19 +809,7 @@ const handleCopy = async (content: string, messageId: string) => {
   }
 };
 
-// 将文本追加到打字机队列
-const appendToTypingQueue = (text: string) => {
-  if (!text) return;
-
-  if (!typingInterval) {
-    startTypingEffect(displayAnswer.value + text);
-  } else {
-    stopTypingEffect();
-    const targetText = displayAnswer.value + text;
-    startTypingEffect(targetText);
-  }
-};
-
+// ✅ 修改：处理点赞 - 保留原有功能
 const handleVote = async (messageId: string, voteType: 'like' | 'dislike') => {
   if (!props.chatData) {
     console.error('chatData is null');
@@ -749,8 +823,9 @@ const handleVote = async (messageId: string, voteType: 'like' | 'dislike') => {
   }
 
   // ✅ 关键修复：从 chatData 中获取 sessionUuid
-  const sessionUuid = (props.chatData as any).conversationUuid || (props.chatData as any).id;
-  
+  const sessionUuid =
+    (props.chatData as any).conversationUuid || (props.chatData as any).id;
+
   if (!sessionUuid) {
     console.error('No sessionUuid found in chatData:', props.chatData);
     ElMessage.error('无法获取会话ID，请刷新页面重试');
@@ -798,10 +873,21 @@ const handleVote = async (messageId: string, voteType: 'like' | 'dislike') => {
   // ✅ 修复：调用后端接口同步点赞状态，传递正确的 sessionUuid
   const likeStatus = message.vote === 'like' ? 1 : 0;
   const dislikeStatus = message.vote === 'dislike' ? 1 : 0;
+  if (dislikeStatus) {
+    currentDislikeMessage.value = message;
+    feedbackDialogVisible.value = true;
+    feedbackReason.value = '';
+    feedbackDetail.value = '';
+  }
 
   try {
     // ✅ 传递 sessionUuid 参数
-    const success = await chatStore.syncLikeStatus(messageId, likeStatus, dislikeStatus, sessionUuid);
+    const success = await chatStore.syncLikeStatus(
+      messageId,
+      likeStatus,
+      dislikeStatus,
+      sessionUuid,
+    );
 
     if (!success) {
       // 如果接口调用失败，回滚到原来的状态
@@ -817,6 +903,75 @@ const handleVote = async (messageId: string, voteType: 'like' | 'dislike') => {
     message.likeCount = originalLikeCount;
     message.dislikeCount = originalDislikeCount;
     ElMessage.error('网络错误，请稍后重试');
+  }
+};
+
+// ✅ 新增：提交点踩反馈
+const submitDislikeFeedback = async () => {
+  if (!feedbackReason.value) {
+    ElMessage.warning('请选择反馈原因');
+    return;
+  }
+
+  if (feedbackReason.value === 'other' && !feedbackDetail.value.trim()) {
+    ElMessage.warning('请输入其他原因');
+    return;
+  }
+
+  if (!currentDislikeMessage.value || !props.chatData) {
+    ElMessage.error('无法获取消息信息');
+    return;
+  }
+
+  submitting.value = true;
+  try {
+    const finalReason = feedbackDetail.value.trim() || feedbackReason.value;
+    const sessionUuid =
+      (props.chatData as any).conversationUuid || (props.chatData as any).id;
+    const funcId = chatStore.getFuncIdByTab('智能问答');
+
+    // 调用点踩接口，包含 dislikeReason
+    const payload = {
+      sessionId: sessionUuid,
+      functionId: funcId,
+      qaId: currentDislikeMessage.value.id,
+      dislikeStatus: 1,
+      dislikeReason: finalReason,
+    };
+
+    console.log('提交点踩反馈:', payload);
+
+    const response = await fetch(`${API_BASE_URL}/v1/chat/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP错误! 状态: ${response.status}`);
+    }
+    ElMessage.success('感谢您的反馈！');
+    feedbackDialogVisible.value = false;
+  } catch (error) {
+    console.error('提交反馈失败:', error);
+    ElMessage.error('提交失败，请稍后重试');
+  } finally {
+    submitting.value = false;
+  }
+};
+
+// 将文本追加到打字机队列
+const appendToTypingQueue = (text: string) => {
+  if (!text) return;
+
+  if (!typingInterval) {
+    startTypingEffect(displayAnswer.value + text);
+  } else {
+    stopTypingEffect();
+    const targetText = displayAnswer.value + text;
+    startTypingEffect(targetText);
   }
 };
 
@@ -878,7 +1033,7 @@ const formatTime = (date: Date) => {
 
 const renderMarkdown = (content: string) => {
   if (!content) return '';
-  // 將 "$$$" 替換為 Markdown 分割線
+  // 将 "$$$" 替换为 Markdown 分割线
   const processedContent = content.replace(/\$\$\$/g, '\n\n---\n\n');
   return md.render(processedContent);
 };
@@ -1087,7 +1242,7 @@ onUpdated(() => {
               animation: fadeIn 0.5s ease;
             }
 
-            .btnbottom {
+            .btn-bottom {
               margin-left: 20px;
             }
 
@@ -1459,266 +1614,298 @@ onUpdated(() => {
       border-radius: 4px;
     }
   }
-}
 
-// ✅ 新增：PDF 预览弹框样式
-.pdf-viewer-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 3000;
-}
+  // ✅ 新增：PDF 预览弹框样式
+  .pdf-viewer-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3000;
+  }
 
-.pdf-viewer-container {
-  width: 90%;
-  height: 90%;
-  background: white;
-  border-radius: 8px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-}
+  .pdf-viewer-container {
+    width: 90%;
+    height: 90%;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  }
 
-.pdf-viewer-header {
-  padding: 16px 20px;
-  background: #f5f5f5;
-  border-bottom: 1px solid #e8e8e8;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 600;
-  color: #333;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: #666;
-  padding: 0 8px;
-  transition: color 0.2s;
-
-  &:hover {
+  .pdf-viewer-header {
+    padding: 16px 20px;
+    background: #f5f5f5;
+    border-bottom: 1px solid #e8e8e8;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
     color: #333;
   }
-}
 
-.pdf-iframe {
-  flex: 1;
-  width: 100%;
-  border: none;
-}
-
-.loading-pdf {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: #666;
-
-  .loading-spinner {
-    width: 50px;
-    height: 50px;
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #3498db;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-bottom: 20px;
-  }
-
-  @keyframes spin {
-    0% {
-      transform: rotate(0deg);
-    }
-    100% {
-      transform: rotate(360deg);
-    }
-  }
-}
-
-// ✅ 新增：加载状态样式
-.loading-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  padding: 40px;
-  
-  .loading-spinner {
-    width: 50px;
-    height: 50px;
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #409eff;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-bottom: 20px;
-  }
-  
-  p {
+  .close-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
     color: #666;
-    font-size: 16px;
-  }
-}
+    padding: 0 8px;
+    transition: color 0.2s;
 
-// ✅ 新增：可点击的来源标题样式
-.source-title-clickable {
-  cursor: pointer;
-  color: #409eff;
-  text-decoration: underline;
-  text-decoration-color: transparent;
-  transition: text-decoration-color 0.3s ease;
-
-  &:hover {
-    text-decoration-color: #409eff;
-  }
-}
-
-.vote-container {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
-
-  &:hover {
-    opacity: 0.8;
+    &:hover {
+      color: #333;
+    }
   }
 
-  img.active {
-    filter: brightness(0.9);
+  .pdf-iframe {
+    flex: 1;
+    width: 100%;
+    border: none;
   }
-}
 
-.vote-count {
-  font-size: 12px;
-  font-weight: 600;
-  min-width: 16px;
-  text-align: center;
-  transition: color 0.3s ease;
-}
+  .loading-pdf {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #666;
 
-.copy-container {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  transition: all 0.3s ease;
-  padding: 4px 8px;
-  border-radius: 6px;
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #3498db;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
 
-  &:hover {
-    background-color: rgba(0, 0, 0, 0.05);
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+  }
 
-    &:not(.copy-disabled) img {
+  // ✅ 新增：加载状态样式
+  .loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 40px;
+
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #409eff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+
+    p {
+      color: #666;
+      font-size: 16px;
+    }
+  }
+
+  // ✅ 新增：可点击的来源标题样式
+  .source-title-clickable {
+    cursor: pointer;
+    color: #409eff;
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    transition: text-decoration-color 0.3s ease;
+
+    &:hover {
+      text-decoration-color: #409eff;
+    }
+  }
+
+  .vote-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+
+    &:hover {
       opacity: 0.8;
     }
-  }
 
-  &.copy-disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
-  }
-
-  img {
-    transition: opacity 0.3s ease;
-  }
-
-  .copied-text {
-    position: absolute;
-    top: -30px;
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: white;
-    color: black;
-    font-size: 12px;
-    padding: 4px 8px;
-    border-radius: 4px;
-    white-space: nowrap;
-    animation: fadeInOut 2s ease;
-    z-index: 10;
-
-    &::after {
-      content: '';
-      position: absolute;
-      top: 100%;
-      left: 50%;
-      transform: translateX(-50%);
-      border-width: 4px;
-      border-style: solid;
-      border-color: #67c23a transparent transparent transparent;
+    img.active {
+      filter: brightness(0.9);
     }
   }
 
-  hr {
-    margin: 10px 0;
+  .vote-count {
+    font-size: 12px;
+    font-weight: 600;
+    min-width: 16px;
+    text-align: center;
+    transition: color 0.3s ease;
   }
-}
 
-@keyframes fadeInOut {
-  0% {
-    opacity: 0;
-    transform: translateX(-50%) translateY(5px);
-  }
-  20% {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-  80% {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-5px);
-  }
-}
+  .copy-container {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    transition: all 0.3s ease;
+    padding: 4px 8px;
+    border-radius: 6px;
 
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+    &:hover {
+      background-color: rgba(0, 0, 0, 0.05);
 
-@keyframes bounce {
-  0%,
-  80%,
-  100% {
-    transform: scale(0);
-  }
-  40% {
-    transform: scale(1);
-  }
-}
+      &:not(.copy-disabled) img {
+        opacity: 0.8;
+      }
+    }
 
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.6;
-  }
-}
+    &.copy-disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
+    img {
+      transition: opacity 0.3s ease;
+    }
+
+    .copied-text {
+      position: absolute;
+      top: -30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: white;
+      color: black;
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+      animation: fadeInOut 2s ease;
+      z-index: 10;
+
+      &::after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border-width: 4px;
+        border-style: solid;
+        border-color: #67c23a transparent transparent transparent;
+      }
+    }
+
+    hr {
+      margin: 10px 0;
+    }
   }
-  to {
-    opacity: 1;
+
+  @keyframes fadeInOut {
+    0% {
+      opacity: 0;
+      transform: translateX(-50%) translateY(5px);
+    }
+    20% {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    80% {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(-50%) translateY(-5px);
+    }
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes bounce {
+    0%,
+    80%,
+    100% {
+      transform: scale(0);
+    }
+    40% {
+      transform: scale(1);
+    }
+  }
+
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.6;
+    }
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .feedback-radio-group {
+    display: flex;
+    gap: 20px;
+  }
+
+  .feedback-radio {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border: 1px solid #dcdfe6;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover {
+      border-color: #409eff;
+      background: #ecf5ff;
+    }
+
+    .radio-icon {
+      margin-right: 8px;
+      font-size: 16px;
+      color: #606266;
+    }
+
+    .radio-text {
+      font-size: 14px;
+      color: #303133;
+    }
   }
 }
 </style>
