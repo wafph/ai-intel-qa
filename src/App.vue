@@ -256,10 +256,63 @@ const toggleSidebar = () => {
 };
 
 const handleNewChat = async () => {
-  const newChatId = Date.now().toString();
+  // ✅ 情况1：左侧没有任何历史记录，允许新建
+  if (chatStore.historyList.length === 0) {
+    const newChatId = generateUUID();
+    activeChatId.value = newChatId;
+    currentConversationUuid.value = generateUUID();
+
+    const chatTitle = activeTab.value;
+
+    const newSession: ChatSession = {
+      id: newChatId,
+      title: chatTitle,
+      time: Date.now(),
+      type: activeTab.value as any,
+      messages: [],
+      menuType: activeTab.value,
+      conversationUuid: currentConversationUuid.value,
+    };
+
+    const newHistory: HistoryItem = {
+      id: newChatId,
+      title: chatTitle,
+      time: Date.now(),
+      type: activeTab.value as any,
+      preview: '新对话',
+      menuType: activeTab.value,
+      isCollected: false,
+    };
+
+    chatStore.addChatSession(newSession);
+    chatStore.addHistoryItem(newHistory);
+    scrollToBottom();
+    return;
+  }
+
+  // ✅ 情况2：左侧有历史记录，必须选择了一个对话
+  if (!activeChatId.value) {
+    ElMessage.warning('请先选择一个会话');
+    return;
+  }
+
+  // ✅ 获取当前选中的会话
+  const currentSession = chatStore.getChatSession(activeChatId.value);
+  if (!currentSession) {
+    ElMessage.warning('当前会话不存在');
+    return;
+  }
+
+  // ✅ 检查当前会话是否有输入回复内容（至少有一条用户消息和一条AI回复）
+  if (!currentSession.messages || currentSession.messages.length < 2) {
+    ElMessage.warning('请先完成当前对话再新建会话');
+    return;
+  }
+
+  // ✅ 满足所有条件，创建新会话
+  const newChatId = generateUUID();
   activeChatId.value = newChatId;
   currentConversationUuid.value = generateUUID();
-  
 
   const chatTitle = activeTab.value;
 
@@ -287,59 +340,24 @@ const handleNewChat = async () => {
   chatStore.addHistoryItem(newHistory);
   scrollToBottom();
 };
-
-// 修改 handleSelectChat 函数，确保能正确加载会话
 const handleSelectChat = async (chatId: string) => {
   if (isStreaming.value) {
     stopStream();
   }
 
-  // 先清空，再设置，确保触发响应式更新
-  activeChatId.value = '';
-  await nextTick();
+  activeChatId.value = chatId;
 
   const session = chatStore.getChatSession(chatId);
-
-  if (!session) {
-    console.error('Session not found:', chatId);
-    try {
-      const funcId = chatStore.getFuncIdByTab(activeTab.value);
-      const messages = await chatStore.querySessionHistory(chatId, funcId);
-
-      if (messages && messages.length > 0) {
-        // 创建新的会话对象
-        const newSession: ChatSession = {
-          id: chatId,
-          title: '从收藏加载的会话',
-          time: Date.now(),
-          type: activeTab.value as any,
-          messages: messages,
-          menuType: activeTab.value,
-          conversationUuid: chatId,
-        };
-
-        chatStore.addChatSession(newSession);
-      } else {
-        return;
-      }
-    } catch (error) {
-      return;
-    }
-  }
-
-  // 设置当前会话UUID
   if (session && !(session as any).conversationUuid) {
     (session as any).conversationUuid = chatId;
   }
 
   currentConversationUuid.value = chatId;
 
-  // 加载会话历史
   if (session && (!session.messages || session.messages.length === 0)) {
     await chatStore.loadSessionHistory(chatId).catch(() => {});
   }
-  activeChatId.value = chatId;
-  resetStreamState();
+
   scrollToBottom();
 };
 
@@ -382,7 +400,13 @@ const isSendDisabled = computed(() => {
 });
 
 const handleSendMessage = async (content: string) => {
-  inputText.value = content;
+  // ✅ 检查是否有活跃会话
+  if (!activeChatId.value) {
+    ElMessage.warning('请先新建或选择一个会话');
+    return;
+  }
+
+  // ✅ 合规审核页面的特殊处理
   if (activeTab.value === '合规审核') {
     if (!uploadedFileUrl.value || selectedDimensions.value.length === 0) {
       return;
@@ -391,18 +415,17 @@ const handleSendMessage = async (content: string) => {
     if (!content.trim() || isStreaming.value) return;
   }
 
-  if (!activeChatId.value) {
-    handleNewChat();
-  }
-
+  // ✅ 获取当前会话
   const chat = chatStore.getChatSession(activeChatId.value!);
   if (!chat) return;
+
+  // ✅ 确保有会话UUID
   if (!currentConversationUuid.value) {
     currentConversationUuid.value = generateUUID();
     (chat as any).conversationUuid = currentConversationUuid.value;
   }
 
-  // 添加用户消息
+  // ✅ 添加用户消息
   const userMessage: ChatMessage = {
     id: Date.now().toString(),
     role: 'user',
@@ -412,14 +435,14 @@ const handleSendMessage = async (content: string) => {
 
   chat.messages.push(userMessage);
 
-  // 如果是第一条消息，更新标题
+  // ✅ 如果是第一条消息，更新标题
   if (chat.messages.length === 1) {
     const newTitle =
       activeTab.value === '合规审核'
         ? `审核: ${uploadedFileName.value}`
         : content.length > 20
-          ? content.substring(0, 20) + '...'
-          : content;
+        ? content.substring(0, 20) + '...'
+        : content;
     chat.title = newTitle;
 
     const historyItem = chatStore.historyList.find((h: any) => h.id === chat.id);
@@ -429,7 +452,7 @@ const handleSendMessage = async (content: string) => {
     }
   }
 
-  // 添加AI消息占位符
+  // ✅ 添加AI消息占位符
   const aiMessageId = (Date.now() + 1).toString();
   const aiMessage: ChatMessage = {
     id: aiMessageId,
@@ -444,7 +467,7 @@ const handleSendMessage = async (content: string) => {
 
   resetStreamState();
 
-  // 开始流式输出
+  // ✅ 开始流式输出
   await startStream(content, aiMessageId);
 
   scrollToBottom();
@@ -645,6 +668,7 @@ const handleTabChange = (tab: string) => {
     router.push(targetRoute);
   }
 };
+
 const finishStream = (messageId: string) => {
   isStreaming.value = false;
   currentStreamingMessageId = null;
@@ -743,29 +767,6 @@ const queryConversationsForCurrentRoute = async () => {
   }
 };
 
-watch(
-  () => route.fullPath,
-  async () => {
-    await queryConversationsForCurrentRoute();
-
-    const sessionId = route.query.id as string;
-    const fromCollections = route.query.from === 'collections';
-
-    if (sessionId && fromCollections) {
-      await handleSelectChat(sessionId);
-    } else if (sessionId) {
-      await handleSelectChat(sessionId);
-    } else {
-      resetCurrentChat();
-
-      if (route.path === '/intelligent-qa' && chatStore.historyList.length === 0) {
-        handleNewChat();
-      }
-    }
-  },
-  { immediate: false },
-);
-
 const handleUpdateTitle = async (chatId: string, newTitle: string) => {
   try {
     const success = await chatStore.updateSessionTitle(chatId, newTitle);
@@ -824,8 +825,10 @@ const handleTogglePin = async (chatId: string, topStatus: number) => {
   }
 };
 
+// 修改 onMounted
 onMounted(async () => {
   await queryConversationsForCurrentRoute();
+
   const sessionId = route.query.id as string;
   const fromCollections = route.query.from === 'collections';
 
@@ -833,10 +836,28 @@ onMounted(async () => {
     await handleSelectChat(sessionId);
   } else if (sessionId) {
     await handleSelectChat(sessionId);
-  } else if (chatStore.historyList.length === 0) {
-    handleNewChat();
-  }
+  } 
 });
+
+// 修改 watch
+watch(
+  () => route.fullPath,
+  async () => {
+    await queryConversationsForCurrentRoute();
+
+    const sessionId = route.query.id as string;
+    const fromCollections = route.query.from === 'collections';
+
+    if (sessionId && fromCollections) {
+      await handleSelectChat(sessionId);
+    } else if (sessionId) {
+      await handleSelectChat(sessionId);
+    } else {
+      resetCurrentChat();
+    }
+  },
+  { immediate: false },
+);
 
 onUnmounted(() => {
   if (isStreaming.value) {

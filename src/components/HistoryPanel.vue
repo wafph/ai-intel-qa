@@ -29,7 +29,7 @@
       <div v-if="filteredHistory.length === 0" class="empty-state">
         <div class="empty-icon">📁</div>
         <p>暂无历史对话</p>
-        <p class="empty-tip">开始新的对话吧</p>
+        <p class="empty-tip">请在右侧输入框中开始对话</p>
       </div>
 
       <div v-else class="history-items">
@@ -82,7 +82,6 @@
               </div>
 
               <div class="item-meta">
-                <span class="item-type">{{ history.type }}</span>
                 <span class="item-time">{{ history.formattedTime }}</span>
               </div>
             </div>
@@ -173,10 +172,6 @@
         <div class="menu-item" @click="goToMyCollections">
           <el-icon><StarFilled /></el-icon>
           <span>我的收藏</span>
-        </div>
-        <div class="menu-item" @click="goToFeedback">
-          <el-icon><Document /></el-icon>
-          <span>我的反馈</span>
         </div>
         <div class="menu-divider"></div>
       </div>
@@ -740,7 +735,6 @@ onUnmounted(() => {
 .item-time {
   color: #bfbfbf;
   white-space: nowrap;
-  margin-left: 8px;
 }
 
 /* 菜单相关样式 */
