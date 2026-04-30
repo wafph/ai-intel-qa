@@ -33,8 +33,9 @@
       </div>
 
       <div v-else class="history-items">
-        <div v-for="item in groupedHistory" :key="item.date" class="history-group">
-          <div class="group-date">{{ item.date }}</div>
+        <!-- ✅ 修改：将置顶的会话放在最前面 -->
+        <div v-for="item in sortedHistory" :key="item.id" class="history-group">
+          <div class="group-date" v-if="item.isTopGroup">{{ item.date }}</div>
           <div
             v-for="history in item.items"
             :key="history.id"
@@ -43,6 +44,7 @@
               {
                 active: activeChatId === history.id,
                 collected: history.isCollected,
+                pinned: history.topStatus === 1,
               },
             ]"
             @mouseenter="handleMouseEnter(history.id)"
@@ -50,7 +52,6 @@
             @click="handleSelectChat(history.id)"
           >
             <div class="item-content">
-              <!-- ✅ 修改：标题可编辑 -->
               <div class="item-title">
                 <span
                   v-if="history.isCollected && hoveredItemId === history.id"
@@ -73,6 +74,9 @@
 
                 <!-- ✅ 查看模式：显示文本 -->
                 <span v-else @dblclick="startEdit(history.id, history.title)">
+                  <span v-if="history.topStatus === 1" class="pin-icon"
+                    ><img style="width: 16px; height: 16px" src="/images/top.svg" alt=""
+                  /></span>
                   {{ history.title }}
                 </span>
               </div>
@@ -102,7 +106,24 @@
                   </span>
                 </button>
 
-                <!-- ✅ 修改：点击修改标题直接进入编辑模式 -->
+                <!-- ✅ 新增：置顶/取消置顶菜单项 -->
+                <button
+                  class="menu-item pin"
+                  @click="handleTogglePin(history.id, history.topStatus === 1)"
+                >
+                  <div class="menu-icon">
+                    <template v-if="history.topStatus === 1">
+                      <img src="/images/bottom.svg" style="width: 13px; height: 13px" alt="" />
+                    </template>
+                    <template v-else>
+                      <img src="/images/top.svg" style="width: 16px; height: 16px" alt="" />
+                    </template>
+                  </div>
+                  <span class="menu-text">
+                    {{ history.topStatus === 1 ? '取消置顶' : '置顶' }}
+                  </span>
+                </button>
+
                 <button
                   class="menu-item edit"
                   @click="startEdit(history.id, history.title)"
@@ -160,12 +181,14 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessageBox, ElMessage } from 'element-plus';
 import type { FormInstance } from 'element-plus';
+import { isTemplate } from 'element-plus/es/utils/index.mjs';
 
 interface Props {
   historyList: any[];
   activeChatId: string | null;
   user: any;
   collapsed?: boolean;
+  activeTab: string; // ✅ 新增：当前激活的标签页
 }
 
 const props = defineProps<Props>();
@@ -177,7 +200,8 @@ const emit = defineEmits<{
   'toggle-favorite': [chatId: string];
   'switch-tab': [tabName: string];
   'toggle-collapse': [];
-  'update-title': [chatId: string, newTitle: string]; // ✅ 新增事件
+  'update-title': [chatId: string, newTitle: string];
+  'toggle-pin': [chatId: string, topStatus: number]; // ✅ 新增：置顶事件
 }>();
 
 const router = useRouter();
@@ -196,7 +220,84 @@ const filteredHistory = computed(() => {
   return props.historyList || [];
 });
 
-// 格式化相对时间
+// ✅ 新增：排序后的历史记录（置顶的在最前面）
+const sortedHistory = computed(() => {
+  const groups: Record<string, any[]> = {};
+
+  // 分离置顶和非置顶的会话
+  const pinnedItems: any[] = [];
+  const unpinnedItems: any[] = [];
+
+  filteredHistory.value.forEach((item) => {
+    if (item.topStatus === 1) {
+      pinnedItems.push(item);
+    } else {
+      unpinnedItems.push(item);
+    }
+  });
+
+  // 置顶的分组
+  if (pinnedItems.length > 0) {
+    groups['置顶'] = pinnedItems.map((item) => ({
+      ...item,
+      formattedTime: formatRelativeTime(item.time),
+    }));
+  }
+
+  // 非置顶的按日期分组
+  unpinnedItems.forEach((item) => {
+    const relativeTime = formatRelativeTime(item.time);
+    let groupKey = '';
+
+    if (relativeTime.includes('今天')) {
+      groupKey = '今天';
+    } else if (relativeTime.includes('昨天')) {
+      groupKey = '昨天';
+    } else if (relativeTime.includes('前天')) {
+      groupKey = '前天';
+    } else {
+      const date = new Date(item.time);
+      if (!isNaN(date.getTime())) {
+        groupKey = `${date.getFullYear()}-${(date.getMonth() + 1)
+          .toString()
+          .padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+      } else {
+        groupKey = '未知日期';
+      }
+    }
+
+    if (!groups[groupKey]) {
+      groups[groupKey] = [];
+    }
+    groups[groupKey].push({
+      ...item,
+      formattedTime: relativeTime,
+    });
+  });
+
+  // 转换为数组格式，置顶分组在最前面
+  const result = [];
+  if (groups['置顶']) {
+    result.push({
+      date: '置顶',
+      items: groups['置顶'],
+      isTopGroup: true,
+    });
+    delete groups['置顶'];
+  }
+
+  // 其他分组按时间倒序排列
+  Object.entries(groups).forEach(([date, items]) => {
+    result.push({
+      date,
+      items,
+      isTopGroup: false,
+    });
+  });
+
+  return result;
+});
+
 const formatRelativeTime = (timestamp: number | string) => {
   let date: Date;
 
@@ -244,60 +345,16 @@ const formatRelativeTime = (timestamp: number | string) => {
     .padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
 };
 
-// 分组逻辑
-const groupedHistory = computed(() => {
-  const groups: Record<string, any[]> = {};
-
-  filteredHistory.value.forEach((item) => {
-    const relativeTime = formatRelativeTime(item.time);
-
-    let groupKey = '';
-
-    if (relativeTime.includes('今天')) {
-      groupKey = '今天';
-    } else if (relativeTime.includes('昨天')) {
-      groupKey = '昨天';
-    } else if (relativeTime.includes('前天')) {
-      groupKey = '前天';
-    } else {
-      const date = new Date(item.time);
-      if (!isNaN(date.getTime())) {
-        groupKey = `${date.getFullYear()}-${(date.getMonth() + 1)
-          .toString()
-          .padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
-      } else {
-        groupKey = '未知日期';
-      }
-    }
-
-    if (!groups[groupKey]) {
-      groups[groupKey] = [];
-    }
-    groups[groupKey].push({
-      ...item,
-      formattedTime: relativeTime,
-    });
-  });
-
-  return Object.entries(groups).map(([date, items]) => ({
-    date,
-    items,
-  }));
-});
-
-// 选择聊天
 const handleSelectChat = (chatId: string) => {
   emit('select-chat', chatId);
   closeMenu();
 };
 
-// 新建聊天
 const handleNewChat = () => {
   emit('new-chat');
   closeMenu();
 };
 
-// 删除聊天
 const handleDeleteChat = (chatId: string) => {
   ElMessageBox.confirm('确定要删除这条对话记录吗？', '提示', {
     confirmButtonText: '确定',
@@ -336,6 +393,13 @@ const handleToggleFavorite = (chatId: string) => {
   closeMenu();
 };
 
+// ✅ 新增：处理置顶/取消置顶
+const handleTogglePin = (chatId: string, isPinned: boolean) => {
+  const topStatus = isPinned ? 0 : 1; // 如果已经置顶，则取消置顶；否则置顶
+  emit('toggle-pin', chatId, topStatus);
+  closeMenu();
+};
+
 // ✅ 新增：开始编辑标题
 const startEdit = (chatId: string, currentTitle: string) => {
   editingId.value = chatId;
@@ -365,13 +429,11 @@ const saveTitle = (chatId: string) => {
   }
 };
 
-// ✅ 新增：取消编辑
 const cancelEdit = () => {
   editingId.value = null;
   editingTitle.value = '';
 };
 
-// 鼠标事件处理
 const handleMouseEnter = (itemId: string) => {
   hoveredItemId.value = itemId;
 };
@@ -398,7 +460,6 @@ const handleClickOutsideMenu = (event: MouseEvent) => {
   }
 };
 
-// 用户菜单处理
 const toggleUserMenu = () => {
   showUserMenu.value = !showUserMenu.value;
 };
@@ -966,7 +1027,7 @@ onUnmounted(() => {
 }
 
 .item-title span {
-  display: block;
+  // display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

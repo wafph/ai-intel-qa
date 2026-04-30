@@ -7,12 +7,14 @@
         :active-chat-id="activeChatId"
         :user="userStore.user"
         :collapsed="sidebarCollapsed"
+        :active-tab="activeTab"
         @select-chat="handleSelectChat"
         @new-chat="handleNewChat"
         @delete-chat="handleDeleteChat"
         @clear-history="handleClearHistory"
         @update-title="handleUpdateTitle"
         @toggle-favorite="handleToggleFavorite"
+        @toggle-pin="handleTogglePin"
       />
 
       <!-- 右侧主内容区 -->
@@ -116,6 +118,7 @@ import { useAppStore } from './stores/app';
 import { useChatStore } from './stores/chat';
 import { useUserStore } from './stores/user';
 import type { ChatMessage, ChatSession, HistoryItem } from './types/chat';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
 const appStore = useAppStore();
 const chatStore = useChatStore();
@@ -771,6 +774,52 @@ const handleUpdateTitle = async (chatId: string, newTitle: string) => {
       ElMessage.error('标题更新失败');
     }
   } catch {}
+};
+
+// ✅ 新增：处理置顶/取消置顶
+const handleTogglePin = async (chatId: string, topStatus: number) => {
+  try {
+    const funcId = chatStore.getFuncIdByTab(activeTab.value);
+
+    const payload = {
+      sessionId: chatId,
+      functionId: funcId,
+      topStatus: topStatus,
+    };
+
+    console.log('切换置顶状态:', payload);
+
+    const response = await fetch(`${API_BASE_URL}/v1/chat/pin`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP错误! 状态: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('置顶状态切换成功:', result);
+
+    // 更新本地数据
+    const historyItem = chatStore.historyList.find((item: any) => item.id === chatId);
+    if (historyItem) {
+      historyItem.topStatus = result.data.topStatus;
+    }
+
+    const session = chatStore.chatSessions[chatId];
+    if (session) {
+      session.topStatus = result.data.topStatus;
+    }
+
+    ElMessage.success(topStatus === 1 ? '已置顶' : '已取消置顶');
+  } catch (error) {
+    console.error('切换置顶状态失败:', error);
+    ElMessage.error('操作失败，请重试');
+  }
 };
 
 onMounted(async () => {

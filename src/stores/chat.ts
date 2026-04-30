@@ -58,16 +58,22 @@ export const useChatStore = defineStore('chat', () => {
 
   // 添加历史记录（只更新内存状态）
   const addHistoryItem = (item: HistoryItem) => {
+    const newItem = {
+      ...item,
+      topStatus: item.topStatus || 0, // 默认未置顶
+    };
+    historyList.value.unshift(newItem);
     historyList.value.unshift(item);
   };
 
-  // 更新历史记录（只更新内存状态）
+  // 更新历史记录
   const updateHistoryItem = (id: string, updates: Partial<HistoryItem>) => {
     const index = historyList.value.findIndex((item) => item.id === id);
     if (index !== -1) {
       historyList.value[index] = { ...historyList.value[index], ...updates };
     }
   };
+
 
   // 删除历史记录（只更新内存状态）
   const deleteHistoryItem = (id: string) => {
@@ -170,7 +176,7 @@ export const useChatStore = defineStore('chat', () => {
   ): Promise<boolean> => {
     try {
       const funcId = getFuncIdByTab(currentActiveTab.value);
-      
+
       const payload = {
         sessionId: sessionUuid,
         functionId: funcId,
@@ -201,7 +207,7 @@ export const useChatStore = defineStore('chat', () => {
   };
 
   // 接口3：查询左侧最近会话列表
-  const queryConversationsByFunc = async (): Promise<any> => {
+ const queryConversationsByFunc = async (): Promise<any> => {
     try {
       const funcId = getFuncIdByTab(currentActiveTab.value);
       const limit = 30;
@@ -233,7 +239,7 @@ export const useChatStore = defineStore('chat', () => {
           const createTimestamp = new Date(createTime).getTime();
           if (isNaN(createTimestamp)) continue;
 
-          // 创建历史记录项
+          // ✅ 创建历史记录项，包含 topStatus
           const historyItem: HistoryItem = {
             id: sessionUuid,
             title: sessionTitle,
@@ -242,22 +248,24 @@ export const useChatStore = defineStore('chat', () => {
             type: currentActiveTab.value as any,
             menuType: currentActiveTab.value,
             isCollected: sessionData.favoriteStatus === 1,
+            topStatus: sessionData.topStatus || 0, // ✅ 从服务器获取置顶状态
             sessionTitle: sessionTitle,
             historyCount: historyCount,
             lastMessageTime: lastMessageTime,
           };
 
-          // 创建会话对象（初始为空消息）
+          // 创建会话对象
           const session: ChatSession = {
             id: sessionUuid,
             title: sessionTitle,
             time: createTimestamp,
             type: currentActiveTab.value as any,
-            messages: [], // 初始为空
+            messages: [],
             menuType: currentActiveTab.value,
             conversationUuid: sessionUuid,
             historyCount: historyCount,
             lastMessageTime: lastMessageTime,
+            topStatus: sessionData.topStatus || 0, // ✅ 从服务器获取置顶状态
           };
 
           chatSessions.value[sessionUuid] = session;
@@ -276,7 +284,10 @@ export const useChatStore = defineStore('chat', () => {
   };
 
   // 接口4：修改会话标题
-  const updateSessionTitle = async (sessionUuid: string, newTitle: string): Promise<boolean> => {
+  const updateSessionTitle = async (
+    sessionUuid: string,
+    newTitle: string,
+  ): Promise<boolean> => {
     try {
       const funcId = getFuncIdByTab(currentActiveTab.value);
 
@@ -368,7 +379,7 @@ export const useChatStore = defineStore('chat', () => {
   ): Promise<boolean> => {
     try {
       const funcId = getFuncIdByTab(currentActiveTab.value);
-      
+
       const payload = {
         sessionId: sessionUuid,
         functionId: funcId,
@@ -378,10 +389,10 @@ export const useChatStore = defineStore('chat', () => {
       };
 
       console.log('同步点赞状态:', payload);
-      
+
       const url = `${API_BASE_URL}/v1/chat/status`;
       console.log('请求URL:', url);
-      
+
       const response = await fetch(url, {
         method: 'PUT',
         headers: {
@@ -439,12 +450,12 @@ export const useChatStore = defineStore('chat', () => {
   const deleteConversationBySession = async (sessionUuid: string): Promise<boolean> => {
     try {
       const funcId = getFuncIdByTab(currentActiveTab.value);
-      
+
       console.log('删除会话:', sessionUuid, '功能ID:', funcId);
-      
+
       const url = `${API_BASE_URL}/v1/chat/history?functionId=${funcId}&sessionId=${sessionUuid}`;
       console.log('删除请求URL:', url);
-      
+
       const response = await fetch(url, {
         method: 'DELETE',
         headers: {
@@ -458,13 +469,13 @@ export const useChatStore = defineStore('chat', () => {
 
       const result = await response.json();
       console.log('删除会话结果:', result);
-      
+
       // 假设后端返回格式：{ code: 0, msg: 'success' }
       if (result && result.code === 0) {
         // 从本地删除
         deleteHistoryItem(sessionUuid);
         delete chatSessions.value[sessionUuid];
-        
+
         console.log('会话已成功删除:', sessionUuid);
         return true;
       } else {
@@ -503,7 +514,7 @@ export const useChatStore = defineStore('chat', () => {
 
       const funcId = getFuncIdByTab(currentActiveTab.value);
       const session = chatSessions.value[sessionUuid];
-      
+
       if (!session) {
         console.error('Session not found:', sessionUuid);
         loadingSessionIds.value.delete(sessionUuid);
@@ -519,22 +530,22 @@ export const useChatStore = defineStore('chat', () => {
 
       console.log('Fetching history for session:', sessionUuid, 'with funcId:', funcId);
       const messages = await querySessionHistory(sessionUuid, funcId);
-      
+
       if (messages && messages.length > 0) {
         console.log('Received messages:', messages.length);
-        
+
         // 创建新的会话对象，确保响应式更新
         const updatedSession = {
           ...session,
-          messages: [...messages]
+          messages: [...messages],
         };
-        
+
         // 直接替换整个会话对象
         chatSessions.value = {
           ...chatSessions.value,
-          [sessionUuid]: updatedSession
+          [sessionUuid]: updatedSession,
         };
-        
+
         loadingSessionIds.value.delete(sessionUuid);
         return true;
       } else {
@@ -551,11 +562,14 @@ export const useChatStore = defineStore('chat', () => {
   };
 
   // 查询会话历史
-  const querySessionHistory = async (sessionUuid: string, funcId: string): Promise<ChatMessage[]> => {
+  const querySessionHistory = async (
+    sessionUuid: string,
+    funcId: string,
+  ): Promise<ChatMessage[]> => {
     try {
       console.log('查询会话完整历史:', sessionUuid, funcId);
       const url = `${API_BASE_URL}/v1/chat/history?functionId=${funcId}&sessionId=${sessionUuid}`;
-      
+
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -571,11 +585,16 @@ export const useChatStore = defineStore('chat', () => {
       console.log('会话历史查询结果:', result);
 
       const messages: ChatMessage[] = [];
-      
+
       // 适应新的数据结构
-      if (result && result.code === 0 && result.data && Array.isArray(result.data.historyJson)) {
+      if (
+        result &&
+        result.code === 0 &&
+        result.data &&
+        Array.isArray(result.data.historyJson)
+      ) {
         const historyJson = result.data.historyJson;
-        
+
         historyJson.forEach((qa: any) => {
           // 用户消息
           messages.push({
@@ -588,23 +607,30 @@ export const useChatStore = defineStore('chat', () => {
 
           // AI消息
           const sources = qa.answer?.data_json || [];
-          const matchScore = sources.length > 0 
-            ? Math.max(...sources.map((s: any) => parseFloat(s.score || '0')))
-            : 0;
+          const matchScore =
+            sources.length > 0
+              ? Math.max(...sources.map((s: any) => parseFloat(s.score || '0')))
+              : 0;
 
           messages.push({
             id: qa.qaId,
             role: 'assistant',
             content: qa.answer?.responseContent || '',
             timestamp: new Date(qa.answerTime).getTime(),
-            vote: qa.likeStatus === 1 ? 'like' : (qa.dislikeStatus === 1 ? 'dislike' : null),
+            vote:
+              qa.likeStatus === 1 ? 'like' : qa.dislikeStatus === 1 ? 'dislike' : null,
             likeCount: qa.likeStatus || 0,
             dislikeCount: qa.dislikeStatus || 0,
             sources: sources,
             match_score: matchScore,
           });
         });
-      } else if (result && result.code === 0 && result.data && Array.isArray(result.data)) {
+      } else if (
+        result &&
+        result.code === 0 &&
+        result.data &&
+        Array.isArray(result.data)
+      ) {
         // 兼容旧的数据结构
         result.data.forEach((qa: any) => {
           messages.push({
@@ -616,16 +642,18 @@ export const useChatStore = defineStore('chat', () => {
           });
 
           const sources = qa.answer?.data_json || [];
-          const matchScore = sources.length > 0 
-            ? Math.max(...sources.map((s: any) => parseFloat(s.score || '0')))
-            : 0;
+          const matchScore =
+            sources.length > 0
+              ? Math.max(...sources.map((s: any) => parseFloat(s.score || '0')))
+              : 0;
 
           messages.push({
             id: qa.qaId,
             role: 'assistant',
             content: qa.answer?.responseContent || '',
             timestamp: new Date(qa.answerTime).getTime(),
-            vote: qa.likeStatus === 1 ? 'like' : (qa.dislikeStatus === 1 ? 'dislike' : null),
+            vote:
+              qa.likeStatus === 1 ? 'like' : qa.dislikeStatus === 1 ? 'dislike' : null,
             likeCount: qa.likeStatus || 0,
             dislikeCount: qa.dislikeStatus || 0,
             sources: sources,

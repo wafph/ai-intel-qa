@@ -29,6 +29,7 @@ export interface ChatSession {
   sessionTitle?: string; // 会话标题
   historyCount?: number; // 历史记录数量
   lastMessageTime?: string; // 最后消息时间
+  topStatus?: number; // 置顶状态 0-未置顶，1-已置顶
 }
 
 // types/chat.ts
@@ -43,6 +44,7 @@ export interface HistoryItem {
   sessionTitle?: string;
   historyCount?: number;
   lastMessageTime?: string;
+  topStatus?: number;
 }
 
 export interface StreamChunk {

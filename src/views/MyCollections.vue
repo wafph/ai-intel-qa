@@ -169,7 +169,7 @@ const goBack = () => {
 
 onMounted(() => {
   // 加载收藏数据
-  chatStore.loadFromLocalStorage();
+  // chatStore.loadFromLocalStorage();
 });
 </script>
 
