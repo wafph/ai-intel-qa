@@ -34,7 +34,7 @@
 
       <div v-else class="history-items">
         <!-- ✅ 修改：将置顶的会话放在最前面 -->
-        <div v-for="item in sortedHistory" :key="item.id" class="history-group">
+        <div v-for="item in sortedHistory" :key="item.date" class="history-group">
           <div class="group-date" v-if="item.isTopGroup">{{ item.date }}</div>
           <div
             v-for="history in item.items"
@@ -113,10 +113,18 @@
                 >
                   <div class="menu-icon">
                     <template v-if="history.topStatus === 1">
-                      <img src="/images/bottom.svg" style="width: 13px; height: 13px" alt="" />
+                      <img
+                        src="/images/bottom.svg"
+                        style="width: 13px; height: 13px"
+                        alt=""
+                      />
                     </template>
                     <template v-else>
-                      <img src="/images/top.svg" style="width: 16px; height: 16px" alt="" />
+                      <img
+                        src="/images/top.svg"
+                        style="width: 16px; height: 16px"
+                        alt=""
+                      />
                     </template>
                   </div>
                   <span class="menu-text">
@@ -180,8 +188,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessageBox, ElMessage } from 'element-plus';
-import type { FormInstance } from 'element-plus';
-import { isTemplate } from 'element-plus/es/utils/index.mjs';
+import type { InputInstance } from 'element-plus';
 
 interface Props {
   historyList: any[];
@@ -213,7 +220,7 @@ const visibleMenuId = ref<string | null>(null);
 // ✅ 新增：编辑标题相关状态
 const editingId = ref<string | null>(null);
 const editingTitle = ref('');
-const titleInputRef = ref<FormInstance>();
+const titleInputRef = ref<InputInstance>();
 
 // 计算属性
 const filteredHistory = computed(() => {
@@ -370,16 +377,12 @@ const handleDeleteChat = (chatId: string) => {
 };
 
 const handleClearAllHistory = () => {
-  ElMessageBox.confirm(
-    '此操作将清空所有菜单的历史记录，且当前对话也会被清空，确定要清空所有历史对话吗？',
-    '提示',
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning',
-      customClass: 'clear-history-dialog',
-    },
-  )
+  ElMessageBox.confirm('确定删除对话？删除后，聊天记录将不可恢复。', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
+    customClass: 'clear-history-dialog',
+  })
     .then(() => {
       emit('clear-history');
       closeMenu();
@@ -408,7 +411,7 @@ const startEdit = (chatId: string, currentTitle: string) => {
 
   // 自动聚焦输入框
   nextTick(() => {
-    const input = titleInputRef.value?.inputRef;
+    const input = titleInputRef.value?.input;
     if (input) {
       input.focus();
       input.select();

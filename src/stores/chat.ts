@@ -56,14 +56,12 @@ export const useChatStore = defineStore('chat', () => {
     currentConversationUuid.value = uuid;
   };
 
-  // 添加历史记录（只更新内存状态）
   const addHistoryItem = (item: HistoryItem) => {
     const newItem = {
       ...item,
       topStatus: item.topStatus || 0, // 默认未置顶
     };
     historyList.value.unshift(newItem);
-    historyList.value.unshift(item);
   };
 
   // 更新历史记录

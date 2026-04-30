@@ -34,11 +34,6 @@ const routes = [
     name: '我的收藏',
     component: () => import('../views/MyCollections.vue'),
   },
-  {
-    path: '/feedback',
-    name: '合规审核',
-    component: () => import('../views/Feedback.vue'),
-  },
 ];
 
 const router = createRouter({

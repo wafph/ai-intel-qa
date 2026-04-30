@@ -118,6 +118,7 @@ import { useAppStore } from './stores/app';
 import { useChatStore } from './stores/chat';
 import { useUserStore } from './stores/user';
 import type { ChatMessage, ChatSession, HistoryItem } from './types/chat';
+import { ElMessage } from 'element-plus'
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
 const appStore = useAppStore();
@@ -258,6 +259,7 @@ const handleNewChat = async () => {
   const newChatId = Date.now().toString();
   activeChatId.value = newChatId;
   currentConversationUuid.value = generateUUID();
+  
 
   const chatTitle = activeTab.value;
 
@@ -596,7 +598,7 @@ const processStreamChunk = async (chunk: any, messageId: string) => {
       const outputs = chunk.data?.outputs || {};
 
       let sources: any[] = [];
-      var referenceSource = '';
+
       if (outputs.user_fields?.data_json) {
         sources = outputs.user_fields.data_json.map((item: any) => ({
           file_id: item.file_id,
@@ -610,7 +612,7 @@ const processStreamChunk = async (chunk: any, messageId: string) => {
           score: parseFloat(item.score) || 0,
           match_score: parseFloat(item.score) || 0,
         }));
-        referenceSource = JSON.stringify(outputs.user_fields.data_json);
+        // 
       }
 
       assistantMessage.sources = sources;
