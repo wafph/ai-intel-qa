@@ -212,22 +212,6 @@ const handleSelectAll = (val: boolean) => {
   }
 };
 
-const updateActiveTabFromRoute = () => {
-  const routeToTabMap: Record<string, string> = {
-    '/intelligent-qa': '智能问答',
-    '/intelligent-retrieval': '智能检索',
-    '/auxiliary-draft': '辅助起草',
-    '/compliance-review': '合规审核',
-  };
-
-  const matchedTab = routeToTabMap[route.path];
-  if (matchedTab && activeTab.value !== matchedTab) {
-    activeTab.value = matchedTab;
-    chatStore.setCurrentActiveTab(matchedTab);
-    resetCurrentChat();
-  }
-};
-
 const inputPlaceholder = computed(() => {
   if (activeTab.value === '智能问答') {
     return '请输入你的问题';
@@ -737,11 +721,27 @@ const scrollToBottom = () => {
   });
 };
 
+const queryConversationsForCurrentRoute = async () => {
+  const routeToTabMap: Record<string, string> = {
+    '/intelligent-qa': '智能问答',
+    '/intelligent-retrieval': '智能检索',
+    '/auxiliary-draft': '辅助起草',
+    '/compliance-review': '合规审核',
+  };
+
+  const matchedTab = routeToTabMap[route.path];
+  if (matchedTab) {
+    activeTab.value = matchedTab;
+    chatStore.setCurrentActiveTab(matchedTab);
+    await chatStore.queryConversationsByFunc();
+  }
+};
+
+
 watch(
   () => route.fullPath,
-  async (newPath) => {
-    updateActiveTabFromRoute();
-    await chatStore.queryConversationsByFunc();
+  async () => {
+    await queryConversationsForCurrentRoute();
 
     const sessionId = route.query.id as string;
     const fromCollections = route.query.from === 'collections';
@@ -758,13 +758,11 @@ watch(
       }
     }
   },
-  { immediate: false }
+  { immediate: false },
 );
 
 onMounted(async () => {
-  updateActiveTabFromRoute();
-  await chatStore.queryConversationsByFunc();
-
+  await queryConversationsForCurrentRoute();
   const sessionId = route.query.id as string;
   const fromCollections = route.query.from === 'collections';
 
