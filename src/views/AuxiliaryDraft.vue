@@ -99,12 +99,14 @@
                   </el-button>
                   <el-button
                     link
-                    class="btnbottom"
+                    class="btn-bottom"
                     type="primary"
                     plain
                     @click="handleExport"
+                    :loading="loading"
+                    :disabled="loading"
                   >
-                    导出
+                    {{ loading ? '转换中...' : '导出' }}
                   </el-button>
                 </div>
               </div>
@@ -130,7 +132,7 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import MarkdownIt from 'markdown-it';
-import { ElButton } from 'element-plus';
+import { ElMessage } from 'element-plus';
 const emit = defineEmits(['regenerate']);
 
 interface Props {
@@ -246,23 +248,93 @@ const renderMarkdown = (content: string) => {
   return md.render(content);
 };
 
-const handleExport = () => {
-  if (!props.chatData) return;
+// 修改：导出功能
+const handleExport = async () => {
+  if (!props.chatData) {
+    ElMessage.error('没有可导出的内容');
+    return;
+  }
 
-  const content = props.chatData.messages
-    .filter((msg) => msg.role === 'assistant')
-    .map((msg) => msg.content)
+  // 获取 AI 生成的草稿内容
+  const draftContent = props.chatData.messages
+    .filter((msg: any) => msg.role === 'assistant')
+    .map((msg: any) => msg.content)
     .join('\n\n');
 
-  const blob = new Blob([content], { type: 'text/markdown' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${props.chatData.title}.md`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  if (!draftContent.trim()) {
+    ElMessage.warning('没有可导出的草稿内容');
+    return;
+  }
+
+  // 获取 qa_id（使用最后一个 AI 消息的 id）
+  const lastAssistantMessage = props.chatData.messages
+    .filter((msg: any) => msg.role === 'assistant')
+    .pop();
+  
+  const qaId = lastAssistantMessage?.id || 'unknown';
+
+  try {
+    loading.value = true;
+    // 调用转换接口
+    const convertResponse = await fetch('http://1.94.244.72:11327/convert', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        markdown: draftContent,
+        qa_id: qaId,
+      }),
+    });
+
+    if (!convertResponse.ok) {
+      throw new Error(`转换失败: ${convertResponse.status}`);
+    }
+    const convertResult = await convertResponse.json();
+    console.log('转换结果:', convertResult);
+    // 检查转换结果
+    if (!convertResult.download_url) {
+      throw new Error('转换结果中没有下载链接');
+    }
+    // 下载文件
+    await downloadConvertedFile(convertResult.download_url, convertResult.file_name);
+    
+    ElMessage.success('文档转换并下载成功！');
+  } catch (error) {
+    console.error('导出失败:', error);
+    ElMessage.error(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`);
+  } finally {
+    loading.value = false;
+  }
+};
+
+// 新增：下载转换后的文件
+const downloadConvertedFile = async (downloadUrl: string, fileName: string) => {
+  try {
+    const response = await fetch(downloadUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': '*/*',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`下载失败: ${response.status}`);
+    }
+    const fileBlob = await response.blob();
+    // 创建下载链接
+    const url = window.URL.createObjectURL(fileBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName || 'draft.docx';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('下载文件失败:', error);
+    throw error;
+  }
 };
 
 const scrollToBottom = () => {
@@ -272,6 +344,23 @@ const scrollToBottom = () => {
       container.scrollTop = container.scrollHeight;
     }
   });
+};
+
+const handleRestart = (index: number) => {
+  if (!props.chatData || !props.chatData.messages) return;
+
+  // 向前查找最近的 user 消息
+  let userMessage = null;
+  for (let i = index - 1; i >= 0; i--) {
+    if (props.chatData.messages[i].role === 'user') {
+      userMessage = props.chatData.messages[i];
+      break;
+    }
+  }
+
+  if (userMessage) {
+    emit('regenerate', userMessage.content);
+  }
 };
 
 // 监听回复内容变化
@@ -301,33 +390,6 @@ watch(
     }
   },
   { immediate: true },
-);
-
-const handleRestart = (index: number) => {
-  if (!props.chatData || !props.chatData.messages) return;
-
-  // 向前查找最近的 user 消息
-  let userMessage = null;
-  for (let i = index - 1; i >= 0; i--) {
-    if (props.chatData.messages[i].role === 'user') {
-      userMessage = props.chatData.messages[i];
-      break;
-    }
-  }
-
-  if (userMessage) {
-    emit('regenerate', userMessage.content);
-  }
-};
-
-// 监听推理过程变化
-watch(
-  () => props.currentReasoning,
-  (newReasoning) => {
-    if (newReasoning && newReasoning.trim() !== '') {
-      scrollToBottom();
-    }
-  },
 );
 
 // 监听当前流式消息ID变化
