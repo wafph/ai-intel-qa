@@ -482,11 +482,24 @@ const formatSourceDate = (timestamp: string) => {
 // ✅ 新增：复制范文片段
 const copySource = async (source: any) => {
   const text = `标题：${source.title}\n子标题：${source.subtitle}\n内容：${source.content}`;
-  try {
-    await navigator.clipboard.writeText(text);
-    ElMessage.success('已复制范文片段');
-  } catch (err) {
-    console.error('复制失败:', err);
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      ElMessage.success('已复制范文片段');
+    } catch (err) {
+      ElMessage.error('复制失败');
+    }
+  } else {
+    // 降级方案
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    document.body.appendChild(textarea);
+    textarea.select();
+    const success = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    success
+      ? ElMessage.success('已复制范文片段')
+      : ElMessage.error('复制失败（降级方案）');
   }
 };
 const scrollToBottom = () => {
