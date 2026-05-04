@@ -72,7 +72,6 @@ export const useChatStore = defineStore('chat', () => {
     }
   };
 
-
   // 删除历史记录（只更新内存状态）
   const deleteHistoryItem = (id: string) => {
     const index = historyList.value.findIndex((item) => item.id === id);
@@ -205,14 +204,14 @@ export const useChatStore = defineStore('chat', () => {
   };
 
   // 接口3：查询左侧最近会话列表
- const queryConversationsByFunc = async (): Promise<any> => {
+  const queryConversationsByFunc = async (): Promise<any> => {
     try {
       const funcId = getFuncIdByTab(currentActiveTab.value);
       const limit = 30;
 
       console.log('查询会话列表，功能ID:', funcId);
       const url = `${API_BASE_URL}/v1/chat/sessions?functionId=${funcId}&limit=${limit}`;
-      
+
       const response = await fetch(url, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
@@ -233,7 +232,7 @@ export const useChatStore = defineStore('chat', () => {
           const historyCount = sessionData.historyCount || 0;
           const lastMessageTime = sessionData.lastMessageTime;
           const createTime = sessionData.createTime || lastMessageTime;
-          
+
           const createTimestamp = new Date(createTime).getTime();
           if (isNaN(createTimestamp)) continue;
 
@@ -486,6 +485,78 @@ export const useChatStore = defineStore('chat', () => {
     }
   };
 
+  // 在现有的 useChatStore 中添加以下函数：
+
+  // 接口9：查询收藏会话列表
+  const queryFavoriteSessions = async (
+    functionId?: string, // 可选，不传则查询全部收藏
+    limit: number = 30,
+  ): Promise<{ success: boolean; data?: any[] }> => {
+    try {
+      let url = `${API_BASE_URL}/v1/chat/favorites?limit=${limit}`;
+
+      if (functionId && functionId.trim() !== '') {
+        url += `&functionId=${functionId}`;
+      }
+
+      console.log('查询收藏会话列表，URL:', url);
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP错误! 状态: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('收藏会话列表查询结果:', result);
+
+      if (result && result.code === 0 && Array.isArray(result.data)) {
+        // 这里可以将收藏数据存储到专门的响应式变量中
+        // 例如：favoriteSessions.value = result.data;
+        return { success: true, data: result.data };
+      } else {
+        return { success: false };
+      }
+    } catch (error) {
+      console.error('查询收藏会话列表失败:', error);
+      return { success: false };
+    }
+  };
+
+  // 接口10：查询收藏会话详情
+  const queryFavoriteSessionDetail = async (
+    sessionUuid: string,
+    functionId: string,
+  ): Promise<{ success: boolean; data?: any }> => {
+    try {
+      const url = `${API_BASE_URL}/v1/chat/favorites/detail?functionId=${functionId}&sessionId=${sessionUuid}`;
+
+      console.log('查询收藏会话详情，URL:', url);
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP错误! 状态: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('收藏会话详情查询结果:', result);
+
+      if (result && result.code === 0 && result.data) {
+        return { success: true, data: result.data };
+      } else {
+        return { success: false };
+      }
+    } catch (error) {
+      console.error('查询收藏会话详情失败:', error);
+      return { success: false };
+    }
+  };
+
   // 加载会话列表
   const loadConversations = async () => {
     await queryConversationsByFunc();
@@ -697,5 +768,7 @@ export const useChatStore = defineStore('chat', () => {
     clearAllConversations,
     loadSessionHistory,
     getFuncIdByTab,
+    queryFavoriteSessions,
+    queryFavoriteSessionDetail
   };
 });
