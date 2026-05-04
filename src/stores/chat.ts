@@ -56,13 +56,15 @@ export const useChatStore = defineStore('chat', () => {
     currentConversationUuid.value = uuid;
   };
 
-  const addHistoryItem = (item: HistoryItem) => {
-    const newItem = {
-      ...item,
-      topStatus: item.topStatus || 0, // 默认未置顶
-    };
-    historyList.value.unshift(newItem);
-  };
+const addHistoryItem = (item: HistoryItem) => {
+  const exists = historyList.value.some((h) => h.id === item.id);
+  if (exists) return;
+
+  historyList.value.unshift({
+    ...item,
+    topStatus: item.topStatus || 0,
+  });
+};
 
   // 更新历史记录
   const updateHistoryItem = (id: string, updates: Partial<HistoryItem>) => {

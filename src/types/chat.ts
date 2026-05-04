@@ -30,6 +30,7 @@ export interface ChatSession {
   historyCount?: number; // 历史记录数量
   lastMessageTime?: string; // 最后消息时间
   topStatus?: number; // 置顶状态 0-未置顶，1-已置顶
+  preview: string;
 }
 
 // types/chat.ts
