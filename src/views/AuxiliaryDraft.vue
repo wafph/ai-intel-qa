@@ -210,6 +210,7 @@ interface DraftMessage {
   reasoning?: string;
   timestamp: Date;
   streaming?: boolean;
+  sources?: any[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
