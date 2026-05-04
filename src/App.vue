@@ -126,7 +126,6 @@ const chatStore = useChatStore();
 const userStore = useUserStore();
 const router = useRouter();
 const route = useRoute();
-const inputText = ref('');
 
 const uploadedFileName = ref('');
 const uploadedFileUrl = ref('');
@@ -305,7 +304,7 @@ const handleNewChat = async () => {
 
   // ✅ 检查当前会话是否有输入回复内容（至少有一条用户消息和一条AI回复）
   if (!currentSession.messages || currentSession.messages.length < 2) {
-    ElMessage.warning('请先完成当前对话再新建会话');
+    ElMessage.warning('当前已经是最新对话');
     return;
   }
 
@@ -516,7 +515,7 @@ const startStream = async (queryText: string, messageId: string) => {
     };
 
     const version1 = '?version=1777453764415';
-    const version2 = '?version=1777019540183';
+    const version2 = '?version=1777869733574';
     const version3 = '?version=1777363853468';
     const version4 = '?version=1777432604064';
 

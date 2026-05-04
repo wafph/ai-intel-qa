@@ -467,11 +467,6 @@ const goToMyCollections = () => {
   router.push('/my-collections');
 };
 
-const goToFeedback = () => {
-  showUserMenu.value = false;
-  router.push('/feedback');
-};
-
 const handleClickOutsideUserMenu = (event: MouseEvent) => {
   const userCenter = document.querySelector('.user-center-bottom');
   if (userCenter && !userCenter.contains(event.target as Node)) {

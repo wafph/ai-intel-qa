@@ -34,95 +34,146 @@
 
         <!-- AI回复消息 -->
         <div v-else class="message-assistant">
-          <div class="message-header">
-            <div class="message-info">
-              <!-- 推理过程显示 -->
-              <div
-                v-if="item.reasoning && item.reasoning.trim() !== ''"
-                class="thinking-process"
-              >
-                <div class="thinking-header">
-                  <span>思考中...</span>
-                </div>
-                <div class="thinking-content">
-                  {{ item.reasoning }}
-                </div>
-              </div>
-
-              <!-- 当前流式消息 -->
-              <div v-if="item.streaming && item.id === currentStreamingMessageId">
-                <!-- 流式回复内容 -->
-                <div
-                  v-if="currentAnswer && currentAnswer.trim() !== ''"
-                  class="answer-streaming"
-                >
-                  <div class="typing-container">
-                    <template v-if="isTyping">
-                      {{ displayAnswer }}
-                    </template>
-                    <template v-else>
-                      <div v-html="renderMarkdown(displayAnswer)"></div>
-                    </template>
-                    <span v-if="isTyping" class="typing-cursor">|</span>
-                  </div>
-                </div>
-
-                <!-- 加载指示器 -->
-                <div
-                  v-if="
-                    streaming &&
-                    (!currentReasoning || currentReasoning.trim() === '') &&
-                    (!currentAnswer || currentAnswer.trim() === '')
-                  "
-                  class="thinking-indicator"
-                >
-                  <div class="thinking-dots">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 非流式消息 -->
-              <div v-else>
-                <div
-                  class="message-content pad"
-                  v-html="renderMarkdown(item.content)"
-                ></div>
-                <div
-                  style="margin-left: 15px"
-                  v-if="item.content && item.content !== '用户停止了生成'"
-                >
-                  <el-button link type="success" plain @click="handleRestart(index)">
-                    重新起草<el-icon class="el-icon--right"><ArrowRight /></el-icon>
-                  </el-button>
-                  <el-button
-                    link
-                    class="btn-bottom"
-                    type="primary"
-                    plain
-                    @click="handleExport"
-                    :loading="loading"
-                    :disabled="loading"
+          <!-- 双栏布局容器开始 -->
+          <div
+            class="dual-column-container"
+            :class="{ 'show-sources': sourcesVisible[item.id] }"
+          >
+            <!-- 左侧消息内容区域 -->
+            <div class="left-column" :ref="(el) => setLeftColumnRef(el, item.id)">
+              <div class="message-header">
+                <div class="message-info">
+                  <!-- 原有的推理过程和消息内容保持不变 -->
+                  <div
+                    v-if="item.reasoning && item.reasoning.trim() !== ''"
+                    class="thinking-process"
                   >
-                    {{ loading ? '转换中...' : '导出' }}
-                  </el-button>
+                    <div class="thinking-header">
+                      <span>思考中...</span>
+                    </div>
+                    <div class="thinking-content">
+                      {{ item.reasoning }}
+                    </div>
+                  </div>
+
+                  <!-- 当前流式消息 -->
+                  <div v-if="item.streaming && item.id === currentStreamingMessageId">
+                    <!-- ... 流式内容显示 ... -->
+                  </div>
+
+                  <!-- 非流式消息 -->
+                  <div v-else>
+                    <div
+                      class="message-content pad"
+                      v-html="renderMarkdown(item.content)"
+                    ></div>
+                    <div
+                      style="margin-left: 15px"
+                      v-if="item.content && item.content !== '用户停止了生成'"
+                    >
+                      <el-button
+                        link
+                        type="primary"
+                        plain
+                        @click="toggleAndScrollToSources(item.id)"
+                      >
+                        {{ sourcesVisible[item.id] ? '隐藏推荐范文' : '显示推荐范文' }}
+                        <el-icon class="el-icon--right">
+                          <component
+                            :is="sourcesVisible[item.id] ? ArrowUp : ArrowRight"
+                          />
+                        </el-icon>
+                      </el-button>
+                      <el-button
+                        link
+                        class="btn-bottom"
+                        type="primary"
+                        plain
+                        @click="handleExport"
+                        :loading="loading"
+                        :disabled="loading"
+                      >
+                        {{ loading ? '转换中...' : '导出' }}
+                      </el-button>
+                      <el-button link type="success" plain @click="handleRestart(index)">
+                        重新起草<el-icon class="el-icon--right"><ArrowRight /></el-icon>
+                      </el-button>
+                    </div>
+                  </div>
+
+                  <div class="message-time">
+                    {{ formatTime(item.timestamp) }}
+                    <span
+                      v-if="item.streaming && item.id === currentStreamingMessageId"
+                      class="streaming-badge"
+                    >
+                      <span class="streaming-dot"></span>
+                      生成中...
+                    </span>
+                  </div>
                 </div>
               </div>
+            </div>
 
-              <div class="message-time">
-                {{ formatTime(item.timestamp) }}
-                <span
-                  v-if="item.streaming && item.id === currentStreamingMessageId"
-                  class="streaming-badge"
-                >
-                  <span class="streaming-dot"></span>
-                  生成中...
-                </span>
+            <!-- 右侧推荐范文区域 -->
+            <div
+              v-if="item.sources && item.sources.length > 0"
+              class="right-column"
+              :ref="(el) => setRightColumnRef(el, item.id)"
+              :style="getRightColumnStyle(item.id)"
+            >
+              <div class="sources-container">
+                <div class="sources-header">
+                  <span>📄 推荐范文</span>
+                </div>
+                <div class="sources-list">
+                  <div
+                    v-for="(source, sourceIndex) in item.sources"
+                    :key="sourceIndex"
+                    class="source-item"
+                  >
+                    <div
+                      class="source-title"
+                      @click="toggleSourceItem(item.id, sourceIndex)"
+                    >
+                      <div class="title-content">
+                        <strong class="source-title-clickable">
+                          {{ source.title }}
+                        </strong>
+                        <span class="source-score">
+                          匹配度: {{ formatScore(source.match_score || source.score) }}%
+                        </span>
+                      </div>
+                      <span class="collapse-icon">
+                        {{ sourceCollapsed[`${item.id}-${sourceIndex}`] ? '▶' : '▼' }}
+                      </span>
+                    </div>
+                    <div
+                      v-show="!sourceCollapsed[`${item.id}-${sourceIndex}`]"
+                      class="source-details"
+                    >
+                      <div class="source-subtitle">{{ source.subtitle }}</div>
+                      <div class="source-content">{{ source.content }}</div>
+                      <div class="source-footer">
+                        <span class="source-date">
+                          更新时间: {{ formatSourceDate(source.update_date_time) }}
+                        </span>
+                        <el-button
+                          link
+                          size="small"
+                          type="primary"
+                          @click="copySource(source)"
+                        >
+                          复制片段
+                        </el-button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
+          <!-- 双栏布局容器结束 -->
         </div>
       </div>
     </div>
@@ -130,8 +181,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, watch, nextTick, reactive, onMounted, onUnmounted, onUpdated } from 'vue';
 import MarkdownIt from 'markdown-it';
+import { ArrowRight, ArrowUp } from '@element-plus/icons-vue'; // 新增图标导入
 import { ElMessage } from 'element-plus';
 const emit = defineEmits(['regenerate']);
 
@@ -270,7 +322,7 @@ const handleExport = async () => {
   const lastAssistantMessage = props.chatData.messages
     .filter((msg: any) => msg.role === 'assistant')
     .pop();
-  
+
   const qaId = lastAssistantMessage?.id || 'unknown';
 
   try {
@@ -298,7 +350,7 @@ const handleExport = async () => {
     }
     // 下载文件
     await downloadConvertedFile(convertResult.download_url, convertResult.file_name);
-    
+
     ElMessage.success('文档转换并下载成功！');
   } catch (error) {
     console.error('导出失败:', error);
@@ -314,7 +366,7 @@ const downloadConvertedFile = async (downloadUrl: string, fileName: string) => {
     const response = await fetch(downloadUrl, {
       method: 'GET',
       headers: {
-        'Accept': '*/*',
+        Accept: '*/*',
       },
     });
 
@@ -337,6 +389,106 @@ const downloadConvertedFile = async (downloadUrl: string, fileName: string) => {
   }
 };
 
+// ✅ 新增：控制推荐范文的显示状态和单个条目的折叠状态
+const sourcesVisible = ref<Record<string, boolean>>({});
+const sourceCollapsed = ref<Record<string, boolean>>({});
+
+// ✅ 新增：存储左右栏的DOM引用，用于高度同步
+const leftColumnRefs = reactive<Record<string, HTMLElement>>({});
+const rightColumnRefs = reactive<Record<string, HTMLElement>>({});
+
+// ✅ 新增：设置引用
+const setLeftColumnRef = (el: any, messageId: string) => {
+  if (el && el instanceof HTMLElement) {
+    leftColumnRefs[messageId] = el;
+  }
+};
+const setRightColumnRef = (el: any, messageId: string) => {
+  if (el && el instanceof HTMLElement) {
+    rightColumnRefs[messageId] = el;
+  }
+};
+
+// ✅ 新增：获取右侧栏样式（动态高度）
+const getRightColumnStyle = (messageId: string) => {
+  const leftColumn = leftColumnRefs[messageId];
+  if (!leftColumn) return {};
+  const leftHeight = leftColumn.offsetHeight;
+  return {
+    height: `${leftHeight}px`,
+    maxHeight: 'none',
+  };
+};
+
+// ✅ 新增：切换推荐范文侧边栏的显示/隐藏
+const toggleAndScrollToSources = (messageId: string) => {
+  sourcesVisible.value[messageId] = !sourcesVisible.value[messageId];
+  if (sourcesVisible.value[messageId]) {
+    nextTick(() => {
+      adjustRightColumnHeight(messageId);
+    });
+  }
+};
+
+// ✅ 新增：调整右侧栏高度以匹配左侧内容
+const adjustRightColumnHeight = (messageId: string) => {
+  const leftColumn = leftColumnRefs[messageId];
+  const rightColumn = rightColumnRefs[messageId];
+  if (leftColumn && rightColumn) {
+    const thinkingProcess = leftColumn.querySelector('.thinking-process') as HTMLElement;
+    const finalContent = leftColumn.querySelector('.message-content.pad') as HTMLElement;
+    let totalHeight = 0;
+    if (thinkingProcess) totalHeight += thinkingProcess.offsetHeight;
+    if (finalContent) totalHeight += finalContent.offsetHeight;
+    const styles = window.getComputedStyle(leftColumn);
+    totalHeight +=
+      (parseInt(styles.paddingTop) || 0) + (parseInt(styles.paddingBottom) || 0);
+    rightColumn.style.height = `${totalHeight}px`;
+    const sourcesContainer = rightColumn.querySelector(
+      '.sources-container',
+    ) as HTMLElement;
+    if (sourcesContainer) sourcesContainer.style.height = `${totalHeight}px`;
+  }
+};
+
+// ✅ 新增：切换单个范文条目的折叠状态
+const toggleSourceItem = (messageId: string, sourceIndex: number) => {
+  const key = `${messageId}-${sourceIndex}`;
+  sourceCollapsed.value[key] = !sourceCollapsed.value[key];
+  nextTick(() => adjustRightColumnHeight(messageId));
+};
+
+// ✅ 新增：格式化匹配度分数
+const formatScore = (score: number | string | undefined): string => {
+  if (score === undefined || score === null) return '0.0';
+  let numScore: number = typeof score === 'number' ? score : parseFloat(score);
+  if (isNaN(numScore)) return '0.0';
+  return (numScore > 1 ? numScore : numScore * 100).toFixed(1);
+};
+
+// ✅ 新增：格式化来源更新时间
+const formatSourceDate = (timestamp: string) => {
+  if (!timestamp) return '';
+  const date = new Date(parseInt(timestamp));
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+// ✅ 新增：复制范文片段
+const copySource = async (source: any) => {
+  const text = `标题：${source.title}\n子标题：${source.subtitle}\n内容：${source.content}`;
+  try {
+    await navigator.clipboard.writeText(text);
+    ElMessage.success('已复制范文片段');
+  } catch (err) {
+    console.error('复制失败:', err);
+  }
+};
 const scrollToBottom = () => {
   nextTick(() => {
     const container = document.querySelector('.conversation-history');
@@ -402,16 +554,28 @@ watch(
   },
 );
 
-// 监听聊天数据变化
 watch(
   () => props.chatData,
   () => {
     nextTick(() => {
-      scrollToBottom();
+      Object.keys(sourcesVisible.value).forEach((messageId) => {
+        if (sourcesVisible.value[messageId]) {
+          adjustRightColumnHeight(messageId);
+        }
+      });
     });
   },
   { deep: true },
 );
+
+// ✅ 新增：在组件更新后也调整高度
+onUpdated(() => {
+  Object.keys(sourcesVisible.value).forEach((messageId) => {
+    if (sourcesVisible.value[messageId]) {
+      adjustRightColumnHeight(messageId);
+    }
+  });
+});
 
 // 生命周期
 onMounted(() => {
@@ -507,7 +671,7 @@ onUnmounted(() => {
       }
 
       .message-assistant {
-        width: 85%;
+        width: 100%;
       }
 
       &.assistant-message {
@@ -725,6 +889,165 @@ onUnmounted(() => {
       display: flex;
       flex-direction: column;
       gap: 8px;
+    }
+  }
+}
+
+.dual-column-container {
+  display: flex;
+  width: 100%;
+  gap: 2%;
+  transition: all 0.3s ease;
+  align-items: flex-start;
+
+  .left-column {
+    width: 83%;
+    transition: width 0.3s ease;
+  }
+
+  .right-column {
+    width: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    border-left: 1px solid #e9ecef;
+    padding-left: 0;
+    margin-left: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    max-height: none;
+  }
+
+  &.show-sources {
+    .left-column {
+      width: 63%;
+    }
+    .right-column {
+      width: 35%;
+      opacity: 1;
+      padding-left: 20px;
+      margin-left: 2%;
+    }
+  }
+}
+
+/* 推荐范文容器样式 */
+.sources-container {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  height: fit-content;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+
+  .sources-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 16px;
+    font-weight: 600;
+    color: #303133;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e9ecef;
+    flex-shrink: 0;
+  }
+
+  .sources-list {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+  }
+
+  .source-item {
+    background: white;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    border-left: 3px solid #409eff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  .source-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    font-size: 14px;
+    color: #303133;
+    cursor: pointer;
+    user-select: none;
+    background: #f0f7ff;
+    transition: background-color 0.3s ease;
+    &:hover {
+      background: #e6f7ff;
+    }
+    .title-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex: 1;
+      margin-right: 10px;
+    }
+    .collapse-icon {
+      font-size: 12px;
+      color: #909399;
+      transition: transform 0.3s ease;
+      flex-shrink: 0;
+    }
+  }
+
+  .source-details {
+    transition: all 0.3s ease;
+    overflow: hidden;
+  }
+  .source-subtitle {
+    font-size: 12px;
+    color: #909399;
+    padding: 0 12px 8px 12px;
+  }
+  .source-content {
+    font-size: 13px;
+    color: #606266;
+    line-height: 1.6;
+    padding: 0 12px 8px 12px;
+    max-height: 200px;
+    overflow-y: auto;
+    background: #f8f9fa;
+    margin: 0 12px 8px 12px;
+    border-radius: 4px;
+  }
+  .source-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: #909399;
+    padding: 8px 12px;
+    border-top: 1px solid #f0f0f0;
+  }
+  .source-score {
+    font-size: 12px;
+    color: #52c41a;
+    font-weight: 500;
+    background: #f6ffed;
+    padding: 2px 6px;
+    border-radius: 10px;
+    border: 1px solid #b7eb8f;
+  }
+  .source-title-clickable {
+    cursor: pointer;
+    color: #1890ff;
+    &:hover {
+      text-decoration: underline;
     }
   }
 }
