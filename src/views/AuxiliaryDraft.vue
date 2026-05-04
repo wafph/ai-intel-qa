@@ -351,7 +351,7 @@ const handleExport = async () => {
     // 下载文件
     await downloadConvertedFile(convertResult.download_url, convertResult.file_name);
 
-    ElMessage.success('文档转换并下载成功！');
+    ElMessage.success('导出成功！');
   } catch (error) {
     console.error('导出失败:', error);
     ElMessage.error(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`);

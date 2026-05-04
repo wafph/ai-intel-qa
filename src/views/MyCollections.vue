@@ -9,7 +9,12 @@
     </div>
 
     <!-- 收藏列表 -->
-    <div class="collections-container">
+    <div 
+      class="collections-container"
+      v-loading="isLoading"
+      element-loading-text="加载中..."
+      element-loading-background="rgba(255, 255, 255, 0.8)"
+    >
       <!-- 搜索和过滤 -->
       <div class="filter-bar">
         <div class="search-box">
@@ -35,20 +40,14 @@
         </div>
       </div>
 
-      <!-- 加载状态 -->
-      <div v-if="isLoading" class="loading-state">
-        <div class="loading-spinner"></div>
-        <p>加载中...</p>
-      </div>
-
       <!-- 收藏内容 -->
-      <div v-else-if="filteredCollections.length === 0" class="empty-state">
+      <div v-if="!isLoading && filteredCollections.length === 0" class="empty-state">
         <div class="empty-icon">⭐</div>
         <p>暂无收藏内容</p>
         <p class="empty-tip">快去收藏你喜欢的历史对话吧</p>
       </div>
 
-      <div v-else class="collections-grid">
+      <div v-else-if="!isLoading" class="collections-grid">
         <div
           v-for="item in filteredCollections"
           :key="item.id"
@@ -91,6 +90,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useChatStore } from '../stores/chat';
+
 const router = useRouter();
 const chatStore = useChatStore();
 
@@ -117,12 +117,12 @@ const filteredCollections = computed(() => {
   if (activeFilter.value !== 'all') {
     // 将中文标签转换为functionId
     const functionIdMap: Record<string, string> = {
-      智能问答: 'knowledge_qa',
-      辅助起草: 'knowledge_draft',
-      合规审核: 'knowledge_review',
-      智能检索: 'knowledge_search',
+      '智能问答': 'knowledge_qa',
+      '辅助起草': 'knowledge_draft',
+      '合规审核': 'knowledge_review',
+      '智能检索': 'knowledge_search',
     };
-
+    
     const functionId = functionIdMap[activeFilter.value];
     collections = collections.filter((item) => item.functionId === functionId);
   }
@@ -132,8 +132,8 @@ const filteredCollections = computed(() => {
     const query = searchQuery.value.toLowerCase();
     collections = collections.filter(
       (item) =>
-        item.sessionTitle.toLowerCase().includes(query) ||
-        (item.preview && item.preview.toLowerCase().includes(query)),
+        item.title.toLowerCase().includes(query) ||
+        (item.preview && item.preview.toLowerCase().includes(query))
     );
   }
 
@@ -144,21 +144,21 @@ const filteredCollections = computed(() => {
 const loadCollections = async () => {
   try {
     isLoading.value = true;
-
+    
     // 如果有激活的过滤器，传递对应的functionId
     let functionId: string | undefined = undefined;
     if (activeFilter.value !== 'all') {
       const functionIdMap: Record<string, string> = {
-        智能问答: 'knowledge_qa',
-        辅助起草: 'knowledge_draft',
-        合规审核: 'knowledge_review',
-        智能检索: 'knowledge_search',
+        '智能问答': 'knowledge_qa',
+        '辅助起草': 'knowledge_draft',
+        '合规审核': 'knowledge_review',
+        '智能检索': 'knowledge_search',
       };
       functionId = functionIdMap[activeFilter.value];
     }
-
+    
     const result = await chatStore.queryFavoriteSessions(functionId);
-
+    
     if (result.success && result.data) {
       serverCollections.value = result.data.map((item: any) => ({
         id: item.sessionId,
@@ -187,10 +187,10 @@ const loadCollections = async () => {
 // 根据functionId获取类型名称
 const getTypeByFunctionId = (functionId: string): string => {
   const typeMap: Record<string, string> = {
-    knowledge_qa: '智能问答',
-    knowledge_draft: '辅助起草',
-    knowledge_review: '合规审核',
-    knowledge_search: '智能检索',
+    'knowledge_qa': '智能问答',
+    'knowledge_draft': '辅助起草',
+    'knowledge_review': '合规审核',
+    'knowledge_search': '智能检索',
   };
   return typeMap[functionId] || '未知类型';
 };
@@ -206,12 +206,12 @@ const viewCollection = async (item: any) => {
   try {
     // 先获取收藏详情
     const result = await chatStore.queryFavoriteSessionDetail(item.id, item.functionId);
-
+    
     if (result.success && result.data) {
       // 这里可以将详情数据传递给对应的页面
       // 或者直接跳转到对应的功能页面
       let path = '/intelligent-qa'; // 默认跳转到智能问答
-
+      
       if (item.functionId === 'knowledge_search') {
         path = '/intelligent-retrieval';
       } else if (item.functionId === 'knowledge_draft') {
@@ -219,15 +219,15 @@ const viewCollection = async (item: any) => {
       } else if (item.functionId === 'knowledge_review') {
         path = '/compliance-review';
       }
-
+      
       // 可以将会话详情存储在store中，供目标页面使用
       // chatStore.setCurrentFavoriteDetail(result.data);
-
+      
       router.push({
         path: path,
-        query: {
+        query: { 
           id: item.id,
-          from: 'collections', // 标记来自收藏页面
+          from: 'collections'  // 标记来自收藏页面
         },
       });
     } else {
@@ -243,7 +243,7 @@ const viewCollection = async (item: any) => {
 const removeFromFavorites = async (id: string) => {
   // 这里需要调用取消收藏的接口
   // 先找到对应的functionId
-  const item = serverCollections.value.find((item) => item.id === id);
+  const item = serverCollections.value.find(item => item.id === id);
   if (item) {
     const success = await chatStore.syncCollectStatus(id, false);
     if (success) {
@@ -270,7 +270,7 @@ onMounted(async () => {
 });
 </script>
 
-<style scoped>
+<style lang="less" scoped>
 .my-collections {
   width: 100%;
   height: 100vh;
@@ -319,6 +319,8 @@ onMounted(async () => {
   .collections-container {
     padding: 30px 40px;
     margin: 0 auto;
+    position: relative; // 为 Loading 组件提供定位上下文
+    min-height: 300px; // 确保有足够的高度显示加载动画
 
     .filter-bar {
       background: white;
@@ -535,16 +537,6 @@ onMounted(async () => {
 
             &:hover {
               background: #40a9ff;
-              transform: translateY(-1px);
-            }
-          }
-
-          .share-btn {
-            background: #f0f0f0;
-            color: #666;
-
-            &:hover {
-              background: #e9ecef;
               transform: translateY(-1px);
             }
           }
