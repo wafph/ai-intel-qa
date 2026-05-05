@@ -874,6 +874,7 @@ onUnmounted(() => {
             line-height: 1.6;
             word-break: break-word;
             width: 85%;
+            margin-bottom: 20px;
 
             :deep(code) {
               background: #f5f5f5;

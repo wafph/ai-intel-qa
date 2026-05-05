@@ -58,7 +58,30 @@
 
                   <!-- 当前流式消息 -->
                   <div v-if="item.streaming && item.id === currentStreamingMessageId">
-                    <!-- ... 流式内容显示 ... -->
+                    <div
+                      v-if="currentAnswer && currentAnswer.trim() !== ''"
+                      class="answer-streaming"
+                    >
+                      <div class="typing-container">
+                        <div
+                          class="typing-text"
+                          v-html="renderMarkdown(displayAnswer)"
+                        ></div>
+                        <span v-if="isTyping" class="typing-cursor">|</span>
+                      </div>
+                    </div>
+
+                    <!-- 加载指示器（当没有任何内容时） -->
+                    <div
+                      v-if="streaming && (!currentAnswer || currentAnswer.trim() === '')"
+                      class="thinking-indicator"
+                    >
+                      <div class="thinking-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                      </div>
+                    </div>
                   </div>
 
                   <!-- 非流式消息 -->

@@ -538,8 +538,8 @@ const startStream = async (queryText: string, messageId: string) => {
     };
 
     const version1 = '?version=1777453764415';
-    const version2 = '?version=1777019540183';
-    const version3 = '?version=1777363853468';
+    const version2 = '?version=1777869733574';
+    const version3 = '?version=1777960203166';
     const version4 = '?version=1777432604064';
 
     let apiUrl = '';
