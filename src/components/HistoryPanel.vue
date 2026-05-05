@@ -29,7 +29,7 @@
       <div v-if="filteredHistory.length === 0" class="empty-state">
         <div class="empty-icon">📁</div>
         <p>暂无历史对话</p>
-        <p class="empty-tip">请在右侧输入框中开始对话</p>
+        <p class="empty-tip">点击新聊天创建对话</p>
       </div>
 
       <div v-else class="history-items">

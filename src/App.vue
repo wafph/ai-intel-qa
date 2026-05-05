@@ -674,10 +674,10 @@ const processStreamChunk = async (chunk: any, messageId: string) => {
 };
 
 const handleTabChange = (tab: string) => {
+  stopStream();
   activeTab.value = tab;
   chatStore.setCurrentActiveTab(tab);
   resetCurrentChat();
-
   const routeMap: Record<string, string> = {
     智能问答: '/intelligent-qa',
     智能检索: '/intelligent-retrieval',
