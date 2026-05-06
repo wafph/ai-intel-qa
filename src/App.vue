@@ -127,7 +127,11 @@ const userStore = useUserStore();
 const router = useRouter();
 const route = useRoute();
 const inputText = ref('');
-
+const lastComplianceParams = ref<{
+  file_url: string;
+  query: string;
+  dimensions: string[];
+} | null>(null);
 const uploadedFileName = ref('');
 const uploadedFileUrl = ref('');
 const selectedDimensions = ref<string[]>([]);
@@ -382,6 +386,9 @@ const handleSelectChat = async (chatId: string) => {
   activeChatId.value = chatId;
   resetStreamState();
   scrollToBottom();
+
+  // ✅ 切换到新会话时，清空保存的合规审核参数
+  lastComplianceParams.value = null;
 };
 
 const handleDeleteChat = async (chatId: string) => {
@@ -423,7 +430,6 @@ const isSendDisabled = computed(() => {
 });
 
 const handleSendMessage = async (content: string) => {
-  inputText.value = content;
   if (activeTab.value === '合规审核') {
     if (!uploadedFileUrl.value || selectedDimensions.value.length === 0) {
       return;
@@ -453,6 +459,17 @@ const handleSendMessage = async (content: string) => {
 
   chat.messages.push(userMessage);
 
+  // ✅ 保存合规审核的参数，用于重新审核
+  if (activeTab.value === '合规审核') {
+    lastComplianceParams.value = {
+      file_url: uploadedFileUrl.value,
+      query: !selectedDimensions.value.includes('全选')
+        ? selectedDimensions.value.join(',')
+        : spliceSelectedDimensions.value.join(','),
+      dimensions: [...selectedDimensions.value],
+    };
+  }
+
   // 如果是第一条消息，更新标题
   if (chat.messages.length === 1) {
     const newTitle =
@@ -468,6 +485,28 @@ const handleSendMessage = async (content: string) => {
       historyItem.title = newTitle;
       historyItem.preview = activeTab.value === '合规审核' ? '开始合规审核' : content;
     }
+  }
+
+  // ✅ 清空输入框（针对合规审核，清空上传状态和选择状态）
+  if (activeTab.value === '合规审核') {
+    // 清空上传文件状态
+    uploadedFileName.value = '';
+    uploadedFileUrl.value = '';
+
+    // 清空多选框状态
+    selectedDimensions.value = [];
+    spliceSelectedDimensions.value = [];
+
+    // 重置"全选"状态
+    const selectAllCheckbox = document.querySelector(
+      '.el-checkbox-group .el-checkbox:first-child input',
+    ) as HTMLInputElement;
+    if (selectAllCheckbox) {
+      selectAllCheckbox.checked = false;
+    }
+  } else {
+    // 清空普通输入框
+    inputText.value = '';
   }
 
   // 添加AI消息占位符
@@ -513,20 +552,31 @@ const startStream = async (queryText: string, messageId: string) => {
   }, requestTimeout);
 
   try {
-    if (selectedDimensions.value.includes('全选')) {
-      spliceSelectedDimensions.value = ['合规性', '冲突性', '文本规范性'];
-    }
     let params: any = {};
 
     if (activeTab.value === '合规审核') {
-      params = {
-        inputs: {
-          file_url: uploadedFileUrl.value,
-          query: !selectedDimensions.value.includes('全选')
-            ? selectedDimensions.value.join(',')
-            : spliceSelectedDimensions.value.join(','),
-        },
-      };
+      // ✅ 使用保存的参数（如果有），否则使用当前值
+      if (lastComplianceParams.value) {
+        params = {
+          inputs: {
+            file_url: lastComplianceParams.value.file_url,
+            query: lastComplianceParams.value.query,
+          },
+        };
+      } else {
+        if (selectedDimensions.value.includes('全选')) {
+          spliceSelectedDimensions.value = ['合规性', '冲突性', '文本规范性'];
+        }
+
+        params = {
+          inputs: {
+            file_url: uploadedFileUrl.value,
+            query: !selectedDimensions.value.includes('全选')
+              ? selectedDimensions.value.join(',')
+              : spliceSelectedDimensions.value.join(','),
+          },
+        };
+      }
     } else {
       params = {
         inputs: {
@@ -534,6 +584,7 @@ const startStream = async (queryText: string, messageId: string) => {
         },
       };
     }
+
     const token = appStore.sharedDataToken;
     if (!token) {
       throw new Error('未找到认证token，请先登录');
@@ -563,6 +614,7 @@ const startStream = async (queryText: string, messageId: string) => {
     } else {
       apiUrl = baseUrls.search + currentConversationUuid.value + version4;
     }
+
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
@@ -621,7 +673,20 @@ const handleRegenerate = (content: string) => {
   if (isStreaming.value) {
     stopStream();
   }
-  handleSendMessage(content);
+
+  // ✅ 如果是合规审核，重新审核时使用保存的参数
+  if (activeTab.value === '合规审核') {
+    if (lastComplianceParams.value) {
+      // 重新审核时不重新上传文件，使用保存的参数
+      handleSendMessage('开始合规审核');
+    } else {
+      // 如果没有保存的参数，则使用当前状态
+      handleSendMessage(content);
+    }
+  } else {
+    // 非合规审核，正常重新生成
+    handleSendMessage(content);
+  }
 };
 
 const appendModelOutputText = async (text: string, messageId: string) => {
@@ -716,6 +781,12 @@ const handleTabChange = (tab: string) => {
   activeTab.value = tab;
   chatStore.setCurrentActiveTab(tab);
   resetCurrentChat();
+
+  // ✅ 切换标签时清空保存的合规审核参数
+  if (tab !== '合规审核') {
+    lastComplianceParams.value = null;
+  }
+
   const routeMap: Record<string, string> = {
     智能问答: '/intelligent-qa',
     智能检索: '/intelligent-retrieval',
