@@ -6,36 +6,35 @@
       <p>你可以使用自然语言提问，我来精准回答</p>
     </div>
 
-    <!-- 历史对话列表 - 只要有消息就显示 -->
-    <div class="conversation-history" v-if="hasMessages">
-      <div
-        v-for="(item, index) in chatData?.messages || []"
-        :key="item.id"
-        :class="[
-          'history-item',
-          item.role === 'user' ? 'user-message' : 'assistant-message',
-        ]"
-        :data-message-id="item.id"
-      >
-        <!-- 用户消息 -->
-        <div v-if="item.role === 'user'" class="message-user">
-          <div class="message-header">
-            <div class="message-info">
-              <pre class="message-content user-message-content">{{ item.content }}</pre>
-              <div class="message-time">{{ formatTime(item.timestamp) }}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- AI回复消息 -->
-        <div v-else class="message-assistant">
-          <!-- 双栏布局容器 -->
+    <!-- 主容器：左右分栏布局 -->
+    <div class="qa-container">
+      <!-- 左侧对话区域 -->
+      <div class="qa-body">
+        <!-- 历史对话列表 -->
+        <div class="conversation-history" v-if="hasMessages">
           <div
-            class="dual-column-container"
-            :class="{ 'show-sources': sourcesVisible[item.id] }"
+            v-for="(item, index) in chatData?.messages || []"
+            :key="item.id"
+            :class="[
+              'history-item',
+              item.role === 'user' ? 'user-message' : 'assistant-message',
+            ]"
+            :data-message-id="item.id"
           >
-            <!-- 左侧消息内容区域 -->
-            <div class="left-column" :ref="(el) => setLeftColumnRef(el, item.id)">
+            <!-- 用户消息（右对齐） -->
+            <div v-if="item.role === 'user'" class="message-user">
+              <div class="message-header">
+                <div class="message-info">
+                  <pre class="message-content user-message-content">{{
+                    item.content
+                  }}</pre>
+                  <div class="message-time">{{ formatTime(item.timestamp) }}</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- AI回复消息（左对齐） -->
+            <div v-else class="message-assistant">
               <div class="message-header">
                 <div class="message-info">
                   <!-- 始终显示"思考过程"部分，只要消息中存在 reasoning 内容 -->
@@ -88,24 +87,34 @@
                       ref="finalContentRef"
                     ></div>
 
+                    <!-- 操作按钮区域 -->
                     <div
-                      style="display: flex; align-items: center"
+                      class="message-actions"
                       v-if="item.content && item.content !== '用户停止了生成'"
                     >
+                      <!-- 查看来源按钮 -->
                       <el-button
                         link
-                        style="padding: 10px 20px"
                         type="primary"
                         plain
-                        @click="toggleAndScrollToSources(item.id)"
+                        @click="toggleSourcesPanel(item)"
                       >
-                        {{ sourcesVisible[item.id] ? '隐藏来源' : '查看来源' }}
+                        {{
+                          activeSourcesItem?.id === item.id && showSourcesPanel
+                            ? '隐藏来源'
+                            : '查看来源'
+                        }}
                         <el-icon class="el-icon--right">
                           <component
-                            :is="sourcesVisible[item.id] ? ArrowUp : ArrowRight"
+                            :is="
+                              activeSourcesItem?.id === item.id && showSourcesPanel
+                                ? ArrowUp
+                                : ArrowRight
+                            "
                           />
                         </el-icon>
                       </el-button>
+
                       <!-- 复制按钮 -->
                       <div
                         class="copy-container"
@@ -132,11 +141,8 @@
                         >
                       </div>
 
-                      <!-- ✅ 点赞按钮 - 保留原有功能 -->
-                      <div
-                        class="vote-container"
-                        style="display: inline-block; margin-left: 20px"
-                      >
+                      <!-- 点赞按钮 -->
+                      <div class="vote-container">
                         <img
                           :src="
                             item.vote === 'like'
@@ -144,12 +150,7 @@
                               : '/images/zhan.svg'
                           "
                           alt="点赞"
-                          style="
-                            width: 20px;
-                            height: 20px;
-                            cursor: pointer;
-                            transition: opacity 0.3s ease;
-                          "
+                          class="vote-icon"
                           @click="handleVote(item.id, 'like')"
                         />
                         <span
@@ -162,22 +163,18 @@
                         </span>
                       </div>
 
-                      <!-- ✅ 点踩按钮 - 保留原有功能，但添加弹窗 -->
-                      <div
-                        class="vote-container"
-                        style="display: inline-block; margin-left: 20px"
-                      >
+                      <!-- 点踩按钮 -->
+                      <div class="vote-container">
                         <img
                           src="/images/cai.svg"
                           alt="踩"
-                          style="width: 20px; height: 20px; cursor: pointer"
+                          class="vote-icon"
                           @click="handleVote(item.id, 'dislike')"
                           :style="{
                             filter:
                               item.vote === 'dislike'
                                 ? 'invert(29%) sepia(82%) saturate(748%) hue-rotate(327deg) brightness(97%) contrast(101%)'
                                 : 'none',
-                            transition: 'filter 0.3s ease',
                           }"
                         />
                         <span
@@ -189,9 +186,11 @@
                           {{ item.dislikeCount || 0 }}
                         </span>
                       </div>
+
+                      <!-- 重新生成按钮 -->
                       <el-button
                         link
-                        class="btn-bottom"
+                        class="regenerate-btn"
                         type="success"
                         plain
                         @click="handleRestart(index)"
@@ -213,82 +212,75 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
 
-            <!-- 右侧参考来源区域 -->
+        <!-- 加载状态 -->
+        <div v-if="loading" class="loading-state">
+          <div class="loading-spinner"></div>
+          <p>正在加载对话...</p>
+        </div>
+      </div>
+
+      <!-- 右侧固定参考来源面板（点击查看来源时显示） -->
+      <div
+        v-if="showSourcesPanel"
+        class="sources-sidebar"
+        :class="{ 'sidebar-visible': showSourcesPanel }"
+      >
+        <div class="sources-header">
+          <h3>📄 参考来源</h3>
+          <el-icon class="close-btn" @click="closeSourcesPanel"><Close /></el-icon>
+        </div>
+        <div
+          class="sources-content"
+          v-if="activeSourcesItem && activeSourcesItem.sources"
+        >
+          <div
+            v-for="(source, sourceIndex) in activeSourcesItem.sources"
+            :key="sourceIndex"
+            class="source-item"
+          >
             <div
-              v-if="item.sources && item.sources.length > 0"
-              class="right-column"
-              :ref="(el) => setRightColumnRef(el, item.id)"
-              :style="getRightColumnStyle(item.id)"
+              class="source-title"
+              @click="toggleSourceItem(activeSourcesItem.id, sourceIndex)"
             >
-              <div class="sources-container">
-                <div class="sources-header">
-                  <span>📄 参考来源</span>
-                </div>
-                <div class="sources-list">
-                  <div
-                    v-for="(source, sourceIndex) in item.sources"
-                    :key="sourceIndex"
-                    class="source-item"
-                  >
-                    <div
-                      class="source-title"
-                      @click="toggleSourceItem(item.id, sourceIndex)"
-                    >
-                      <div class="title-content">
-                        <!-- ✅ 给标题添加点击事件 -->
-                        <strong
-                          @click.stop="handleSourceTitleClick(source, $event)"
-                          class="source-title-clickable"
-                        >
-                          {{ source.title }}
-                        </strong>
-                        <span class="source-score">
-                          匹配度:
-                          {{ formatScore(source.match_score || source.score) }}%</span
-                        >
-                      </div>
-                      <span class="collapse-icon">
-                        {{ sourceCollapsed[`${item.id}-${sourceIndex}`] ? '▶' : '▼' }}
-                      </span>
-                    </div>
-                    <div
-                      v-show="!sourceCollapsed[`${item.id}-${sourceIndex}`]"
-                      class="source-details"
-                    >
-                      <div class="source-subtitle">{{ source.subtitle }}</div>
-                      <div class="source-content">{{ source.content }}</div>
-                      <div class="source-footer">
-                        <span class="source-date">
-                          更新时间:
-                          {{ formatSourceDate(source.update_date_time) }}
-                        </span>
-                        <el-button
-                          link
-                          size="small"
-                          type="primary"
-                          @click="copySource(source)"
-                        >
-                          复制片段
-                        </el-button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              <div class="title-content">
+                <strong
+                  @click.stop="handleSourceTitleClick(source, $event)"
+                  class="source-title-clickable"
+                >
+                  {{ source.title }}
+                </strong>
+                <span class="source-score">
+                  匹配度: {{ formatScore(source.match_score || source.score) }}%
+                </span>
+              </div>
+              <span class="collapse-icon">
+                {{ isSourceCollapsed(sourceIndex) ? '▶' : '▼' }}
+              </span>
+            </div>
+            <div v-show="!isSourceCollapsed(sourceIndex)" class="source-details">
+              <div class="source-subtitle">{{ source.subtitle }}</div>
+              <div class="source-content">{{ source.content }}</div>
+              <div class="source-footer">
+                <span class="source-date">
+                  更新时间: {{ formatSourceDate(source.update_date_time) }}
+                </span>
+                <el-button link size="small" type="primary" @click="copySource(source)">
+                  复制片段
+                </el-button>
               </div>
             </div>
           </div>
         </div>
+        <div v-else class="no-sources">
+          <p>暂无参考来源</p>
+        </div>
       </div>
     </div>
 
-    <!-- 加载状态 -->
-    <div v-if="loading" class="loading-state">
-      <div class="loading-spinner"></div>
-      <p>正在加载对话...</p>
-    </div>
-
-    <!--点踩反馈弹窗 -->
+    <!-- 点踩反馈弹窗 -->
     <el-dialog
       v-model="feedbackDialogVisible"
       title="分享反馈"
@@ -297,7 +289,6 @@
       class="dialogfoot"
       destroy-on-close
     >
-      <!-- ✅ 单选按钮组 -->
       <el-radio-group v-model="feedbackReason" class="feedback-radio-group">
         <el-radio
           v-for="opt in feedbackOptions"
@@ -309,7 +300,6 @@
         </el-radio>
       </el-radio-group>
 
-      <!-- ✅ 其他情况显示输入框 -->
       <el-input
         v-if="feedbackReason === 'other'"
         v-model="feedbackDetail"
@@ -375,7 +365,7 @@ import {
 } from 'vue';
 import MarkdownIt from 'markdown-it';
 import { ElMessage } from 'element-plus';
-import { ArrowRight, ArrowUp } from '@element-plus/icons-vue';
+import { ArrowRight, ArrowUp, Close } from '@element-plus/icons-vue';
 import { useChatStore } from '@/stores/chat';
 const chatStore = useChatStore();
 
@@ -387,41 +377,16 @@ const loading = ref(false);
 const isTyping = ref(false);
 const emit = defineEmits(['regenerate']);
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
-const sourcesVisible = ref<Record<string, boolean>>({});
+
+// 参考来源面板状态
+const showSourcesPanel = ref(false);
+const activeSourcesItem = ref<any>(null);
 const sourceCollapsed = ref<Record<string, boolean>>({});
 
+// PDF 预览相关状态
 const showPdfViewer = ref(false);
 const pdfViewerUrl = ref('');
 const currentPdfTitle = ref('');
-
-// 存储每个消息的左边栏和右边栏的DOM引用
-const leftColumnRefs = reactive<Record<string, HTMLElement>>({});
-const rightColumnRefs = reactive<Record<string, HTMLElement>>({});
-
-// 设置左边栏引用
-const setLeftColumnRef = (el: any, messageId: string) => {
-  if (el && el instanceof HTMLElement) {
-    leftColumnRefs[messageId] = el;
-  }
-};
-
-const setRightColumnRef = (el: any, messageId: string) => {
-  if (el && el instanceof HTMLElement) {
-    rightColumnRefs[messageId] = el;
-  }
-};
-
-// 获取右边栏样式
-const getRightColumnStyle = (messageId: string) => {
-  const leftColumn = leftColumnRefs[messageId];
-  if (!leftColumn) return {};
-
-  const leftHeight = leftColumn.offsetHeight;
-  return {
-    height: `${leftHeight}px`,
-    maxHeight: 'none', // 移除最大高度限制
-  };
-};
 
 // Props
 interface Props {
@@ -460,6 +425,7 @@ const props = withDefaults(defineProps<Props>(), {
   currentStreamingMessageId: null,
 });
 
+// 反馈对话框相关
 const feedbackDialogVisible = ref(false);
 const currentDislikeMessage = ref<ChatMessage | null>(null);
 const submitting = ref(false);
@@ -484,6 +450,7 @@ watch(
   (newChatData) => {
     if (newChatData) {
       if (newChatData.messages && newChatData.messages.length > 0) {
+        // 数据加载完成后的处理
       }
     }
   },
@@ -497,12 +464,12 @@ const md = new MarkdownIt({
   typographer: true,
 });
 
-// 在script部分添加响应式数据
+// 复制相关状态
 const showCopied = ref(false);
 const copiedMessageId = ref<string | null>(null);
 let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
-// IntelligentQA.vue - formatScore 函数
+// 格式化匹配度分数
 const formatScore = (score: number | string | undefined): string => {
   if (score === undefined || score === null) return '0.0';
 
@@ -524,14 +491,12 @@ const formatScore = (score: number | string | undefined): string => {
   return (numScore * 100).toFixed(1);
 };
 
-// 复制文本到剪贴板的函数
+// 复制文本到剪贴板
 const copyToClipboard = async (text: string) => {
   try {
-    // 现代浏览器API
     if (navigator.clipboard && window.isSecureContext) {
       await navigator.clipboard.writeText(text);
     } else {
-      // 回退方案
       const textArea = document.createElement('textarea');
       textArea.value = text;
       textArea.style.position = 'absolute';
@@ -571,7 +536,6 @@ const copySource = async (source: any) => {
       ElMessage.error('复制失败');
     }
   } else {
-    // 降级方案
     const textarea = document.createElement('textarea');
     textarea.value = text;
     document.body.appendChild(textarea);
@@ -584,11 +548,12 @@ const copySource = async (source: any) => {
   }
 };
 
+// 处理来源标题点击
 const handleSourceTitleClick = async (source: any, event: Event) => {
-  event.stopPropagation(); // 阻止事件冒泡，避免触发父元素的折叠/展开
+  event.stopPropagation();
 
   try {
-    const fileId = source.file_id || source.id; // 根据实际字段调整
+    const fileId = source.file_id || source.id;
     if (!fileId) {
       return;
     }
@@ -626,13 +591,11 @@ const handleSourceTitleClick = async (source: any, event: Event) => {
 
     // 4. 根据文件类型处理
     if (isPdfFile(fileId, contentType)) {
-      // PDF 文件：显示预览弹框
       const pdfUrl = window.URL.createObjectURL(fileBlob);
       pdfViewerUrl.value = pdfUrl;
       currentPdfTitle.value = source.title || 'PDF 预览';
       showPdfViewer.value = true;
     } else {
-      // 其他格式：直接下载
       downloadFile(fileBlob, source.title || 'document', fileId);
     }
   } catch (error) {
@@ -640,6 +603,7 @@ const handleSourceTitleClick = async (source: any, event: Event) => {
   }
 };
 
+// 判断是否为 PDF 文件
 const isPdfFile = (fileName: string, contentType: string): boolean => {
   const lowerFileName = fileName.toLowerCase();
   return (
@@ -649,8 +613,8 @@ const isPdfFile = (fileName: string, contentType: string): boolean => {
   );
 };
 
+// 下载文件
 const downloadFile = (fileBlob: Blob, fileName: string, fileId: string) => {
-  // 尝试从 fileId 中提取文件扩展名
   const extension = extractFileExtension(fileId);
   const fullFileName = extension ? `${fileName}.${extension}` : fileName;
 
@@ -664,6 +628,7 @@ const downloadFile = (fileBlob: Blob, fileName: string, fileId: string) => {
   window.URL.revokeObjectURL(url);
 };
 
+// 提取文件扩展名
 const extractFileExtension = (fileId: string): string => {
   const parts = fileId.split('.');
   if (parts.length > 1) {
@@ -672,6 +637,7 @@ const extractFileExtension = (fileId: string): string => {
   return '';
 };
 
+// 关闭 PDF 查看器
 const closePdfViewer = () => {
   if (pdfViewerUrl.value) {
     window.URL.revokeObjectURL(pdfViewerUrl.value);
@@ -681,79 +647,40 @@ const closePdfViewer = () => {
   currentPdfTitle.value = '';
 };
 
-// 点击来源按钮时显示参考来源面板
-const toggleAndScrollToSources = (messageId: string) => {
-  // 切换显示状态
-  sourcesVisible.value[messageId] = !sourcesVisible.value[messageId];
-
-  // 如果显示，则调整右边栏高度
-  if (sourcesVisible.value[messageId]) {
-    nextTick(() => {
-      adjustRightColumnHeight(messageId);
-
-      const sourcesContainer = document.querySelector(
-        `[data-message-id="${messageId}"] .sources-container`,
-      );
-      if (sourcesContainer) {
-        sourcesContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
-    });
+// 切换参考来源面板
+const toggleSourcesPanel = (item: ChatMessage) => {
+  if (activeSourcesItem.value?.id === item.id && showSourcesPanel.value) {
+    // 如果点击的是当前已显示的面板，则关闭
+    closeSourcesPanel();
+  } else {
+    // 否则打开新面板
+    activeSourcesItem.value = item;
+    showSourcesPanel.value = true;
   }
 };
 
-const adjustRightColumnHeight = (messageId: string) => {
-  const leftColumn = leftColumnRefs[messageId];
-  const rightColumn = rightColumnRefs[messageId];
-
-  if (leftColumn && rightColumn) {
-    // 获取左侧容器内所有需要计算高度的元素
-    const thinkingProcess = leftColumn.querySelector('.thinking-process') as HTMLElement;
-    const finalContent = leftColumn.querySelector('.message-content.pad') as HTMLElement;
-
-    let totalHeight = 0;
-
-    // 计算推理内容高度（如果存在）
-    if (thinkingProcess) {
-      totalHeight += thinkingProcess.offsetHeight;
-    }
-
-    // 计算最终回复内容高度（如果存在）
-    if (finalContent) {
-      totalHeight += finalContent.offsetHeight;
-    }
-
-    // 加上一些额外的间距（padding、margin等）
-    const styles = window.getComputedStyle(leftColumn);
-    const paddingTop = parseInt(styles.paddingTop) || 0;
-    const paddingBottom = parseInt(styles.paddingBottom) || 0;
-    const marginTop = parseInt(styles.marginTop) || 0;
-    const marginBottom = parseInt(styles.marginBottom) || 0;
-
-    totalHeight += paddingTop + paddingBottom + marginTop + marginBottom;
-
-    // 设置右侧容器高度
-    rightColumn.style.height = `${totalHeight}px`;
-
-    // 同时设置sources-container的高度
-    const sourcesContainer = rightColumn.querySelector(
-      '.sources-container',
-    ) as HTMLElement;
-    if (sourcesContainer) {
-      sourcesContainer.style.height = `${totalHeight}px`;
-    }
-  }
+// 关闭参考来源面板
+const closeSourcesPanel = () => {
+  showSourcesPanel.value = false;
+  activeSourcesItem.value = null;
+  // 重置所有折叠状态
+  sourceCollapsed.value = {};
 };
 
+// 检查源是否折叠
+const isSourceCollapsed = (sourceIndex: number): boolean => {
+  if (!activeSourcesItem.value) return false;
+  const key = `${activeSourcesItem.value.id}-${sourceIndex}`;
+  return sourceCollapsed.value[key] || false;
+};
+
+// 切换单个源折叠状态
 const toggleSourceItem = (messageId: string, sourceIndex: number) => {
   const key = `${messageId}-${sourceIndex}`;
   sourceCollapsed.value[key] = !sourceCollapsed.value[key];
-
-  // 延迟调整高度，等待DOM更新
-  nextTick(() => {
-    adjustRightColumnHeight(messageId);
-  });
 };
 
+// 重新生成
 const handleRestart = (index: number) => {
   if (!props.chatData || !props.chatData.messages) return;
 
@@ -780,16 +707,13 @@ const handleCopy = async (content: string, messageId: string) => {
   const isCopied = await copyToClipboard(content);
 
   if (isCopied) {
-    // 显示"已复制"提示
     showCopied.value = true;
     copiedMessageId.value = messageId;
 
-    // 清除之前的计时器
     if (copyTimer) {
       clearTimeout(copyTimer);
     }
 
-    // 设置2秒后自动隐藏
     copyTimer = setTimeout(() => {
       showCopied.value = false;
       copiedMessageId.value = null;
@@ -797,6 +721,7 @@ const handleCopy = async (content: string, messageId: string) => {
   }
 };
 
+// 处理点赞/点踩
 const handleVote = async (messageId: string, voteType: 'like' | 'dislike') => {
   if (!props.chatData) {
     return;
@@ -850,7 +775,7 @@ const handleVote = async (messageId: string, voteType: 'like' | 'dislike') => {
     }
   }
 
-  // 修复：调用后端接口同步点赞状态，传递正确的 sessionUuid
+  // 调用后端接口同步点赞状态
   const likeStatus = message.vote === 'like' ? 1 : 0;
   const dislikeStatus = message.vote === 'dislike' ? 1 : 0;
   if (dislikeStatus) {
@@ -869,14 +794,12 @@ const handleVote = async (messageId: string, voteType: 'like' | 'dislike') => {
     );
 
     if (!success) {
-      // 如果接口调用失败，回滚到原来的状态
       message.vote = originalVote;
       message.likeCount = originalLikeCount;
       message.dislikeCount = originalDislikeCount;
       ElMessage.error('点赞状态更新失败，请重试');
     }
   } catch (error) {
-    // 回滚状态
     message.vote = originalVote;
     message.likeCount = originalLikeCount;
     message.dislikeCount = originalDislikeCount;
@@ -884,7 +807,7 @@ const handleVote = async (messageId: string, voteType: 'like' | 'dislike') => {
   }
 };
 
-// 新增：提交点踩反馈
+// 提交点踩反馈
 const submitDislikeFeedback = async () => {
   if (!feedbackReason.value) {
     ElMessage.warning('请选择反馈原因');
@@ -908,7 +831,6 @@ const submitDislikeFeedback = async () => {
       (props.chatData as any).conversationUuid || (props.chatData as any).id;
     const funcId = chatStore.getFuncIdByTab('智能问答');
 
-    // 调用点踩接口，包含 dislikeReason
     const payload = {
       sessionId: sessionUuid,
       functionId: funcId,
@@ -936,7 +858,7 @@ const submitDislikeFeedback = async () => {
   }
 };
 
-// 将文本追加到打字机队列
+// 打字机效果相关函数
 const appendToTypingQueue = (text: string) => {
   if (!text) return;
 
@@ -949,7 +871,6 @@ const appendToTypingQueue = (text: string) => {
   }
 };
 
-// 打字机效果
 const startTypingEffect = (targetText: string) => {
   stopTypingEffect();
 
@@ -981,7 +902,6 @@ const startTypingEffect = (targetText: string) => {
   }, typingSpeed);
 };
 
-// 停止打字效果
 const stopTypingEffect = () => {
   if (typingInterval) {
     clearInterval(typingInterval);
@@ -993,7 +913,7 @@ const stopTypingEffect = () => {
   }
 };
 
-// 方法
+// 格式化时间
 const formatTime = (date: Date) => {
   if (!(date instanceof Date)) {
     date = new Date(date);
@@ -1005,26 +925,52 @@ const formatTime = (date: Date) => {
   });
 };
 
+// 渲染 Markdown
 const renderMarkdown = (content: string) => {
   if (!content) return '';
-  // 将 "$$$" 替换为 Markdown 分割线
   const processedContent = content.replace(/\$\$\$/g, '\n\n---\n\n');
   return md.render(processedContent);
 };
 
+// 滚动到底部
+// 修改后的 scrollToBottom 函数
 const scrollToBottom = () => {
   nextTick(() => {
-    const container = document.querySelector('.conversation-history');
-    if (container) {
-      container.scrollTop = container.scrollHeight;
+    // 方法1：尝试查找正确的滚动容器
+    const containers = [
+      document.querySelector('.qa-body'),
+      document.querySelector('.conversation-history'),
+      document.querySelector('.dynamic-content'),
+      document.querySelector('.intelligent-qa'),
+    ];
+    
+    for (const container of containers) {
+      if (container) {
+        try {
+          const isScrollable = container.scrollHeight > container.clientHeight;
+          if (isScrollable || container === containers[0]) {
+            container.scrollTop = container.scrollHeight;
+            console.log('滚动容器:', container.className, 'scrollTop:', container.scrollTop, 'scrollHeight:', container.scrollHeight);
+            return;
+          }
+        } catch (error) {
+          console.error('滚动失败:', error);
+        }
+      }
     }
+    
+    // 方法2：如果上述方法都失败，使用全局滚动
+    window.scrollTo({
+      top: document.documentElement.scrollHeight,
+      behavior: 'smooth'
+    });
   });
 };
 
+// 移除重复的推理过程
 const removeDuplicateReasoning = (reasoningText: string) => {
   if (!reasoningText) return '';
 
-  // 简单去重逻辑：如果内容完全重复，只取一半
   const midIndex = Math.floor(reasoningText.length / 2);
   const firstHalf = reasoningText.substring(0, midIndex);
   const secondHalf = reasoningText.substring(midIndex);
@@ -1048,7 +994,6 @@ watch(
         stopTypingEffect();
       }
     }
-    // 回复内容变化时，确保滚动
     scrollToBottom();
   },
   { immediate: true },
@@ -1081,13 +1026,6 @@ watch(
   () => {
     nextTick(() => {
       scrollToBottom();
-
-      // 调整所有可见的右边栏高度
-      Object.keys(sourcesVisible.value).forEach((messageId) => {
-        if (sourcesVisible.value[messageId]) {
-          adjustRightColumnHeight(messageId);
-        }
-      });
     });
   },
   { deep: true },
@@ -1100,16 +1038,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopTypingEffect();
-});
-
-// 在每次更新后调整右边栏高度
-onUpdated(() => {
-  // 调整所有可见的右边栏高度
-  Object.keys(sourcesVisible.value).forEach((messageId) => {
-    if (sourcesVisible.value[messageId]) {
-      adjustRightColumnHeight(messageId);
-    }
-  });
+  if (copyTimer) {
+    clearTimeout(copyTimer);
+  }
 });
 </script>
 
@@ -1117,17 +1048,16 @@ onUpdated(() => {
 .intelligent-qa {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  padding: 0;
+  height: 100vh;
   background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
   position: relative;
-  overflow-y: auto;
-  align-items: center;
+  overflow: hidden;
 
   .qa-header {
     text-align: center;
-    margin-bottom: 40px;
-    margin-top: 60px;
+    margin: 40px auto 20px;
+    // max-width: 800px;
+    padding: 0 20px;
 
     h1 {
       font-size: 28px;
@@ -1142,54 +1072,90 @@ onUpdated(() => {
     }
   }
 
+  .qa-container {
+    display: flex;
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .qa-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 0 20px 20px;
+    box-sizing: border-box;
+    max-width: 1312px;
+    margin: 0 auto;
+    width: 100%;
+
+    // 当右侧面板显示时，留出空间
+    &:has(~ .sources-sidebar.sidebar-visible) {
+      padding-right: 250px;
+    }
+  }
+
   .conversation-history {
     flex: 1;
-    overflow-y: auto;
-    margin-bottom: 20px;
-    padding-top: 20px;
     display: flex;
     flex-direction: column;
     gap: 20px;
-    width: 80%;
+    width: 100%;
+    padding-top: 20px;
 
     .history-item {
-      margin: 0 auto;
       animation: slideIn 0.3s ease-out;
 
       &.user-message {
-        align-self: flex-end;
+        align-self: flex-end; /* 用户消息右对齐 */
         width: 100%;
+        display: flex;
+        justify-content: flex-end; /* 内容右对齐 */
 
         .message-user {
+          width: 68%;
+          // max-width: 800px;
+          display: flex;
+          justify-content: flex-end; /* 容器右对齐 */
+
           .message-header {
-            flex-direction: row-reverse;
+            display: flex;
+            justify-content: flex-end; /* 头部右对齐 */
 
             .message-info {
-              align-items: flex-end;
-              margin-right: 30px;
+              display: flex;
+              flex-direction: column;
+              align-items: flex-end; /* 内容右对齐 */
 
               .message-content {
-                background: #1c73eb;
-                color: @white;
+                background: #1c73eb; /* 用户消息背景色 */
+                color: white; /* 用户消息文字颜色 */
                 border-radius: 22px;
-                padding: 12px 36px;
+                padding: 12px 20px;
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+                border: 1px solid #1a6bc7;
+                margin-left: 0;
+                text-align: right; /* 文本右对齐 */
               }
 
               .user-message-content {
                 white-space: pre-wrap;
                 word-break: break-word;
-                border-radius: 12px;
-                padding: 12px 20px;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-                font-family: inherit; /* 继承父字体，避免等宽字体 */
-                margin: 0; /* 移除 pre 标签默认的边距 */
+                font-family: inherit;
+                margin: 0;
+                font-size: 15px;
+                line-height: 1.6;
+                color: white;
                 overflow-x: auto; /* 防止长行溢出 */
-                max-width: 68%;
               }
 
               .message-time {
                 text-align: right;
+                margin-top: 8px;
+                color: #999;
+                font-size: 12px;
+                padding-right: 0;
               }
             }
           }
@@ -1197,8 +1163,9 @@ onUpdated(() => {
       }
 
       &.assistant-message {
-        align-self: flex-start;
+        align-self: flex-start; /* AI消息左对齐 */
         width: 100%;
+        // max-width: 800px;
 
         .message-header {
           .message-info {
@@ -1206,6 +1173,11 @@ onUpdated(() => {
 
             .pad {
               padding: 20px 40px;
+              background: #ffffff;
+              border-radius: 22px;
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+              border: 1px solid #e9ecef;
+              text-align: left; /* AI消息文本左对齐 */
             }
 
             .thinking-process {
@@ -1214,10 +1186,20 @@ onUpdated(() => {
               padding: 16px;
               margin-bottom: 12px;
               animation: fadeIn 0.5s ease;
+              background: #fff9e6;
+              border-left: 3px solid #faad14;
+              text-align: left; /* 思考过程左对齐 */
             }
 
-            .btn-bottom {
-              margin-left: 20px;
+            .message-actions {
+              display: flex;
+              align-items: center;
+              gap: 15px;
+              margin-top: 12px;
+              padding-top: 12px;
+              border-top: 1px solid #f0f0f0;
+              flex-wrap: wrap;
+              justify-content: flex-start; /* 操作按钮左对齐 */
             }
 
             .thinking-header {
@@ -1242,23 +1224,18 @@ onUpdated(() => {
               padding: 12px;
               border-radius: 6px;
               border-left: 3px solid #fa8c16;
-            }
-
-            .thinking-placeholder {
-              font-size: 12px;
-              color: #999;
-              font-style: italic;
-              text-align: center;
-              padding: 8px;
+              text-align: left;
             }
 
             .answer-streaming {
-              background: @white;
+              background: #ffffff;
               border-radius: 22px;
-              padding: 20px 40px;
+              padding: 20px;
               animation: fadeIn 0.5s ease;
               margin-bottom: 15px;
               line-height: 1.6;
+              border: 1px solid #e9ecef;
+              text-align: left;
             }
 
             .typing-container {
@@ -1269,8 +1246,9 @@ onUpdated(() => {
             .typing-text {
               display: inline;
               line-height: 1.6;
-              font-size: 17px;
+              font-size: 16px;
               color: #333;
+              text-align: left;
 
               :deep(p) {
                 margin: 8px 0;
@@ -1352,8 +1330,11 @@ onUpdated(() => {
               background: #fff;
               border-radius: 22px;
               margin-bottom: 15px;
-              font-size: 17px;
+              font-size: 16px;
               line-height: 1.6;
+              text-align: left;
+              width: 83%;
+
               :deep(code) {
                 background: #f5f5f5;
                 padding: 2px 4px;
@@ -1387,6 +1368,8 @@ onUpdated(() => {
               color: #999;
               margin-top: 8px;
               padding: 0 4px;
+              font-size: 12px;
+              text-align: left; /* AI消息时间左对齐 */
             }
 
             .streaming-badge {
@@ -1409,103 +1392,165 @@ onUpdated(() => {
               background: #409eff;
               animation: blink 1s infinite;
             }
+
+            .copy-container {
+              cursor: pointer;
+              position: relative;
+              display: inline-flex;
+              align-items: center;
+
+              &:hover {
+                opacity: 0.8;
+              }
+
+              &.copy-disabled {
+                cursor: not-allowed;
+                opacity: 0.5;
+              }
+
+              .copied-text {
+                position: absolute;
+                top: -30px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: #52c41a;
+                color: white;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 12px;
+                white-space: nowrap;
+                z-index: 10;
+
+                &:after {
+                  content: '';
+                  position: absolute;
+                  bottom: -4px;
+                  left: 50%;
+                  transform: translateX(-50%);
+                  border-left: 4px solid transparent;
+                  border-right: 4px solid transparent;
+                  border-top: 4px solid #52c41a;
+                }
+              }
+            }
+
+            .vote-container {
+              display: inline-flex;
+              align-items: center;
+              gap: 4px;
+
+              .vote-icon {
+                width: 20px;
+                height: 20px;
+                cursor: pointer;
+                transition: opacity 0.3s ease;
+
+                &:hover {
+                  opacity: 0.8;
+                }
+              }
+
+              .vote-count {
+                font-size: 12px;
+                min-width: 20px;
+              }
+            }
+
+            .regenerate-btn {
+              margin-left: 0;
+            }
           }
         }
       }
     }
   }
 
-  .message-header {
-    display: flex;
-    align-items: flex-start;
-    max-width: 100%;
-
-    .message-info {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-  }
-
-  // 双栏布局样式
-  .dual-column-container {
-    display: flex;
-    width: 100%;
-    gap: 2%;
-    transition: all 0.3s ease;
-    align-items: flex-start; // 防止等高拉伸
-
-    // 默认单栏布局
-    .left-column {
-      width: 83%;
-      transition: width 0.3s ease;
-    }
-
-    .right-column {
-      width: 0;
-      opacity: 0;
-      overflow: hidden;
-      transition: all 0.3s ease;
-      border-left: 1px solid #e9ecef;
-      padding-left: 0;
-      margin-left: 0;
-      display: flex;
-      flex-direction: column;
-      overflow-y: auto; // 允许滚动
-      max-height: none; // 移除最大高度限制
-    }
-
-    // 显示参考来源时的双栏布局
-    &.show-sources {
-      .left-column {
-        width: 63%;
-      }
-
-      .right-column {
-        width: 35%;
-        opacity: 1;
-        padding-left: 20px;
-        margin-left: 2%;
-      }
-    }
-  }
-
-  // 参考来源容器样式
-  .sources-container {
-    background: #f8f9fa;
-    border-radius: 8px;
-    padding: 16px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    height: fit-content;
-    flex: 1;
+  .loading-state {
     display: flex;
     flex-direction: column;
-    min-height: 0;
-    height: 100%; // 确保容器占满父元素高度
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #409eff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 16px;
+    }
+
+    p {
+      color: #666;
+      font-size: 14px;
+    }
+  }
+
+  /* 右侧固定参考来源面板 */
+  .sources-sidebar {
+    position: fixed;
+    right: -400px;
+    top: 70px;
+    width: 400px;
+    height: 93vh;
+    background: #ffffff;
+    border-left: 1px solid #e9ecef;
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.1);
+    transition: right 0.3s ease;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+
+    &.sidebar-visible {
+      right: 0;
+    }
 
     .sources-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 16px;
-      font-weight: 600;
-      color: #303133;
-      margin-bottom: 12px;
-      padding-bottom: 8px;
+      padding: 20px;
       border-bottom: 1px solid #e9ecef;
-      flex-shrink: 0;
+      background: #f8f9fa;
+
+      h3 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: #303133;
+      }
+
+      .close-btn {
+        cursor: pointer;
+        color: #909399;
+        font-size: 20px;
+
+        &:hover {
+          color: #409eff;
+        }
+      }
     }
 
-    .sources-list {
+    .sources-content {
       flex: 1;
       overflow-y: auto;
-      min-height: 0;
+      padding: 20px;
+    }
+
+    .no-sources {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: #909399;
+      font-size: 14px;
     }
 
     .source-item {
-      background: white;
-      border-radius: 6px;
+      background: #f8f9fa;
+      border-radius: 8px;
       margin-bottom: 12px;
       border-left: 3px solid #409eff;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
@@ -1566,7 +1611,7 @@ onUpdated(() => {
       padding: 0 12px 8px 12px;
       max-height: 200px;
       overflow-y: auto;
-      background: #f8f9fa;
+      background: #ffffff;
       margin: 0 12px 8px 12px;
       border-radius: 4px;
     }
@@ -1577,19 +1622,53 @@ onUpdated(() => {
       align-items: center;
       font-size: 12px;
       color: #909399;
-      padding: 0 12px 12px 12px;
+      padding: 8px 12px;
+      border-top: 1px solid #f0f0f0;
     }
 
     .source-score {
       font-size: 12px;
-      color: #67c23a;
-      background: #f0f9eb;
+      color: #52c41a;
+      font-weight: 500;
+      background: #f6ffed;
       padding: 2px 6px;
-      border-radius: 4px;
+      border-radius: 10px;
+      border: 1px solid #b7eb8f;
+    }
+
+    .source-title-clickable {
+      cursor: pointer;
+      color: #1890ff;
+
+      &:hover {
+        text-decoration: underline;
+      }
     }
   }
 
-  // PDF 预览弹框样式
+  /* 点踩反馈对话框 */
+  .dialogfoot {
+    :deep(.el-dialog__body) {
+      padding: 20px;
+    }
+
+    .feedback-radio-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .feedback-radio {
+      margin-right: 0;
+
+      .radio-text {
+        font-size: 14px;
+        color: #303133;
+      }
+    }
+  }
+
+  /* PDF 预览弹框 */
   .pdf-viewer-modal {
     position: fixed;
     top: 0;
@@ -1600,7 +1679,7 @@ onUpdated(() => {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 3000;
+    z-index: 2000;
   }
 
   .pdf-viewer-container {
@@ -1672,214 +1751,46 @@ onUpdated(() => {
       }
     }
   }
+}
 
-  //加载状态样式
-  .loading-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    padding: 40px;
-
-    .loading-spinner {
-      width: 50px;
-      height: 50px;
-      border: 4px solid #f3f3f3;
-      border-top: 4px solid #409eff;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin-bottom: 20px;
-    }
-
-    p {
-      color: #666;
-      font-size: 16px;
-    }
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
   }
-
-  // 可点击的来源标题样式
-  .source-title-clickable {
-    cursor: pointer;
-    color: #409eff;
-    text-decoration: underline;
-    text-decoration-color: transparent;
-    transition: text-decoration-color 0.3s ease;
-
-    &:hover {
-      text-decoration-color: #409eff;
-    }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
+}
 
-  .vote-container {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    cursor: pointer;
-
-    &:hover {
-      opacity: 0.8;
-    }
-
-    img.active {
-      filter: brightness(0.9);
-    }
+@keyframes bounce {
+  0%,
+  80%,
+  100% {
+    transform: scale(0);
   }
-
-  .vote-count {
-    font-size: 12px;
-    font-weight: 600;
-    min-width: 16px;
-    text-align: center;
-    transition: color 0.3s ease;
+  40% {
+    transform: scale(1);
   }
+}
 
-  .copy-container {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    transition: all 0.3s ease;
-    padding: 4px 8px;
-    border-radius: 6px;
-
-    &:hover {
-      background-color: rgba(0, 0, 0, 0.05);
-
-      &:not(.copy-disabled) img {
-        opacity: 0.8;
-      }
-    }
-
-    &.copy-disabled {
-      cursor: not-allowed;
-      opacity: 0.5;
-    }
-
-    img {
-      transition: opacity 0.3s ease;
-    }
-
-    .copied-text {
-      position: absolute;
-      top: -30px;
-      left: 50%;
-      transform: translateX(-50%);
-      background-color: white;
-      color: black;
-      font-size: 12px;
-      padding: 4px 8px;
-      border-radius: 4px;
-      white-space: nowrap;
-      animation: fadeInOut 2s ease;
-      z-index: 10;
-
-      &::after {
-        content: '';
-        position: absolute;
-        top: 100%;
-        left: 50%;
-        transform: translateX(-50%);
-        border-width: 4px;
-        border-style: solid;
-        border-color: #67c23a transparent transparent transparent;
-      }
-    }
-
-    hr {
-      margin: 10px 0;
-    }
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
   }
-
-  @keyframes fadeInOut {
-    0% {
-      opacity: 0;
-      transform: translateX(-50%) translateY(5px);
-    }
-    20% {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
-    80% {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
-    100% {
-      opacity: 0;
-      transform: translateX(-50%) translateY(-5px);
-    }
+  50% {
+    opacity: 0.6;
   }
+}
 
-  @keyframes slideIn {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+@keyframes fadeIn {
+  from {
+    opacity: 0;
   }
-
-  @keyframes bounce {
-    0%,
-    80%,
-    100% {
-      transform: scale(0);
-    }
-    40% {
-      transform: scale(1);
-    }
-  }
-
-  @keyframes pulse {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.6;
-    }
-  }
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
-  .feedback-radio-group {
-    display: flex;
-    gap: 20px;
-  }
-
-  .feedback-radio {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 12px;
-    border: 1px solid #dcdfe6;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s;
-
-    &:hover {
-      border-color: #409eff;
-      background: #ecf5ff;
-    }
-
-    .radio-icon {
-      margin-right: 8px;
-      font-size: 16px;
-      color: #606266;
-    }
-
-    .radio-text {
-      font-size: 14px;
-      color: #303133;
-    }
+  to {
+    opacity: 1;
   }
 }
 </style>
