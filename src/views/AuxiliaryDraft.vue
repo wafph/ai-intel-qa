@@ -160,7 +160,11 @@
                       @click="toggleSourceItem(item.id, sourceIndex)"
                     >
                       <div class="title-content">
-                        <strong class="source-title-clickable">
+                        <!-- ✅ 修改：将普通标题改为可点击链接，用于PDF预览和DOC下载 -->
+                        <strong
+                          @click.stop="handleSourceTitleClick(source, $event)"
+                          class="source-title-clickable"
+                        >
                           {{ source.title }}
                         </strong>
                         <span class="source-score">
@@ -200,13 +204,33 @@
         </div>
       </div>
     </div>
+
+    <!--PDF 预览弹框 -->
+    <div v-if="showPdfViewer" class="pdf-viewer-modal" @click.self="closePdfViewer">
+      <div class="pdf-viewer-container">
+        <div class="pdf-viewer-header">
+          <span>{{ currentPdfTitle }}</span>
+          <button class="close-btn" @click="closePdfViewer">×</button>
+        </div>
+        <iframe
+          v-if="pdfViewerUrl"
+          :src="pdfViewerUrl"
+          class="pdf-iframe"
+          frameborder="0"
+        ></iframe>
+        <div v-else class="loading-pdf">
+          <div class="loading-spinner"></div>
+          <p>正在加载 PDF...</p>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, nextTick, reactive, onMounted, onUnmounted, onUpdated } from 'vue';
 import MarkdownIt from 'markdown-it';
-import { ArrowRight, ArrowUp } from '@element-plus/icons-vue'; // 新增图标导入
+import { ArrowRight, ArrowUp } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 const emit = defineEmits(['regenerate']);
 
@@ -251,6 +275,11 @@ let typingInterval: NodeJS.Timeout | null = null;
 let currentTypingIndex = 0;
 const loading = ref(false);
 const isTyping = ref(false);
+
+// 预览相关状态
+const showPdfViewer = ref(false);
+const pdfViewerUrl = ref('');
+const currentPdfTitle = ref('');
 
 // 打字机效果
 const appendToTypingQueue = (text: string) => {
@@ -367,7 +396,6 @@ const handleExport = async () => {
       throw new Error(`转换失败: ${convertResponse.status}`);
     }
     const convertResult = await convertResponse.json();
-    console.log('转换结果:', convertResult);
     // 检查转换结果
     if (!convertResult.download_url) {
       throw new Error('转换结果中没有下载链接');
@@ -377,7 +405,6 @@ const handleExport = async () => {
 
     ElMessage.success('导出成功！');
   } catch (error) {
-    console.error('导出失败:', error);
     ElMessage.error(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`);
   } finally {
     loading.value = false;
@@ -408,20 +435,19 @@ const downloadConvertedFile = async (downloadUrl: string, fileName: string) => {
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
   } catch (error) {
-    console.error('下载文件失败:', error);
     throw error;
   }
 };
 
-// ✅ 新增：控制推荐范文的显示状态和单个条目的折叠状态
+// 控制推荐范文的显示状态和单个条目的折叠状态
 const sourcesVisible = ref<Record<string, boolean>>({});
 const sourceCollapsed = ref<Record<string, boolean>>({});
 
-// ✅ 新增：存储左右栏的DOM引用，用于高度同步
+// 存储左右栏的DOM引用，用于高度同步
 const leftColumnRefs = reactive<Record<string, HTMLElement>>({});
 const rightColumnRefs = reactive<Record<string, HTMLElement>>({});
 
-// ✅ 新增：设置引用
+// 设置引用
 const setLeftColumnRef = (el: any, messageId: string) => {
   if (el && el instanceof HTMLElement) {
     leftColumnRefs[messageId] = el;
@@ -433,7 +459,7 @@ const setRightColumnRef = (el: any, messageId: string) => {
   }
 };
 
-// ✅ 新增：获取右侧栏样式（动态高度）
+// 获取右侧栏样式（动态高度）
 const getRightColumnStyle = (messageId: string) => {
   const leftColumn = leftColumnRefs[messageId];
   if (!leftColumn) return {};
@@ -444,7 +470,7 @@ const getRightColumnStyle = (messageId: string) => {
   };
 };
 
-// ✅ 新增：切换推荐范文侧边栏的显示/隐藏
+// 切换推荐范文侧边栏的显示/隐藏
 const toggleAndScrollToSources = (messageId: string) => {
   sourcesVisible.value[messageId] = !sourcesVisible.value[messageId];
   if (sourcesVisible.value[messageId]) {
@@ -454,7 +480,7 @@ const toggleAndScrollToSources = (messageId: string) => {
   }
 };
 
-// ✅ 新增：调整右侧栏高度以匹配左侧内容
+// 调整右侧栏高度以匹配左侧内容
 const adjustRightColumnHeight = (messageId: string) => {
   const leftColumn = leftColumnRefs[messageId];
   const rightColumn = rightColumnRefs[messageId];
@@ -475,14 +501,14 @@ const adjustRightColumnHeight = (messageId: string) => {
   }
 };
 
-// ✅ 新增：切换单个范文条目的折叠状态
+// 切换单个范文条目的折叠状态
 const toggleSourceItem = (messageId: string, sourceIndex: number) => {
   const key = `${messageId}-${sourceIndex}`;
   sourceCollapsed.value[key] = !sourceCollapsed.value[key];
   nextTick(() => adjustRightColumnHeight(messageId));
 };
 
-// ✅ 新增：格式化匹配度分数
+// 格式化匹配度分数
 const formatScore = (score: number | string | undefined): string => {
   if (score === undefined || score === null) return '0.0';
   let numScore: number = typeof score === 'number' ? score : parseFloat(score);
@@ -490,7 +516,7 @@ const formatScore = (score: number | string | undefined): string => {
   return (numScore > 1 ? numScore : numScore * 100).toFixed(1);
 };
 
-// ✅ 新增：格式化来源更新时间
+// 格式化来源更新时间
 const formatSourceDate = (timestamp: string) => {
   if (!timestamp) return '';
   const date = new Date(parseInt(timestamp));
@@ -503,7 +529,7 @@ const formatSourceDate = (timestamp: string) => {
   });
 };
 
-// ✅ 新增：复制范文片段
+// 复制范文片段
 const copySource = async (source: any) => {
   const text = `标题：${source.title}\n子标题：${source.subtitle}\n内容：${source.content}`;
   if (navigator.clipboard && window.isSecureContext) {
@@ -526,6 +552,109 @@ const copySource = async (source: any) => {
       : ElMessage.error('复制失败（降级方案）');
   }
 };
+
+// 处理来源标题点击（PDF预览和DOC下载）
+const handleSourceTitleClick = async (source: any, event: Event) => {
+  event.stopPropagation(); // 阻止事件冒泡，避免触发父元素的折叠/展开
+
+  try {
+    const fileId = source.file_id || source.id; // 根据实际字段调整
+    if (!fileId) {
+      return;
+    }
+
+    // 1. 先调用 POST 接口
+    const postResponse = await fetch('http://1.94.244.72:11328/download', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        file_ids: [fileId],
+      }),
+    });
+
+    if (!postResponse.ok) {
+      throw new Error(`POST 请求失败: ${postResponse.status}`);
+    }
+
+    // 2. 调用 GET 接口获取文件
+    const fileResponse = await fetch(`http://1.94.244.72:11328/download/${fileId}`, {
+      method: 'GET',
+      headers: {
+        Accept: '*/*',
+      },
+    });
+
+    if (!fileResponse.ok) {
+      throw new Error(`GET 请求失败: ${fileResponse.status}`);
+    }
+
+    // 3. 获取文件内容和类型
+    const contentType = fileResponse.headers.get('content-type') || '';
+    const fileBlob = await fileResponse.blob();
+
+    // 4. 根据文件类型处理
+    if (isPdfFile(fileId, contentType)) {
+      // PDF 文件：显示预览弹框
+      const pdfUrl = window.URL.createObjectURL(fileBlob);
+      pdfViewerUrl.value = pdfUrl;
+      currentPdfTitle.value = source.title || 'PDF 预览';
+      showPdfViewer.value = true;
+    } else {
+      // 其他格式：直接下载
+      downloadFile(fileBlob, source.title || 'document', fileId);
+    }
+  } catch (error) {
+    ElMessage.error('获取文档失败，请稍后重试');
+  }
+};
+
+// 判断是否为 PDF 文件
+const isPdfFile = (fileName: string, contentType: string): boolean => {
+  const lowerFileName = fileName.toLowerCase();
+  return (
+    lowerFileName.endsWith('.pdf') ||
+    contentType.includes('pdf') ||
+    contentType.includes('application/pdf')
+  );
+};
+
+// 下载文件
+const downloadFile = (fileBlob: Blob, fileName: string, fileId: string) => {
+  // 尝试从 fileId 中提取文件扩展名
+  const extension = extractFileExtension(fileId);
+  const fullFileName = extension ? `${fileName}.${extension}` : fileName;
+
+  const url = window.URL.createObjectURL(fileBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fullFileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+};
+
+// 从 fileId 提取文件扩展名
+const extractFileExtension = (fileId: string): string => {
+  const parts = fileId.split('.');
+  if (parts.length > 1) {
+    return parts[parts.length - 1];
+  }
+  return '';
+};
+
+// 关闭 PDF 查看器
+const closePdfViewer = () => {
+  if (pdfViewerUrl.value) {
+    window.URL.revokeObjectURL(pdfViewerUrl.value);
+    pdfViewerUrl.value = '';
+  }
+  showPdfViewer.value = false;
+  currentPdfTitle.value = '';
+};
+
 const scrollToBottom = () => {
   nextTick(() => {
     const container = document.querySelector('.conversation-history');
@@ -605,7 +734,7 @@ watch(
   { deep: true },
 );
 
-// ✅ 新增：在组件更新后也调整高度
+// 在组件更新后也调整高度
 onUpdated(() => {
   Object.keys(sourcesVisible.value).forEach((messageId) => {
     if (sourcesVisible.value[messageId]) {
@@ -625,7 +754,7 @@ onUnmounted(() => {
 </script>
 
 <style lang="less" scoped>
-.intelligent-qa {
+.auxiliary-draft {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1085,6 +1214,90 @@ onUnmounted(() => {
     color: #1890ff;
     &:hover {
       text-decoration: underline;
+    }
+  }
+}
+
+//PDF 预览弹框样式
+.pdf-viewer-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+}
+
+.pdf-viewer-container {
+  width: 90%;
+  height: 90%;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.pdf-viewer-header {
+  padding: 16px 20px;
+  background: #f5f5f5;
+  border-bottom: 1px solid #e8e8e8;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  color: #333;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0 8px;
+  transition: color 0.2s;
+
+  &:hover {
+    color: #333;
+  }
+}
+
+.pdf-iframe {
+  flex: 1;
+  width: 100%;
+  border: none;
+}
+
+.loading-pdf {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+
+  .loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+  }
+
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
     }
   }
 }

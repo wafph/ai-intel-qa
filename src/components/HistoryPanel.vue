@@ -105,7 +105,6 @@
                   </span>
                 </button>
 
-                <!-- ✅ 新增：置顶/取消置顶菜单项 -->
                 <button
                   class="menu-item pin"
                   @click="handleTogglePin(history.id, history.topStatus === 1)"
@@ -190,7 +189,7 @@ interface Props {
   activeChatId: string | null;
   user: any;
   collapsed?: boolean;
-  activeTab: string; // ✅ 新增：当前激活的标签页
+  activeTab: string; // 
 }
 
 const props = defineProps<Props>();
@@ -203,7 +202,7 @@ const emit = defineEmits<{
   'switch-tab': [tabName: string];
   'toggle-collapse': [];
   'update-title': [chatId: string, newTitle: string];
-  'toggle-pin': [chatId: string, topStatus: number]; // ✅ 新增：置顶事件
+  'toggle-pin': [chatId: string, topStatus: number]; // 
 }>();
 
 const router = useRouter();
@@ -211,8 +210,6 @@ const router = useRouter();
 const showUserMenu = ref(false);
 const hoveredItemId = ref<string | null>(null);
 const visibleMenuId = ref<string | null>(null);
-
-// ✅ 新增：编辑标题相关状态
 const editingId = ref<string | null>(null);
 const editingTitle = ref('');
 const titleInputRef = ref<InputInstance>();
@@ -222,7 +219,6 @@ const filteredHistory = computed(() => {
   return props.historyList || [];
 });
 
-// ✅ 新增：排序后的历史记录（置顶的在最前面）
 const sortedHistory = computed(() => {
   const groups: Record<string, any[]> = {};
 
@@ -391,14 +387,12 @@ const handleToggleFavorite = (chatId: string) => {
   closeMenu();
 };
 
-// ✅ 新增：处理置顶/取消置顶
 const handleTogglePin = (chatId: string, isPinned: boolean) => {
   const topStatus = isPinned ? 0 : 1; // 如果已经置顶，则取消置顶；否则置顶
   emit('toggle-pin', chatId, topStatus);
   closeMenu();
 };
 
-// ✅ 新增：开始编辑标题
 const startEdit = (chatId: string, currentTitle: string) => {
   editingId.value = chatId;
   editingTitle.value = currentTitle;
@@ -414,7 +408,6 @@ const startEdit = (chatId: string, currentTitle: string) => {
   });
 };
 
-// ✅ 新增：保存标题
 const saveTitle = (chatId: string) => {
   if (!editingTitle.value.trim()) {
     ElMessage.warning('标题不能为空');

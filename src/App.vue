@@ -65,7 +65,7 @@
               </el-button>
             </div>
 
-            <!-- ✅ 新增：仅「合规审核」页面显示 -->
+            <!-- 仅「合规审核」页面显示 -->
             <div v-if="activeTab === '合规审核'" class="compliance-extras">
               <el-upload
                 class="upload-demo"
@@ -145,6 +145,10 @@ const currentReasoning = ref<string>('');
 const currentAnswer = ref<string>('');
 let abortController: AbortController | null = null;
 let currentStreamingMessageId: string | null = null;
+
+// 大模型答案展示控制：首次检测到双换行后才开始把 text 展示到页面，且保留双换行本身
+let answerOutputStarted = false;
+let answerPendingText = '';
 
 // 计算属性
 const currentChatData = computed(() => {
@@ -255,7 +259,6 @@ const toggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value;
 };
 
-// ✅ 防止并发创建
 let isCreatingChat = false;
 let creationPromise: Promise<void> | null = null;
 
@@ -270,7 +273,6 @@ const handleNewChat = async () => {
       currentChat.preview !== '已有内容';
 
     if (isEmptyNewChat) {
-      console.log('当前已经是空白新对话，不重复创建');
       return;
     }
   }
@@ -341,7 +343,6 @@ const handleSelectChat = async (chatId: string) => {
   const session = chatStore.getChatSession(chatId);
 
   if (!session) {
-    console.error('Session not found:', chatId);
     try {
       const funcId = chatStore.getFuncIdByTab(activeTab.value);
       const messages = await chatStore.querySessionHistory(chatId, funcId);
@@ -494,13 +495,23 @@ const handleSendMessage = async (content: string) => {
   scrollToBottom();
 };
 
+const REQUEST_TIMEOUT_MAP: Record<string, number> = {
+  智能问答: 120000,
+  智能检索: 120000,
+  辅助起草: 300000,
+  合规审核: 15 * 60 * 1000,
+};
 // 流式请求
 const startStream = async (queryText: string, messageId: string) => {
   isStreaming.value = true;
   currentReasoning.value = '';
   currentAnswer.value = '';
   abortController = new AbortController();
-  const id = setTimeout(() => abortController?.abort(), 90000);
+  const requestTimeout = REQUEST_TIMEOUT_MAP[activeTab.value] || 120000;
+  const id = setTimeout(() => {
+    abortController?.abort();
+  }, requestTimeout);
+
   try {
     if (selectedDimensions.value.includes('全选')) {
       spliceSelectedDimensions.value = ['合规性', '冲突性', '文本规范性'];
@@ -594,7 +605,10 @@ const startStream = async (queryText: string, messageId: string) => {
   } catch (error: any) {
     clearTimeout(id); // 清除定时器
     if (error.name === 'AbortError') {
-      throw new Error(`请求超时（${90000}ms）`);
+      handleStreamError(
+        messageId,
+        `请求超时，当前功能超时时间为 ${Math.floor(requestTimeout / 60000)} 分钟`,
+      );
     } else {
       handleStreamError(messageId, error.message);
     }
@@ -608,6 +622,38 @@ const handleRegenerate = (content: string) => {
     stopStream();
   }
   handleSendMessage(content);
+};
+
+const appendModelOutputText = async (text: string, messageId: string) => {
+  if (!text) return;
+
+  let displayText = text;
+
+  // 首次展示前先缓存模型 text，直到累计内容中出现 "\n\n"
+  if (!answerOutputStarted) {
+    answerPendingText += text;
+    const firstDoubleNewlineIndex = answerPendingText.indexOf('\n\n');
+
+    if (firstDoubleNewlineIndex === -1) {
+      return;
+    }
+
+    answerOutputStarted = true;
+    // 从首次 "\n\n" 位置开始展示，保留 "\n\n" 本身，丢弃其前面的模型前置内容
+    displayText = answerPendingText.slice(firstDoubleNewlineIndex);
+    answerPendingText = '';
+  }
+
+  currentAnswer.value += displayText;
+
+  const chat = chatStore.getChatSession(activeChatId.value!);
+  if (chat) {
+    const msg = chat.messages.find((m: any) => m.id === messageId);
+    if (msg) msg.content = currentAnswer.value;
+  }
+
+  await nextTick();
+  scrollToBottom();
 };
 
 const processStreamChunk = async (chunk: any, messageId: string) => {
@@ -624,15 +670,7 @@ const processStreamChunk = async (chunk: any, messageId: string) => {
   }
 
   if (chunk.event === 'message' && chunk.data?.text) {
-    currentAnswer.value += chunk.data.text;
-
-    const chat = chatStore.getChatSession(activeChatId.value!);
-    if (chat) {
-      const msg = chat.messages.find((m: any) => m.id === messageId);
-      if (msg) msg.content = currentAnswer.value;
-    }
-    await nextTick();
-    scrollToBottom();
+    await appendModelOutputText(chunk.data.text, messageId);
   }
 
   if (chunk.event === 'workflow_finished') {
@@ -760,6 +798,8 @@ const stopStream = () => {
 const resetStreamState = () => {
   currentReasoning.value = '';
   currentAnswer.value = '';
+  answerOutputStarted = false;
+  answerPendingText = '';
   abortController = null;
 };
 
@@ -792,7 +832,6 @@ const handleUpdateTitle = async (chatId: string, newTitle: string) => {
   try {
     const success = await chatStore.updateSessionTitle(chatId, newTitle);
     if (success) {
-      console.log('标题更新成功:', chatId, newTitle);
       ElMessage.success('标题修改成功');
     } else {
       ElMessage.error('标题更新失败');
@@ -800,7 +839,7 @@ const handleUpdateTitle = async (chatId: string, newTitle: string) => {
   } catch {}
 };
 
-// ✅ 新增：处理置顶/取消置顶
+// 新增：处理置顶/取消置顶
 const handleTogglePin = async (chatId: string, topStatus: number) => {
   try {
     const funcId = chatStore.getFuncIdByTab(activeTab.value);
@@ -810,9 +849,6 @@ const handleTogglePin = async (chatId: string, topStatus: number) => {
       functionId: funcId,
       topStatus: topStatus,
     };
-
-    console.log('切换置顶状态:', payload);
-
     const response = await fetch(`${API_BASE_URL}/v1/chat/pin`, {
       method: 'PUT',
       headers: {
@@ -826,7 +862,6 @@ const handleTogglePin = async (chatId: string, topStatus: number) => {
     }
 
     const result = await response.json();
-    console.log('置顶状态切换成功:', result);
 
     // 更新本地数据
     const historyItem = chatStore.historyList.find((item: any) => item.id === chatId);
@@ -841,12 +876,11 @@ const handleTogglePin = async (chatId: string, topStatus: number) => {
 
     ElMessage.success(topStatus === 1 ? '已置顶' : '已取消置顶');
   } catch (error) {
-    console.error('切换置顶状态失败:', error);
     ElMessage.error('操作失败，请重试');
   }
 };
 
-// ✅ 修改：使用标志位确保只自动创建一次
+// 修改：使用标志位确保只自动创建一次
 let hasAutoCreated = false;
 
 onMounted(async () => {
@@ -888,9 +922,9 @@ watch(
         route.path === '/intelligent-qa' &&
         chatStore.historyList.length === 0 &&
         !activeChatId.value &&
-        !hasAutoCreated // ✅ 检查标志位
+        !hasAutoCreated // 检查标志位
       ) {
-        hasAutoCreated = true; // ✅ 设置标志位
+        hasAutoCreated = true; // 设置标志位
         handleNewChat();
       }
     }

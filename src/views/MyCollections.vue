@@ -177,7 +177,6 @@ const loadCollections = async () => {
       serverCollections.value = [];
     }
   } catch (error) {
-    console.error('加载收藏数据失败:', error);
     serverCollections.value = [];
   } finally {
     isLoading.value = false;
@@ -234,7 +233,6 @@ const viewCollection = async (item: any) => {
       alert('获取收藏详情失败');
     }
   } catch (error) {
-    console.error('查看收藏失败:', error);
     alert('查看收藏失败');
   }
 };

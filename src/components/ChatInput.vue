@@ -44,7 +44,7 @@ import { ref, nextTick, watch, onMounted, computed, onUnmounted } from 'vue';
 interface Props {
   placeholder?: string;
   disabled?: boolean;
-  isComplianceMode?: boolean; // ✅ 新增：是否为合规审核模式
+  isComplianceMode?: boolean; // 是否为合规审核模式
 }
 
 

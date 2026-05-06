@@ -56,15 +56,15 @@ export const useChatStore = defineStore('chat', () => {
     currentConversationUuid.value = uuid;
   };
 
-const addHistoryItem = (item: HistoryItem) => {
-  const exists = historyList.value.some((h) => h.id === item.id);
-  if (exists) return;
+  const addHistoryItem = (item: HistoryItem) => {
+    const exists = historyList.value.some((h) => h.id === item.id);
+    if (exists) return;
 
-  historyList.value.unshift({
-    ...item,
-    topStatus: item.topStatus || 0,
-  });
-};
+    historyList.value.unshift({
+      ...item,
+      topStatus: item.topStatus || 0,
+    });
+  };
 
   // 更新历史记录
   const updateHistoryItem = (id: string, updates: Partial<HistoryItem>) => {
@@ -145,8 +145,6 @@ const addHistoryItem = (item: HistoryItem) => {
         dislikeStatus: dislikeStatus,
         favoriteStatus: collectStatus,
       };
-
-      console.log('保存对话记录到服务器:', payload);
       const response = await fetch(`${API_BASE_URL}/v1/chat/history`, {
         method: 'POST',
         headers: {
@@ -160,10 +158,8 @@ const addHistoryItem = (item: HistoryItem) => {
       }
 
       const result = await response.json();
-      console.log('对话记录保存成功:', result);
       return { success: true, insertId: result.insert_id };
     } catch (error) {
-      console.error('保存对话记录到服务器失败:', error);
       return { success: false };
     }
   };
@@ -183,7 +179,6 @@ const addHistoryItem = (item: HistoryItem) => {
         historyJson: historyJson,
       };
 
-      console.log('批量保存对话记录:', payload);
       const response = await fetch(`${API_BASE_URL}/v1/chat/history/batch`, {
         method: 'POST',
         headers: {
@@ -195,12 +190,8 @@ const addHistoryItem = (item: HistoryItem) => {
       if (!response.ok) {
         throw new Error(`HTTP错误! 状态: ${response.status}`);
       }
-
-      const result = await response.json();
-      console.log('批量保存成功:', result);
       return true;
     } catch (error) {
-      console.error('批量保存失败:', error);
       return false;
     }
   };
@@ -210,8 +201,6 @@ const addHistoryItem = (item: HistoryItem) => {
     try {
       const funcId = getFuncIdByTab(currentActiveTab.value);
       const limit = 30;
-
-      console.log('查询会话列表，功能ID:', funcId);
       const url = `${API_BASE_URL}/v1/chat/sessions?functionId=${funcId}&limit=${limit}`;
 
       const response = await fetch(url, {
@@ -222,8 +211,6 @@ const addHistoryItem = (item: HistoryItem) => {
       if (!response.ok) throw new Error(`HTTP错误! 状态: ${response.status}`);
 
       const result = await response.json();
-      console.log('会话列表查询结果:', result);
-
       if (result && result.code === 0 && Array.isArray(result.data)) {
         historyList.value = [];
         chatSessions.value = {};
@@ -272,12 +259,10 @@ const addHistoryItem = (item: HistoryItem) => {
         }
 
         historyList.value.sort((a, b) => b.time - a.time);
-        console.log('historyList', historyList.value);
       }
 
       return result;
     } catch (error) {
-      console.error('查询会话列表失败:', error);
       return null;
     }
   };
@@ -295,8 +280,6 @@ const addHistoryItem = (item: HistoryItem) => {
         functionId: funcId,
         sessionTitle: newTitle,
       };
-
-      console.log('修改会话标题:', payload);
       const response = await fetch(`${API_BASE_URL}/v1/chat/title`, {
         method: 'PUT',
         headers: {
@@ -308,9 +291,6 @@ const addHistoryItem = (item: HistoryItem) => {
       if (!response.ok) {
         throw new Error(`HTTP错误! 状态: ${response.status}`);
       }
-
-      const result = await response.json();
-      console.log('会话标题修改成功:', result);
 
       // 更新本地数据
       const session = chatSessions.value[sessionUuid];
@@ -326,7 +306,6 @@ const addHistoryItem = (item: HistoryItem) => {
 
       return true;
     } catch (error) {
-      console.error('修改会话标题失败:', error);
       return false;
     }
   };
@@ -347,7 +326,6 @@ const addHistoryItem = (item: HistoryItem) => {
         favoriteStatus: isCollected ? 1 : 0,
       };
 
-      console.log('同步收藏状态:', payload);
       const response = await fetch(`${API_BASE_URL}/v1/chat/favorite`, {
         method: 'PUT',
         headers: {
@@ -359,12 +337,8 @@ const addHistoryItem = (item: HistoryItem) => {
       if (!response.ok) {
         throw new Error(`HTTP错误! 状态: ${response.status}`);
       }
-
-      const result = await response.json();
-      console.log('收藏状态同步成功:', result);
       return true;
     } catch (error) {
-      console.error('同步收藏状态失败:', error);
       return false;
     }
   };
@@ -386,12 +360,7 @@ const addHistoryItem = (item: HistoryItem) => {
         likeStatus: likeStatus,
         dislikeStatus: dislikeStatus,
       };
-
-      console.log('同步点赞状态:', payload);
-
       const url = `${API_BASE_URL}/v1/chat/status`;
-      console.log('请求URL:', url);
-
       const response = await fetch(url, {
         method: 'PUT',
         headers: {
@@ -403,12 +372,8 @@ const addHistoryItem = (item: HistoryItem) => {
       if (!response.ok) {
         throw new Error(`HTTP错误! 状态: ${response.status}, URL: ${url}`);
       }
-
-      const result = await response.json();
-      console.log('点赞状态同步成功:', result);
       return true;
-    } catch (error) {
-      console.error('同步点赞状态失败:', error);
+    } catch {
       return false;
     }
   };
@@ -449,12 +414,7 @@ const addHistoryItem = (item: HistoryItem) => {
   const deleteConversationBySession = async (sessionUuid: string): Promise<boolean> => {
     try {
       const funcId = getFuncIdByTab(currentActiveTab.value);
-
-      console.log('删除会话:', sessionUuid, '功能ID:', funcId);
-
       const url = `${API_BASE_URL}/v1/chat/history?functionId=${funcId}&sessionId=${sessionUuid}`;
-      console.log('删除请求URL:', url);
-
       const response = await fetch(url, {
         method: 'DELETE',
         headers: {
@@ -467,22 +427,16 @@ const addHistoryItem = (item: HistoryItem) => {
       }
 
       const result = await response.json();
-      console.log('删除会话结果:', result);
-
       // 假设后端返回格式：{ code: 0, msg: 'success' }
       if (result && result.code === 0) {
         // 从本地删除
         deleteHistoryItem(sessionUuid);
         delete chatSessions.value[sessionUuid];
-
-        console.log('会话已成功删除:', sessionUuid);
         return true;
       } else {
-        console.error('删除会话失败:', result.msg || '未知错误');
         return false;
       }
     } catch (error) {
-      console.error('删除会话失败:', error);
       return false;
     }
   };
@@ -500,8 +454,6 @@ const addHistoryItem = (item: HistoryItem) => {
       if (functionId && functionId.trim() !== '') {
         url += `&functionId=${functionId}`;
       }
-
-      console.log('查询收藏会话列表，URL:', url);
       const response = await fetch(url, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
@@ -512,17 +464,12 @@ const addHistoryItem = (item: HistoryItem) => {
       }
 
       const result = await response.json();
-      console.log('收藏会话列表查询结果:', result);
-
       if (result && result.code === 0 && Array.isArray(result.data)) {
-        // 这里可以将收藏数据存储到专门的响应式变量中
-        // 例如：favoriteSessions.value = result.data;
         return { success: true, data: result.data };
       } else {
         return { success: false };
       }
     } catch (error) {
-      console.error('查询收藏会话列表失败:', error);
       return { success: false };
     }
   };
@@ -534,8 +481,6 @@ const addHistoryItem = (item: HistoryItem) => {
   ): Promise<{ success: boolean; data?: any }> => {
     try {
       const url = `${API_BASE_URL}/v1/chat/favorites/detail?functionId=${functionId}&sessionId=${sessionUuid}`;
-
-      console.log('查询收藏会话详情，URL:', url);
       const response = await fetch(url, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
@@ -546,15 +491,12 @@ const addHistoryItem = (item: HistoryItem) => {
       }
 
       const result = await response.json();
-      console.log('收藏会话详情查询结果:', result);
-
       if (result && result.code === 0 && result.data) {
         return { success: true, data: result.data };
       } else {
         return { success: false };
       }
     } catch (error) {
-      console.error('查询收藏会话详情失败:', error);
       return { success: false };
     }
   };
@@ -577,7 +519,6 @@ const addHistoryItem = (item: HistoryItem) => {
   const loadSessionHistory = async (sessionUuid: string): Promise<boolean> => {
     try {
       if (loadingSessionIds.value.has(sessionUuid)) {
-        console.log('Already loading session:', sessionUuid);
         return false;
       }
 
@@ -587,24 +528,18 @@ const addHistoryItem = (item: HistoryItem) => {
       const session = chatSessions.value[sessionUuid];
 
       if (!session) {
-        console.error('Session not found:', sessionUuid);
         loadingSessionIds.value.delete(sessionUuid);
         return false;
       }
 
       // 如果已经有消息，则不需要重新加载
       if (session.messages && session.messages.length > 0) {
-        console.log('Session already has messages:', session.messages.length);
         loadingSessionIds.value.delete(sessionUuid);
         return true;
       }
 
-      console.log('Fetching history for session:', sessionUuid, 'with funcId:', funcId);
       const messages = await querySessionHistory(sessionUuid, funcId);
-
       if (messages && messages.length > 0) {
-        console.log('Received messages:', messages.length);
-
         // 创建新的会话对象，确保响应式更新
         const updatedSession = {
           ...session,
@@ -625,8 +560,7 @@ const addHistoryItem = (item: HistoryItem) => {
 
       loadingSessionIds.value.delete(sessionUuid);
       return false;
-    } catch (error) {
-      console.error('加载会话历史失败:', error);
+    } catch {
       loadingSessionIds.value.delete(sessionUuid);
       return false;
     }
@@ -638,9 +572,7 @@ const addHistoryItem = (item: HistoryItem) => {
     funcId: string,
   ): Promise<ChatMessage[]> => {
     try {
-      console.log('查询会话完整历史:', sessionUuid, funcId);
       const url = `${API_BASE_URL}/v1/chat/history?functionId=${funcId}&sessionId=${sessionUuid}`;
-
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -653,10 +585,7 @@ const addHistoryItem = (item: HistoryItem) => {
       }
 
       const result = await response.json();
-      console.log('会话历史查询结果:', result);
-
       const messages: ChatMessage[] = [];
-
       // 适应新的数据结构
       if (
         result &&
@@ -771,6 +700,6 @@ const addHistoryItem = (item: HistoryItem) => {
     loadSessionHistory,
     getFuncIdByTab,
     queryFavoriteSessions,
-    queryFavoriteSessionDetail
+    queryFavoriteSessionDetail,
   };
 });

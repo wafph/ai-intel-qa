@@ -84,17 +84,15 @@
                     <!-- 搜索结果列表 -->
 
                     <div
-                    v-for="(source, idx) in paginatedSources(item)"
-                    :key="source.chunk_id || idx"
-                    class="search-result-item"
+                      v-for="(source, idx) in paginatedSources(item)"
+                      :key="source.chunk_id || idx"
+                      class="search-result-item"
                     >
                       <h3 class="source-title">
                         {{ source.subtitle
                         }}<el-button type="primary" plain round class="source-score">
                           匹配度:
-                          {{
-                            formatScore(source.score)
-                          }}%</el-button
+                          {{ formatScore(source.score) }}%</el-button
                         >
                       </h3>
                       <div class="result-content-wrapper">
@@ -217,7 +215,6 @@ let currentTypingIndex = 0;
 const loading = ref(false);
 const isTyping = ref(false);
 const emit = defineEmits(['regenerate']);
-// ✅ 新增：PDF 查看器状态
 const showPdfViewer = ref(false);
 const pdfViewerUrl = ref('');
 // 分页状态管理
@@ -225,7 +222,6 @@ const paginationStates = reactive<
   Record<string, { currentPage: number; pageSize: number }>
 >({});
 const isDownloading = reactive<Record<string, boolean>>({});
-// ✅ 新增：展开状态管理
 const expandedStates = reactive<Record<string, boolean>>({});
 
 // Props
@@ -294,7 +290,7 @@ const formatUpdateDate = (timeStr: string) => {
   return timeStr;
 };
 
-// ✅ 新增：获取显示内容（截断或完整）
+// 获取显示内容（截断或完整）
 const getDisplayContent = (source: SourceInfo) => {
   const content = source.content || '';
   const chunkId = source.chunk_id;
@@ -308,7 +304,7 @@ const getDisplayContent = (source: SourceInfo) => {
   return content.substring(0, 150) + '...';
 };
 
-// ✅ 新增：判断是否应该显示展开/收起按钮
+// 判断是否应该显示展开/收起按钮
 const shouldShowExpand = (source: SourceInfo) => {
   const content = source.content || '';
   return content.length > 150;
@@ -371,7 +367,7 @@ const handleViewDocument = async (fileId: string, title: string) => {
   }
 };
 
-// ✅ 新增：判断是否为 PDF 文件
+// 判断是否为 PDF 文件
 const isPdfFile = (fileName: string, contentType: string): boolean => {
   const lowerFileName = fileName.toLowerCase();
   return (
@@ -381,7 +377,7 @@ const isPdfFile = (fileName: string, contentType: string): boolean => {
   );
 };
 
-// ✅ 新增：下载文件
+// 下载文件
 const downloadFile = (fileBlob: Blob, fileName: string, fileId: string) => {
   // 尝试从 fileId 中提取文件扩展名
   const extension = extractFileExtension(fileId);
@@ -397,7 +393,7 @@ const downloadFile = (fileBlob: Blob, fileName: string, fileId: string) => {
   window.URL.revokeObjectURL(url);
 };
 
-// ✅ 新增：从 fileId 提取文件扩展名
+// 从 fileId 提取文件扩展名
 const extractFileExtension = (fileId: string): string => {
   const parts = fileId.split('.');
   if (parts.length > 1) {
@@ -406,7 +402,7 @@ const extractFileExtension = (fileId: string): string => {
   return '';
 };
 
-// ✅ 修改：关闭 PDF 查看器
+// 关闭 PDF 查看器
 const closePdfViewer = () => {
   if (pdfViewerUrl.value) {
     window.URL.revokeObjectURL(pdfViewerUrl.value);
@@ -415,7 +411,7 @@ const closePdfViewer = () => {
   showPdfViewer.value = false;
 };
 
-// ✅ 新增：切换展开状态
+// 切换展开状态
 const toggleExpand = (chunkId: string) => {
   expandedStates[chunkId] = !expandedStates[chunkId];
 };

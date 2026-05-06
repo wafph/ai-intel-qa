@@ -288,7 +288,7 @@
       <p>正在加载对话...</p>
     </div>
 
-    <!-- ✅ 新增：点踩反馈弹窗 -->
+    <!--点踩反馈弹窗 -->
     <el-dialog
       v-model="feedbackDialogVisible"
       title="分享反馈"
@@ -340,7 +340,7 @@
       </template>
     </el-dialog>
 
-    <!-- ✅ 新增：PDF 预览弹框 -->
+    <!-- PDF 预览弹框 -->
     <div v-if="showPdfViewer" class="pdf-viewer-modal" @click.self="closePdfViewer">
       <div class="pdf-viewer-container">
         <div class="pdf-viewer-header">
@@ -379,17 +379,6 @@ import { ArrowRight, ArrowUp } from '@element-plus/icons-vue';
 import { useChatStore } from '@/stores/chat';
 const chatStore = useChatStore();
 
-// ✅ 新增：导入需要的图标
-// import {
-//   WarningFilled,
-//   CircleCloseFilled,
-//   Clock,
-//   ChatLineRound,
-//   Lock,
-//   MoreFilled,
-// } from '@element-plus/icons-vue';
-
-// 状态变量
 const displayAnswer = ref<string>('');
 const typingSpeed = 20; // 打字速度（毫秒）
 let typingInterval: NodeJS.Timeout | null = null;
@@ -398,11 +387,9 @@ const loading = ref(false);
 const isTyping = ref(false);
 const emit = defineEmits(['regenerate']);
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
-// 新增：控制参考来源的显示状态和单个来源项的折叠状态
 const sourcesVisible = ref<Record<string, boolean>>({});
 const sourceCollapsed = ref<Record<string, boolean>>({});
 
-// ✅ 新增：PDF 预览相关状态
 const showPdfViewer = ref(false);
 const pdfViewerUrl = ref('');
 const currentPdfTitle = ref('');
@@ -473,14 +460,12 @@ const props = withDefaults(defineProps<Props>(), {
   currentStreamingMessageId: null,
 });
 
-// ✅ 新增：点踩反馈相关状态
 const feedbackDialogVisible = ref(false);
 const currentDislikeMessage = ref<ChatMessage | null>(null);
 const submitting = ref(false);
 const feedbackReason = ref('');
 const feedbackDetail = ref('');
 
-// ✅ 新增：反馈选项配置
 const feedbackOptions = ref([
   { label: '不正确或不完整', value: 'incorrect_or_incomplete' },
   { label: '与期望不符', value: 'not_as_expected' },
@@ -490,20 +475,15 @@ const feedbackOptions = ref([
   { label: '其他', value: 'other' },
 ]);
 
-// ✅ 新增：计算属性判断是否有消息
 const hasMessages = computed(() => {
   return props.chatData?.messages && props.chatData.messages.length > 0;
 });
 
-// ✅ 新增：监听 chatData 变化，打印调试信息
 watch(
   () => props.chatData,
   (newChatData) => {
-    console.log('IntelligentQA received chatData:', newChatData);
     if (newChatData) {
-      console.log('Messages count:', newChatData.messages?.length || 0);
       if (newChatData.messages && newChatData.messages.length > 0) {
-        console.log('First message:', newChatData.messages[0]);
       }
     }
   },
@@ -604,7 +584,6 @@ const copySource = async (source: any) => {
   }
 };
 
-// ✅ 新增：处理来源标题点击
 const handleSourceTitleClick = async (source: any, event: Event) => {
   event.stopPropagation(); // 阻止事件冒泡，避免触发父元素的折叠/展开
 
@@ -661,7 +640,6 @@ const handleSourceTitleClick = async (source: any, event: Event) => {
   }
 };
 
-// ✅ 新增：判断是否为 PDF 文件
 const isPdfFile = (fileName: string, contentType: string): boolean => {
   const lowerFileName = fileName.toLowerCase();
   return (
@@ -671,7 +649,6 @@ const isPdfFile = (fileName: string, contentType: string): boolean => {
   );
 };
 
-// ✅ 新增：下载文件
 const downloadFile = (fileBlob: Blob, fileName: string, fileId: string) => {
   // 尝试从 fileId 中提取文件扩展名
   const extension = extractFileExtension(fileId);
@@ -687,7 +664,6 @@ const downloadFile = (fileBlob: Blob, fileName: string, fileId: string) => {
   window.URL.revokeObjectURL(url);
 };
 
-// ✅ 新增：从 fileId 提取文件扩展名
 const extractFileExtension = (fileId: string): string => {
   const parts = fileId.split('.');
   if (parts.length > 1) {
@@ -696,7 +672,6 @@ const extractFileExtension = (fileId: string): string => {
   return '';
 };
 
-// ✅ 新增：关闭 PDF 查看器
 const closePdfViewer = () => {
   if (pdfViewerUrl.value) {
     window.URL.revokeObjectURL(pdfViewerUrl.value);
@@ -726,7 +701,6 @@ const toggleAndScrollToSources = (messageId: string) => {
   }
 };
 
-// 新增：调整右边栏高度的函数 - 精确计算推理内容+最终回复内容高度
 const adjustRightColumnHeight = (messageId: string) => {
   const leftColumn = leftColumnRefs[messageId];
   const rightColumn = rightColumnRefs[messageId];
@@ -770,7 +744,6 @@ const adjustRightColumnHeight = (messageId: string) => {
   }
 };
 
-// 新增：切换单个来源项的折叠状态
 const toggleSourceItem = (messageId: string, sourceIndex: number) => {
   const key = `${messageId}-${sourceIndex}`;
   sourceCollapsed.value[key] = !sourceCollapsed.value[key];
@@ -824,32 +797,24 @@ const handleCopy = async (content: string, messageId: string) => {
   }
 };
 
-// ✅ 修改：处理点赞 - 保留原有功能
 const handleVote = async (messageId: string, voteType: 'like' | 'dislike') => {
   if (!props.chatData) {
-    console.error('chatData is null');
     return;
   }
 
   const message = props.chatData.messages.find((msg) => msg.id === messageId);
   if (!message) {
-    console.error('Message not found:', messageId);
     return;
   }
 
-  // ✅ 关键修复：从 chatData 中获取 sessionUuid
   const sessionUuid =
     (props.chatData as any).conversationUuid || (props.chatData as any).id;
 
   if (!sessionUuid) {
-    console.error('No sessionUuid found in chatData:', props.chatData);
     ElMessage.error('无法获取会话ID，请刷新页面重试');
     return;
   }
 
-  console.log('Vote request - sessionUuid:', sessionUuid, 'messageId:', messageId);
-
-  // 保存原来的投票状态，用于回滚
   const originalVote = message.vote;
   let originalLikeCount = message.likeCount || 0;
   let originalDislikeCount = message.dislikeCount || 0;
@@ -885,7 +850,7 @@ const handleVote = async (messageId: string, voteType: 'like' | 'dislike') => {
     }
   }
 
-  // ✅ 修复：调用后端接口同步点赞状态，传递正确的 sessionUuid
+  // 修复：调用后端接口同步点赞状态，传递正确的 sessionUuid
   const likeStatus = message.vote === 'like' ? 1 : 0;
   const dislikeStatus = message.vote === 'dislike' ? 1 : 0;
   if (dislikeStatus) {
@@ -896,7 +861,6 @@ const handleVote = async (messageId: string, voteType: 'like' | 'dislike') => {
   }
 
   try {
-    // ✅ 传递 sessionUuid 参数
     const success = await chatStore.syncLikeStatus(
       messageId,
       likeStatus,
@@ -912,7 +876,6 @@ const handleVote = async (messageId: string, voteType: 'like' | 'dislike') => {
       ElMessage.error('点赞状态更新失败，请重试');
     }
   } catch (error) {
-    console.error('Vote error:', error);
     // 回滚状态
     message.vote = originalVote;
     message.likeCount = originalLikeCount;
@@ -921,7 +884,7 @@ const handleVote = async (messageId: string, voteType: 'like' | 'dislike') => {
   }
 };
 
-// ✅ 新增：提交点踩反馈
+// 新增：提交点踩反馈
 const submitDislikeFeedback = async () => {
   if (!feedbackReason.value) {
     ElMessage.warning('请选择反馈原因');
@@ -953,9 +916,6 @@ const submitDislikeFeedback = async () => {
       dislikeStatus: 1,
       dislikeReason: finalReason,
     };
-
-    console.log('提交点踩反馈:', payload);
-
     const response = await fetch(`${API_BASE_URL}/v1/chat/status`, {
       method: 'PUT',
       headers: {
@@ -970,7 +930,6 @@ const submitDislikeFeedback = async () => {
     ElMessage.success('感谢您的反馈！');
     feedbackDialogVisible.value = false;
   } catch (error) {
-    console.error('提交反馈失败:', error);
     ElMessage.error('提交失败，请稍后重试');
   } finally {
     submitting.value = false;
@@ -1630,7 +1589,7 @@ onUpdated(() => {
     }
   }
 
-  // ✅ 新增：PDF 预览弹框样式
+  // PDF 预览弹框样式
   .pdf-viewer-modal {
     position: fixed;
     top: 0;
@@ -1714,7 +1673,7 @@ onUpdated(() => {
     }
   }
 
-  // ✅ 新增：加载状态样式
+  //加载状态样式
   .loading-state {
     display: flex;
     flex-direction: column;
@@ -1739,7 +1698,7 @@ onUpdated(() => {
     }
   }
 
-  // ✅ 新增：可点击的来源标题样式
+  // 可点击的来源标题样式
   .source-title-clickable {
     cursor: pointer;
     color: #409eff;
