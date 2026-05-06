@@ -131,6 +131,7 @@ const lastComplianceParams = ref<{
   file_url: string;
   query: string;
   dimensions: string[];
+  fileName: string;
 } | null>(null);
 const uploadedFileName = ref('');
 const uploadedFileUrl = ref('');
@@ -149,19 +150,15 @@ const currentReasoning = ref<string>('');
 const currentAnswer = ref<string>('');
 let abortController: AbortController | null = null;
 let currentStreamingMessageId: string | null = null;
-
 // 大模型答案展示控制：首次检测到双换行后才开始把 text 展示到页面，且保留双换行本身
 let answerOutputStarted = false;
 let answerPendingText = '';
-
 // 计算属性
 const currentChatData = computed(() => {
   if (!activeChatId.value) {
     return null;
   }
-
   const session = chatStore.getChatSession(activeChatId.value);
-
   if (!session) {
     return null;
   }
@@ -207,7 +204,6 @@ const customUpload = async (options: any) => {
     if (!response.ok) {
       throw new Error(`上传失败: ${response.status}`);
     }
-
     const result = await response.json();
     onSuccess(result, file);
     uploadedFileName.value = file.name;
@@ -262,46 +258,35 @@ const resetCurrentChat = () => {
 const toggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value;
 };
-
 let isCreatingChat = false;
 let creationPromise: Promise<void> | null = null;
-
 const handleNewChat = async () => {
   // 如果当前已经是空白新会话，则不再重复创建
   if (activeChatId.value) {
     const currentChat = chatStore.getChatSession(activeChatId.value);
-
     const isEmptyNewChat =
       currentChat &&
       currentChat.messages.length === 0 &&
       currentChat.preview !== '已有内容';
-
     if (isEmptyNewChat) {
       return;
     }
   }
-
   if (isCreatingChat) {
     return;
   }
-
   if (creationPromise) {
     await creationPromise;
     return;
   }
-
   isCreatingChat = true;
-
   creationPromise = (async () => {
     try {
       const newChatId = generateUUID();
-
       activeChatId.value = newChatId;
       currentConversationUuid.value = newChatId;
-
       const chatTitle = activeTab.value;
       const now = Date.now();
-
       const newSession: ChatSession = {
         id: newChatId,
         title: chatTitle,
@@ -321,7 +306,6 @@ const handleNewChat = async () => {
         menuType: activeTab.value,
         isCollected: false,
       };
-
       chatStore.addChatSession(newSession);
       chatStore.addHistoryItem(newHistory);
       scrollToBottom();
@@ -329,7 +313,6 @@ const handleNewChat = async () => {
       isCreatingChat = false;
     }
   })();
-
   await creationPromise;
   creationPromise = null;
 };
@@ -343,14 +326,11 @@ const handleSelectChat = async (chatId: string) => {
   // 先清空，再设置，确保触发响应式更新
   activeChatId.value = '';
   await nextTick();
-
   const session = chatStore.getChatSession(chatId);
-
   if (!session) {
     try {
       const funcId = chatStore.getFuncIdByTab(activeTab.value);
       const messages = await chatStore.querySessionHistory(chatId, funcId);
-
       if (messages && messages.length > 0) {
         // 创建新的会话对象
         const newSession: ChatSession = {
@@ -371,14 +351,11 @@ const handleSelectChat = async (chatId: string) => {
       return;
     }
   }
-
   // 设置当前会话UUID
   if (session && !(session as any).conversationUuid) {
     (session as any).conversationUuid = chatId;
   }
-
   currentConversationUuid.value = chatId;
-
   // 加载会话历史
   if (session && (!session.messages || session.messages.length === 0)) {
     await chatStore.loadSessionHistory(chatId).catch(() => {});
@@ -386,14 +363,11 @@ const handleSelectChat = async (chatId: string) => {
   activeChatId.value = chatId;
   resetStreamState();
   scrollToBottom();
-
-  // ✅ 切换到新会话时，清空保存的合规审核参数
   lastComplianceParams.value = null;
 };
 
 const handleDeleteChat = async (chatId: string) => {
   await chatStore.deleteConversationBySession(chatId);
-
   if (activeChatId.value === chatId) {
     if (chatStore.historyList.length > 0) {
       activeChatId.value = chatStore.historyList[0].id;
@@ -437,38 +411,46 @@ const handleSendMessage = async (content: string) => {
   } else {
     if (!content.trim() || isStreaming.value) return;
   }
-
   if (!activeChatId.value) {
     handleNewChat();
   }
-
   const chat = chatStore.getChatSession(activeChatId.value!);
   if (!chat) return;
   if (!currentConversationUuid.value) {
     currentConversationUuid.value = generateUUID();
     (chat as any).conversationUuid = currentConversationUuid.value;
   }
-
-  // 添加用户消息
-  const userMessage: ChatMessage = {
-    id: Date.now().toString(),
-    role: 'user',
-    content: activeTab.value === '合规审核' ? '开始合规审核' : content.trim(),
-    timestamp: new Date() as any,
-  };
-
-  chat.messages.push(userMessage);
-
-  // ✅ 保存合规审核的参数，用于重新审核
+  let userMessageContent = '';
   if (activeTab.value === '合规审核') {
+    // 获取实际的审核维度（排除"全选"选项）
+    const displayDimensions = selectedDimensions.value.includes('全选')
+      ? spliceSelectedDimensions.value
+      : selectedDimensions.value;
+    // 格式：文件名 + 换行 + 审核维度
+    userMessageContent = `${uploadedFileName.value}\n审核维度：${displayDimensions.join('、')}`;
+
+    // 保存合规审核的参数，用于重新审核
     lastComplianceParams.value = {
       file_url: uploadedFileUrl.value,
       query: !selectedDimensions.value.includes('全选')
         ? selectedDimensions.value.join(',')
         : spliceSelectedDimensions.value.join(','),
       dimensions: [...selectedDimensions.value],
+      fileName: uploadedFileName.value, // 新增：保存文件名
     };
+  } else {
+    userMessageContent = content.trim();
   }
+
+  // 添加用户消息
+  const userMessage: ChatMessage = {
+    id: Date.now().toString(),
+    role: 'user',
+    content: userMessageContent, // 使用新的消息内容
+    timestamp: new Date() as any,
+  };
+
+  chat.messages.push(userMessage);
 
   // 如果是第一条消息，更新标题
   if (chat.messages.length === 1) {
@@ -483,20 +465,19 @@ const handleSendMessage = async (content: string) => {
     const historyItem = chatStore.historyList.find((h: any) => h.id === chat.id);
     if (historyItem) {
       historyItem.title = newTitle;
-      historyItem.preview = activeTab.value === '合规审核' ? '开始合规审核' : content;
+      historyItem.preview =
+        activeTab.value === '合规审核' ? `${uploadedFileName.value}的审核` : content;
     }
   }
 
-  // ✅ 清空输入框（针对合规审核，清空上传状态和选择状态）
+  // 清空输入框（针对合规审核，清空上传状态和选择状态）
   if (activeTab.value === '合规审核') {
     // 清空上传文件状态
     uploadedFileName.value = '';
     uploadedFileUrl.value = '';
-
     // 清空多选框状态
     selectedDimensions.value = [];
     spliceSelectedDimensions.value = [];
-
     // 重置"全选"状态
     const selectAllCheckbox = document.querySelector(
       '.el-checkbox-group .el-checkbox:first-child input',
@@ -521,9 +502,8 @@ const handleSendMessage = async (content: string) => {
   };
   chat.messages.push(aiMessage);
   currentStreamingMessageId = aiMessageId;
-
   chatStore.updateHistoryItem(activeChatId.value!, {
-    preview: content.trim() || '已有内容',
+    preview: userMessageContent, // 使用新的消息内容作为预览
     time: Date.now(),
   });
   resetStreamState();
@@ -550,12 +530,10 @@ const startStream = async (queryText: string, messageId: string) => {
   const id = setTimeout(() => {
     abortController?.abort();
   }, requestTimeout);
-
   try {
     let params: any = {};
-
     if (activeTab.value === '合规审核') {
-      // ✅ 使用保存的参数（如果有），否则使用当前值
+      //  使用保存的参数（如果有），否则使用当前值
       if (lastComplianceParams.value) {
         params = {
           inputs: {
@@ -667,24 +645,12 @@ const startStream = async (queryText: string, messageId: string) => {
 };
 
 const handleRegenerate = (content: string) => {
-  console.log(
-    'handleRegenerate called with content:',
-    content,
-    'activeTab:',
-    activeTab.value,
-  );
-
   if (isStreaming.value) {
     stopStream();
   }
-
-  // ✅ 如果是合规审核，使用保存的参数
   if (activeTab.value === '合规审核') {
-    console.log('合规审核重新审核，lastComplianceParams:', lastComplianceParams.value);
-
     if (lastComplianceParams.value) {
-      // ✅ 使用保存的参数重新审核
-      handleComplianceReview('重新审核');
+      handleComplianceReview();
     } else {
       console.warn('没有找到保存的审核参数，使用默认流程');
       handleSendMessage(content);
@@ -696,12 +662,7 @@ const handleRegenerate = (content: string) => {
 };
 
 // 处理合规审核的专用函数
-const handleComplianceReview = async (content: string) => {
-  console.log(
-    'handleComplianceReview called, lastComplianceParams:',
-    lastComplianceParams.value,
-  );
-
+const handleComplianceReview = async () => {
   if (!lastComplianceParams.value) {
     ElMessage.warning('没有找到上一次审核的参数');
     return;
@@ -719,11 +680,18 @@ const handleComplianceReview = async (content: string) => {
     (chat as any).conversationUuid = currentConversationUuid.value;
   }
 
+  // 修改：为重新审核生成详细的用户消息内容
+  const displayDimensions = lastComplianceParams.value.dimensions.includes('全选')
+    ? spliceSelectedDimensions.value
+    : lastComplianceParams.value.dimensions;
+
+  const userMessageContent = `${lastComplianceParams.value.fileName}\n审核维度：${displayDimensions.join('、')}`;
+
   // 添加用户消息
   const userMessage: ChatMessage = {
     id: Date.now().toString(),
     role: 'user',
-    content: '重新审核',
+    content: userMessageContent, // 使用新的消息内容
     timestamp: new Date() as any,
   };
 
@@ -731,13 +699,13 @@ const handleComplianceReview = async (content: string) => {
 
   // 如果是第一条消息，更新标题
   if (chat.messages.length === 1) {
-    const newTitle = '重新审核';
+    const newTitle = `重新审核: ${lastComplianceParams.value.fileName}`;
     chat.title = newTitle;
 
     const historyItem = chatStore.historyList.find((h: any) => h.id === chat.id);
     if (historyItem) {
       historyItem.title = newTitle;
-      historyItem.preview = '重新审核';
+      historyItem.preview = `${lastComplianceParams.value.fileName}的重新审核`;
     }
   }
 
@@ -753,26 +721,18 @@ const handleComplianceReview = async (content: string) => {
   };
   chat.messages.push(aiMessage);
   currentStreamingMessageId = aiMessageId;
-
   chatStore.updateHistoryItem(activeChatId.value!, {
-    preview: '重新审核',
+    preview: userMessageContent, // 使用新的消息内容作为预览
     time: Date.now(),
   });
   resetStreamState();
-
-  //使用保存的参数开始流式输出
+  // 使用保存的参数开始流式输出
   await startComplianceStream(aiMessageId);
-
   scrollToBottom();
 };
 
 // 审核的流式请求函数
 const startComplianceStream = async (messageId: string) => {
-  console.log(
-    'startComplianceStream called, lastComplianceParams:',
-    lastComplianceParams.value,
-  );
-
   if (!lastComplianceParams.value) {
     ElMessage.error('没有找到审核参数，无法重新审核');
     handleStreamError(messageId, '审核参数缺失');
@@ -795,21 +755,14 @@ const startComplianceStream = async (messageId: string) => {
         query: lastComplianceParams.value.query,
       },
     };
-
-    console.log('合规审核重新审核参数:', params);
-
     const token = appStore.sharedDataToken;
     if (!token) {
       throw new Error('未找到认证token，请先登录');
     }
-
     const apiUrl =
       '/v1/1725c43e3fa54828a078fce60f5a3773/workflows/32dd3ef3-2bfb-4ad7-a448-811ddd37924a/conversations/' +
       currentConversationUuid.value +
       '?version=1777960203166';
-
-    console.log('重新审核API URL:', apiUrl);
-
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
@@ -874,19 +827,15 @@ const appendModelOutputText = async (text: string, messageId: string) => {
   if (!answerOutputStarted) {
     answerPendingText += text;
     const firstDoubleNewlineIndex = answerPendingText.indexOf('\n\n');
-
     if (firstDoubleNewlineIndex === -1) {
       return;
     }
-
     answerOutputStarted = true;
     // 从首次 "\n\n" 位置开始展示，保留 "\n\n" 本身，丢弃其前面的模型前置内容
     displayText = answerPendingText.slice(firstDoubleNewlineIndex);
     answerPendingText = '';
   }
-
   currentAnswer.value += displayText;
-
   const chat = chatStore.getChatSession(activeChatId.value!);
   if (chat) {
     const msg = chat.messages.find((m: any) => m.id === messageId);
@@ -900,7 +849,6 @@ const appendModelOutputText = async (text: string, messageId: string) => {
 const processStreamChunk = async (chunk: any, messageId: string) => {
   if (chunk.event === 'message' && chunk.data?.reasoning_content) {
     currentReasoning.value += chunk.data.reasoning_content;
-
     const chat = chatStore.getChatSession(activeChatId.value!);
     if (chat) {
       const msg = chat.messages.find((m: any) => m.id === messageId);
@@ -958,7 +906,7 @@ const handleTabChange = (tab: string) => {
   chatStore.setCurrentActiveTab(tab);
   resetCurrentChat();
 
-  // ✅ 切换标签时清空保存的合规审核参数
+  // 切换标签时清空保存的合规审核参数
   if (tab !== '合规审核') {
     lastComplianceParams.value = null;
   }
@@ -999,9 +947,7 @@ const finishStream = (messageId: string) => {
       }
     }
   }
-
   resetStreamState();
-
   scrollToBottom();
 };
 
@@ -1023,7 +969,6 @@ const stopStream = () => {
   if (abortController) {
     abortController.abort();
   }
-
   if (currentStreamingMessageId) {
     const chat = chatStore.getChatSession(activeChatId.value!);
     if (chat) {
@@ -1036,7 +981,6 @@ const stopStream = () => {
       }
     }
   }
-
   isStreaming.value = false;
   currentStreamingMessageId = null;
   resetStreamState();
@@ -1090,7 +1034,6 @@ const handleUpdateTitle = async (chatId: string, newTitle: string) => {
 const handleTogglePin = async (chatId: string, topStatus: number) => {
   try {
     const funcId = chatStore.getFuncIdByTab(activeTab.value);
-
     const payload = {
       sessionId: chatId,
       functionId: funcId,
@@ -1107,20 +1050,16 @@ const handleTogglePin = async (chatId: string, topStatus: number) => {
     if (!response.ok) {
       throw new Error(`HTTP错误! 状态: ${response.status}`);
     }
-
     const result = await response.json();
-
     // 更新本地数据
     const historyItem = chatStore.historyList.find((item: any) => item.id === chatId);
     if (historyItem) {
       historyItem.topStatus = result.data.topStatus;
     }
-
     const session = chatStore.chatSessions[chatId];
     if (session) {
       session.topStatus = result.data.topStatus;
     }
-
     ElMessage.success(topStatus === 1 ? '已置顶' : '已取消置顶');
   } catch (error) {
     ElMessage.error('操作失败，请重试');
@@ -1145,7 +1084,7 @@ onMounted(async () => {
     !activeChatId.value &&
     !hasAutoCreated
   ) {
-    hasAutoCreated = true; // ✅ 设置标志位
+    hasAutoCreated = true; // 设置标志位
     handleNewChat();
   }
 });
