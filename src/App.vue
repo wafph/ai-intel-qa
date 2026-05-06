@@ -657,10 +657,7 @@ const startStream = async (queryText: string, messageId: string) => {
   } catch (error: any) {
     clearTimeout(id); // 清除定时器
     if (error.name === 'AbortError') {
-      handleStreamError(
-        messageId,
-        `请求超时，当前功能超时时间为 ${Math.floor(requestTimeout / 60000)} 分钟`,
-      );
+      return;
     } else {
       handleStreamError(messageId, error.message);
     }
@@ -670,22 +667,201 @@ const startStream = async (queryText: string, messageId: string) => {
 };
 
 const handleRegenerate = (content: string) => {
+  console.log(
+    'handleRegenerate called with content:',
+    content,
+    'activeTab:',
+    activeTab.value,
+  );
+
   if (isStreaming.value) {
     stopStream();
   }
 
-  // ✅ 如果是合规审核，重新审核时使用保存的参数
+  // ✅ 如果是合规审核，使用保存的参数
   if (activeTab.value === '合规审核') {
+    console.log('合规审核重新审核，lastComplianceParams:', lastComplianceParams.value);
+
     if (lastComplianceParams.value) {
-      // 重新审核时不重新上传文件，使用保存的参数
-      handleSendMessage('开始合规审核');
+      // ✅ 使用保存的参数重新审核
+      handleComplianceReview('重新审核');
     } else {
-      // 如果没有保存的参数，则使用当前状态
+      console.warn('没有找到保存的审核参数，使用默认流程');
       handleSendMessage(content);
     }
   } else {
     // 非合规审核，正常重新生成
     handleSendMessage(content);
+  }
+};
+
+// 处理合规审核的专用函数
+const handleComplianceReview = async (content: string) => {
+  console.log(
+    'handleComplianceReview called, lastComplianceParams:',
+    lastComplianceParams.value,
+  );
+
+  if (!lastComplianceParams.value) {
+    ElMessage.warning('没有找到上一次审核的参数');
+    return;
+  }
+
+  if (!activeChatId.value) {
+    handleNewChat();
+  }
+
+  const chat = chatStore.getChatSession(activeChatId.value!);
+  if (!chat) return;
+
+  if (!currentConversationUuid.value) {
+    currentConversationUuid.value = generateUUID();
+    (chat as any).conversationUuid = currentConversationUuid.value;
+  }
+
+  // 添加用户消息
+  const userMessage: ChatMessage = {
+    id: Date.now().toString(),
+    role: 'user',
+    content: '重新审核',
+    timestamp: new Date() as any,
+  };
+
+  chat.messages.push(userMessage);
+
+  // 如果是第一条消息，更新标题
+  if (chat.messages.length === 1) {
+    const newTitle = '重新审核';
+    chat.title = newTitle;
+
+    const historyItem = chatStore.historyList.find((h: any) => h.id === chat.id);
+    if (historyItem) {
+      historyItem.title = newTitle;
+      historyItem.preview = '重新审核';
+    }
+  }
+
+  // 添加AI消息占位符
+  const aiMessageId = (Date.now() + 1).toString();
+  const aiMessage: ChatMessage = {
+    id: aiMessageId,
+    role: 'assistant',
+    content: '',
+    reasoning: '',
+    timestamp: new Date() as any,
+    streaming: true,
+  };
+  chat.messages.push(aiMessage);
+  currentStreamingMessageId = aiMessageId;
+
+  chatStore.updateHistoryItem(activeChatId.value!, {
+    preview: '重新审核',
+    time: Date.now(),
+  });
+  resetStreamState();
+
+  //使用保存的参数开始流式输出
+  await startComplianceStream(aiMessageId);
+
+  scrollToBottom();
+};
+
+// 审核的流式请求函数
+const startComplianceStream = async (messageId: string) => {
+  console.log(
+    'startComplianceStream called, lastComplianceParams:',
+    lastComplianceParams.value,
+  );
+
+  if (!lastComplianceParams.value) {
+    ElMessage.error('没有找到审核参数，无法重新审核');
+    handleStreamError(messageId, '审核参数缺失');
+    return;
+  }
+
+  isStreaming.value = true;
+  currentReasoning.value = '';
+  currentAnswer.value = '';
+  abortController = new AbortController();
+  const requestTimeout = REQUEST_TIMEOUT_MAP[activeTab.value] || 15 * 60 * 1000;
+  const id = setTimeout(() => {
+    abortController?.abort();
+  }, requestTimeout);
+
+  try {
+    const params = {
+      inputs: {
+        file_url: lastComplianceParams.value.file_url,
+        query: lastComplianceParams.value.query,
+      },
+    };
+
+    console.log('合规审核重新审核参数:', params);
+
+    const token = appStore.sharedDataToken;
+    if (!token) {
+      throw new Error('未找到认证token，请先登录');
+    }
+
+    const apiUrl =
+      '/v1/1725c43e3fa54828a078fce60f5a3773/workflows/32dd3ef3-2bfb-4ad7-a448-811ddd37924a/conversations/' +
+      currentConversationUuid.value +
+      '?version=1777960203166';
+
+    console.log('重新审核API URL:', apiUrl);
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'X-Auth-Token': token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params),
+      signal: abortController.signal,
+    });
+
+    clearTimeout(id);
+
+    if (!response.ok || !response.body) {
+      throw new Error(`网络响应异常: ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.trim() === '') continue;
+        if (line.startsWith('data:')) {
+          const data = line.substring(5).trim();
+          if (data === '[DONE]') continue;
+
+          try {
+            const parsed: any = JSON.parse(data);
+            await processStreamChunk(parsed, messageId);
+          } catch (error) {
+            console.error('解析流数据失败:', error);
+          }
+        }
+      }
+    }
+  } catch (error: any) {
+    clearTimeout(id);
+    if (error.name === 'AbortError') {
+      return;
+    } else {
+      handleStreamError(messageId, error.message);
+    }
+  } finally {
+    finishStream(messageId);
   }
 };
 
@@ -910,7 +1086,7 @@ const handleUpdateTitle = async (chatId: string, newTitle: string) => {
   } catch {}
 };
 
-// 新增：处理置顶/取消置顶
+// 处理置顶/取消置顶
 const handleTogglePin = async (chatId: string, topStatus: number) => {
   try {
     const funcId = chatStore.getFuncIdByTab(activeTab.value);
