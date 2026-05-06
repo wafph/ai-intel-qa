@@ -134,7 +134,7 @@
                   </div>
 
                   <!-- 使用 Element Plus 分页组件 -->
-                  <div class="pagination-wrapper">
+                  <!-- <div class="pagination-wrapper">
                     <el-pagination
                       :current-page="getCurrentPage(item.id)"
                       :page-size="getPageSize(item.id)"
@@ -144,7 +144,7 @@
                       @size-change="(size) => handleSizeChange(item.id, size)"
                       @current-change="(page) => handleCurrentChange(item.id, page)"
                     />
-                  </div>
+                  </div> -->
                 </div>
 
                 <!-- 当没有来源信息时，显示原有回复内容 -->
@@ -417,36 +417,13 @@ const toggleExpand = (chunkId: string) => {
 };
 
 // 获取当前页码（带默认值）
-const getCurrentPage = (messageId: string): number => {
-  if (!paginationStates[messageId]) {
-    paginationStates[messageId] = { currentPage: 1, pageSize: 10 };
-  }
-  return paginationStates[messageId].currentPage;
-};
+// const getCurrentPage = (messageId: string): number => {
+//   if (!paginationStates[messageId]) {
+//     paginationStates[messageId] = { currentPage: 1, pageSize: 10 };
+//   }
+//   return paginationStates[messageId].currentPage;
+// };
 
-// 获取每页条数（带默认值）
-const getPageSize = (messageId: string): number => {
-  if (!paginationStates[messageId]) {
-    paginationStates[messageId] = { currentPage: 1, pageSize: 10 };
-  }
-  return paginationStates[messageId].pageSize;
-};
-
-// 分页处理函数
-const handleSizeChange = (messageId: string, size: number) => {
-  if (!paginationStates[messageId]) {
-    paginationStates[messageId] = { currentPage: 1, pageSize: 10 };
-  }
-  paginationStates[messageId].pageSize = size;
-  paginationStates[messageId].currentPage = 1; // 重置到第一页
-};
-
-const handleCurrentChange = (messageId: string, page: number) => {
-  if (!paginationStates[messageId]) {
-    paginationStates[messageId] = { currentPage: 1, pageSize: 10 };
-  }
-  paginationStates[messageId].currentPage = page;
-};
 
 // 计算分页后的数据
 const paginatedSources = (item: ChatMessage) => {
@@ -1010,77 +987,6 @@ onUnmounted(() => {
   &:hover {
     color: #40a9ff;
     text-decoration: underline;
-  }
-}
-
-/* 分页组件样式 */
-.pagination-wrapper {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  padding: 15px 0;
-  font-size: 14px;
-  color: #666;
-  // border-top: 1px solid #e8e8e8;
-  margin-top: 20px;
-
-  :deep(.el-pagination) {
-    --el-pagination-font-size: 14px;
-    --el-pagination-bg-color: #fff;
-    --el-pagination-text-color: #606266;
-    --el-pagination-border-radius: 4px;
-    --el-pagination-button-color: #606266;
-    --el-pagination-button-bg-color: #f4f4f5;
-    --el-pagination-button-disabled-color: #c0c4cc;
-    --el-pagination-button-disabled-bg-color: #fff;
-    --el-pagination-hover-color: #409eff;
-
-    .el-pagination__total {
-      margin-right: 16px;
-      font-weight: normal;
-    }
-
-    .el-pagination__sizes {
-      margin-right: 16px;
-    }
-
-    .el-pagination__jump {
-      margin-left: 16px;
-    }
-
-    .btn-prev,
-    .btn-next {
-      background-color: transparent;
-      border: 1px solid #dcdfe6;
-      border-radius: 4px;
-      margin: 0 4px;
-
-      &:hover {
-        color: #409eff;
-        border-color: #409eff;
-      }
-    }
-
-    .el-pager li {
-      background-color: transparent;
-      border: 1px solid #dcdfe6;
-      border-radius: 4px;
-      margin: 0 4px;
-      min-width: 32px;
-      height: 32px;
-      line-height: 30px;
-
-      &.is-active {
-        background-color: #409eff;
-        color: #fff;
-        border-color: #409eff;
-      }
-
-      &:hover {
-        color: #409eff;
-        border-color: #409eff;
-      }
-    }
   }
 }
 
