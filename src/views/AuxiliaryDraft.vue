@@ -738,7 +738,7 @@ onUnmounted(() => {
 .auxiliary-draft.intelligent-qa {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 74vh;
   background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
   position: relative;
   overflow: hidden;
