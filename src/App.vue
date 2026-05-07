@@ -539,6 +539,8 @@ const startStream = async (queryText: string, messageId: string) => {
           inputs: {
             file_url: lastComplianceParams.value.file_url,
             query: lastComplianceParams.value.query,
+            ancestorScope: [],
+            descendantScope: [],
           },
         };
       } else {
@@ -552,13 +554,26 @@ const startStream = async (queryText: string, messageId: string) => {
             query: !selectedDimensions.value.includes('全选')
               ? selectedDimensions.value.join(',')
               : spliceSelectedDimensions.value.join(','),
+            ancestorScope: [],
+            descendantScope: [],
           },
         };
       }
+    } else if (activeTab.value === '辅助起草') {
+      params = {
+        inputs: {
+          query: queryText,
+          ancestorScope: [],
+          descendantScope: [],
+        },
+      };
     } else {
       params = {
         inputs: {
           query: queryText,
+          ancestorScope: [],
+          descendantScope: [],
+          user: '1',
         },
       };
     }
@@ -569,7 +584,7 @@ const startStream = async (queryText: string, messageId: string) => {
     }
 
     const baseUrls = {
-      qa: '/v1/1725c43e3fa54828a078fce60f5a3773/workflows/60a15b33-e781-4d5d-88d3-5ed90054d9b0/conversations/',
+      qa: '/v1/1725c43e3fa54828a078fce60f5a3773/workflows/36ef6120-e675-4982-9add-4ab960165014/conversations/',
       draf: '/v1/1725c43e3fa54828a078fce60f5a3773/workflows/1808592a-3c09-41a1-b1b6-225c9985ee00/conversations/',
       review:
         '/v1/1725c43e3fa54828a078fce60f5a3773/workflows/32dd3ef3-2bfb-4ad7-a448-811ddd37924a/conversations/',
@@ -577,10 +592,10 @@ const startStream = async (queryText: string, messageId: string) => {
         '/v1/1725c43e3fa54828a078fce60f5a3773/workflows/c206107e-ec31-47d8-9aaf-5c1262931168/conversations/',
     };
 
-    const version1 = '?version=1777453764415';
-    const version2 = '?version=1777869733574';
+    const version1 = '?version=1778136208083';
+    const version2 = '?version=1778135796942';
     const version3 = '?version=1777960203166';
-    const version4 = '?version=1777432604064';
+    const version4 = '?version=1778135927550';
 
     let apiUrl = '';
     if (activeTab.value === '智能问答') {

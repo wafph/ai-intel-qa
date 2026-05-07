@@ -241,7 +241,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted, onUnmounted, onUpdated } from 'vue';
+import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import MarkdownIt from 'markdown-it';
 import { ArrowRight, ArrowUp, Close } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
@@ -470,14 +470,14 @@ const closeSourcesPanel = () => {
 };
 
 // 检查源是否折叠
-const isSourceCollapsed = (sourceIndex: number): boolean => {
+const isSourceCollapsed = (sourceIndex: string | number): boolean => {
   if (!activeSourcesItem.value) return false;
   const key = `${activeSourcesItem.value.id}-${sourceIndex}`;
   return sourceCollapsed.value[key] || false;
 };
 
 // 切换单个源折叠状态
-const toggleSourceItem = (messageId: string, sourceIndex: number) => {
+const toggleSourceItem = (messageId: string, sourceIndex: string | number) => {
   const key = `${messageId}-${sourceIndex}`;
   sourceCollapsed.value[key] = !sourceCollapsed.value[key];
 };

@@ -210,7 +210,7 @@ import { ArrowRight } from '@element-plus/icons-vue';
 // 状态变量
 const displayAnswer = ref<string>('');
 const typingSpeed = 20; // 打字速度（毫秒）
-let typingInterval: number | null = null;
+let typingInterval: NodeJS.Timeout | null = null;
 let currentTypingIndex = 0;
 const loading = ref(false);
 const isTyping = ref(false);
