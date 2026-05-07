@@ -9,41 +9,40 @@
       <p>帮助您快速生成合规、专业的制度文档，降低起草难度，节约时间成本</p>
     </div>
 
-    <!-- 起草内容 -->
-    <div
-      class="conversation-history"
-      v-if="chatData?.messages && chatData.messages.length > 0"
-    >
-      <div
-        v-for="(item, index) in chatData.messages || []"
-        :key="item.id"
-        :class="[
-          'history-item',
-          item.role === 'user' ? 'user-message' : 'assistant-message',
-        ]"
-      >
-        <!-- 用户消息 -->
-        <div v-if="item.role === 'user'" class="message-user">
-          <div class="message-header">
-            <div class="message-info">
-              <pre class="message-content user-message-content">{{ item.content }}</pre>
-              <div class="message-time">{{ formatTime(item.timestamp) }}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- AI回复消息 -->
-        <div v-else class="message-assistant">
-          <!-- 双栏布局容器开始 -->
+    <!-- 主容器：左右分栏布局 -->
+    <div class="qa-container">
+      <!-- 左侧对话区域 -->
+      <div class="qa-body">
+        <!-- 起草内容 -->
+        <div
+          class="conversation-history"
+          v-if="chatData?.messages && chatData.messages.length > 0"
+        >
           <div
-            class="dual-column-container"
-            :class="{ 'show-sources': sourcesVisible[item.id] }"
+            v-for="(item, index) in chatData.messages || []"
+            :key="item.id"
+            :class="[
+              'history-item',
+              item.role === 'user' ? 'user-message' : 'assistant-message',
+            ]"
           >
-            <!-- 左侧消息内容区域 -->
-            <div class="left-column" :ref="(el) => setLeftColumnRef(el, item.id)">
+            <!-- 用户消息（右对齐） -->
+            <div v-if="item.role === 'user'" class="message-user">
               <div class="message-header">
                 <div class="message-info">
-                  <!-- 原有的推理过程和消息内容保持不变 -->
+                  <pre class="message-content user-message-content">{{
+                    item.content
+                  }}</pre>
+                  <div class="message-time">{{ formatTime(item.timestamp) }}</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- AI回复消息（左对齐） -->
+            <div v-else class="message-assistant">
+              <div class="message-header">
+                <div class="message-info">
+                  <!-- 原有的推理过程 -->
                   <div
                     v-if="item.reasoning && item.reasoning.trim() !== ''"
                     class="thinking-process"
@@ -71,7 +70,7 @@
                       </div>
                     </div>
 
-                    <!-- 加载指示器（当没有任何内容时） -->
+                    <!-- 加载指示器 -->
                     <div
                       v-if="streaming && (!currentAnswer || currentAnswer.trim() === '')"
                       class="thinking-indicator"
@@ -91,25 +90,36 @@
                       v-html="renderMarkdown(item.content)"
                     ></div>
                     <div
-                      style="margin-left: 15px"
+                      class="message-actions"
                       v-if="item.content && item.content !== '用户停止了生成'"
                     >
+                      <!-- 查看推荐范文按钮 -->
                       <el-button
                         link
                         type="primary"
                         plain
-                        @click="toggleAndScrollToSources(item.id)"
+                        @click="toggleSourcesPanel(item)"
                       >
-                        {{ sourcesVisible[item.id] ? '隐藏推荐范文' : '显示推荐范文' }}
+                        {{
+                          activeSourcesItem?.id === item.id && showSourcesPanel
+                            ? '隐藏推荐范文'
+                            : '显示推荐范文'
+                        }}
                         <el-icon class="el-icon--right">
                           <component
-                            :is="sourcesVisible[item.id] ? ArrowUp : ArrowRight"
+                            :is="
+                              activeSourcesItem?.id === item.id && showSourcesPanel
+                                ? ArrowUp
+                                : ArrowRight
+                            "
                           />
                         </el-icon>
                       </el-button>
+
+                      <!-- 导出按钮 -->
                       <el-button
                         link
-                        class="btn-bottom"
+                        class="export-btn"
                         type="primary"
                         plain
                         @click="handleExport"
@@ -118,7 +128,15 @@
                       >
                         {{ loading ? '转换中...' : '导出' }}
                       </el-button>
-                      <el-button link type="success" plain @click="handleRestart(index)">
+
+                      <!-- 重新起草按钮 -->
+                      <el-button
+                        link
+                        class="regenerate-btn"
+                        type="success"
+                        plain
+                        @click="handleRestart(index)"
+                      >
                         重新起草<el-icon class="el-icon--right"><ArrowRight /></el-icon>
                       </el-button>
                     </div>
@@ -137,75 +155,70 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
 
-            <!-- 右侧推荐范文区域 -->
+      <!-- 右侧固定推荐范文面板（点击显示推荐范文时显示） -->
+      <div
+        v-if="showSourcesPanel"
+        class="sources-sidebar"
+        :class="{ 'sidebar-visible': showSourcesPanel }"
+      >
+        <div class="sources-header">
+          <h3>📄 推荐范文</h3>
+          <el-icon class="close-btn" @click="closeSourcesPanel"><Close /></el-icon>
+        </div>
+        <div
+          class="sources-content"
+          v-if="activeSourcesItem && activeSourcesItem.sources"
+        >
+          <div
+            v-for="(source, sourceIndex) in activeSourcesItem.sources"
+            :key="sourceIndex"
+            class="source-item"
+          >
             <div
-              v-if="item.sources && item.sources.length > 0"
-              class="right-column"
-              :ref="(el) => setRightColumnRef(el, item.id)"
-              :style="getRightColumnStyle(item.id)"
+              class="source-title"
+              @click="toggleSourceItem(activeSourcesItem.id, sourceIndex)"
             >
-              <div class="sources-container">
-                <div class="sources-header">
-                  <span>📄 推荐范文</span>
-                </div>
-                <div class="sources-list">
-                  <div
-                    v-for="(source, sourceIndex) in item.sources"
-                    :key="sourceIndex"
-                    class="source-item"
-                  >
-                    <div
-                      class="source-title"
-                      @click="toggleSourceItem(item.id, sourceIndex)"
-                    >
-                      <div class="title-content">
-                        <!-- ✅ 修改：将普通标题改为可点击链接，用于PDF预览和DOC下载 -->
-                        <strong
-                          @click.stop="handleSourceTitleClick(source, $event)"
-                          class="source-title-clickable"
-                        >
-                          {{ source.title }}
-                        </strong>
-                        <span class="source-score">
-                          匹配度: {{ formatScore(source.match_score || source.score) }}%
-                        </span>
-                      </div>
-                      <span class="collapse-icon">
-                        {{ sourceCollapsed[`${item.id}-${sourceIndex}`] ? '▶' : '▼' }}
-                      </span>
-                    </div>
-                    <div
-                      v-show="!sourceCollapsed[`${item.id}-${sourceIndex}`]"
-                      class="source-details"
-                    >
-                      <div class="source-subtitle">{{ source.subtitle }}</div>
-                      <div class="source-content">{{ source.content }}</div>
-                      <div class="source-footer">
-                        <span class="source-date">
-                          更新时间: {{ formatSourceDate(source.update_date_time) }}
-                        </span>
-                        <el-button
-                          link
-                          size="small"
-                          type="primary"
-                          @click="copySource(source)"
-                        >
-                          复制片段
-                        </el-button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              <div class="title-content">
+                <!-- 可点击的标题链接 -->
+                <strong
+                  @click.stop="handleSourceTitleClick(source, $event)"
+                  class="source-title-clickable"
+                >
+                  {{ source.title }}
+                </strong>
+                <span class="source-score">
+                  匹配度: {{ formatScore(source.match_score || source.score) }}%
+                </span>
+              </div>
+              <span class="collapse-icon">
+                {{ isSourceCollapsed(sourceIndex) ? '▶' : '▼' }}
+              </span>
+            </div>
+            <div v-show="!isSourceCollapsed(sourceIndex)" class="source-details">
+              <div class="source-subtitle">{{ source.subtitle }}</div>
+              <div class="source-content">{{ source.content }}</div>
+              <div class="source-footer">
+                <span class="source-date">
+                  更新时间: {{ formatSourceDate(source.update_date_time) }}
+                </span>
+                <el-button link size="small" type="primary" @click="copySource(source)">
+                  复制片段
+                </el-button>
               </div>
             </div>
           </div>
-          <!-- 双栏布局容器结束 -->
+        </div>
+        <div v-else class="no-sources">
+          <p>暂无推荐范文</p>
         </div>
       </div>
     </div>
 
-    <!--PDF 预览弹框 -->
+    <!-- PDF 预览弹框 -->
     <div v-if="showPdfViewer" class="pdf-viewer-modal" @click.self="closePdfViewer">
       <div class="pdf-viewer-container">
         <div class="pdf-viewer-header">
@@ -228,9 +241,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, reactive, onMounted, onUnmounted, onUpdated } from 'vue';
+import { ref, watch, nextTick, onMounted, onUnmounted, onUpdated } from 'vue';
 import MarkdownIt from 'markdown-it';
-import { ArrowRight, ArrowUp } from '@element-plus/icons-vue';
+import { ArrowRight, ArrowUp, Close } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 const emit = defineEmits(['regenerate']);
 
@@ -276,7 +289,12 @@ let currentTypingIndex = 0;
 const loading = ref(false);
 const isTyping = ref(false);
 
-// 预览相关状态
+// 推荐范文面板状态
+const showSourcesPanel = ref(false);
+const activeSourcesItem = ref<any>(null);
+const sourceCollapsed = ref<Record<string, boolean>>({});
+
+// PDF 预览相关状态
 const showPdfViewer = ref(false);
 const pdfViewerUrl = ref('');
 const currentPdfTitle = ref('');
@@ -336,7 +354,7 @@ const stopTypingEffect = () => {
   }
 };
 
-// 方法
+// 格式化时间
 const formatTime = (date: Date) => {
   if (!(date instanceof Date)) {
     date = new Date(date);
@@ -348,19 +366,19 @@ const formatTime = (date: Date) => {
   });
 };
 
+// 渲染 Markdown
 const renderMarkdown = (content: string) => {
   if (!content) return '';
   return md.render(content);
 };
 
-// 修改：导出功能
+// 导出功能
 const handleExport = async () => {
   if (!props.chatData) {
     ElMessage.error('没有可导出的内容');
     return;
   }
 
-  // 获取 AI 生成的草稿内容
   const draftContent = props.chatData.messages
     .filter((msg: any) => msg.role === 'assistant')
     .map((msg: any) => msg.content)
@@ -371,7 +389,6 @@ const handleExport = async () => {
     return;
   }
 
-  // 获取 qa_id（使用最后一个 AI 消息的 id）
   const lastAssistantMessage = props.chatData.messages
     .filter((msg: any) => msg.role === 'assistant')
     .pop();
@@ -380,7 +397,6 @@ const handleExport = async () => {
 
   try {
     loading.value = true;
-    // 调用转换接口
     const convertResponse = await fetch('http://1.94.244.72:11327/convert', {
       method: 'POST',
       headers: {
@@ -396,11 +412,9 @@ const handleExport = async () => {
       throw new Error(`转换失败: ${convertResponse.status}`);
     }
     const convertResult = await convertResponse.json();
-    // 检查转换结果
     if (!convertResult.download_url) {
       throw new Error('转换结果中没有下载链接');
     }
-    // 下载文件
     await downloadConvertedFile(convertResult.download_url, convertResult.file_name);
 
     ElMessage.success('导出成功！');
@@ -411,7 +425,7 @@ const handleExport = async () => {
   }
 };
 
-// 新增：下载转换后的文件
+// 下载转换后的文件
 const downloadConvertedFile = async (downloadUrl: string, fileName: string) => {
   try {
     const response = await fetch(downloadUrl, {
@@ -425,7 +439,6 @@ const downloadConvertedFile = async (downloadUrl: string, fileName: string) => {
       throw new Error(`下载失败: ${response.status}`);
     }
     const fileBlob = await response.blob();
-    // 创建下载链接
     const url = window.URL.createObjectURL(fileBlob);
     const a = document.createElement('a');
     a.href = url;
@@ -439,73 +452,34 @@ const downloadConvertedFile = async (downloadUrl: string, fileName: string) => {
   }
 };
 
-// 控制推荐范文的显示状态和单个条目的折叠状态
-const sourcesVisible = ref<Record<string, boolean>>({});
-const sourceCollapsed = ref<Record<string, boolean>>({});
-
-// 存储左右栏的DOM引用，用于高度同步
-const leftColumnRefs = reactive<Record<string, HTMLElement>>({});
-const rightColumnRefs = reactive<Record<string, HTMLElement>>({});
-
-// 设置引用
-const setLeftColumnRef = (el: any, messageId: string) => {
-  if (el && el instanceof HTMLElement) {
-    leftColumnRefs[messageId] = el;
-  }
-};
-const setRightColumnRef = (el: any, messageId: string) => {
-  if (el && el instanceof HTMLElement) {
-    rightColumnRefs[messageId] = el;
+// 切换推荐范文面板
+const toggleSourcesPanel = (item: DraftMessage) => {
+  if (activeSourcesItem.value?.id === item.id && showSourcesPanel.value) {
+    closeSourcesPanel();
+  } else {
+    activeSourcesItem.value = item;
+    showSourcesPanel.value = true;
   }
 };
 
-// 获取右侧栏样式（动态高度）
-const getRightColumnStyle = (messageId: string) => {
-  const leftColumn = leftColumnRefs[messageId];
-  if (!leftColumn) return {};
-  const leftHeight = leftColumn.offsetHeight;
-  return {
-    height: `${leftHeight}px`,
-    maxHeight: 'none',
-  };
+// 关闭推荐范文面板
+const closeSourcesPanel = () => {
+  showSourcesPanel.value = false;
+  activeSourcesItem.value = null;
+  sourceCollapsed.value = {};
 };
 
-// 切换推荐范文侧边栏的显示/隐藏
-const toggleAndScrollToSources = (messageId: string) => {
-  sourcesVisible.value[messageId] = !sourcesVisible.value[messageId];
-  if (sourcesVisible.value[messageId]) {
-    nextTick(() => {
-      adjustRightColumnHeight(messageId);
-    });
-  }
+// 检查源是否折叠
+const isSourceCollapsed = (sourceIndex: number): boolean => {
+  if (!activeSourcesItem.value) return false;
+  const key = `${activeSourcesItem.value.id}-${sourceIndex}`;
+  return sourceCollapsed.value[key] || false;
 };
 
-// 调整右侧栏高度以匹配左侧内容
-const adjustRightColumnHeight = (messageId: string) => {
-  const leftColumn = leftColumnRefs[messageId];
-  const rightColumn = rightColumnRefs[messageId];
-  if (leftColumn && rightColumn) {
-    const thinkingProcess = leftColumn.querySelector('.thinking-process') as HTMLElement;
-    const finalContent = leftColumn.querySelector('.message-content.pad') as HTMLElement;
-    let totalHeight = 0;
-    if (thinkingProcess) totalHeight += thinkingProcess.offsetHeight;
-    if (finalContent) totalHeight += finalContent.offsetHeight;
-    const styles = window.getComputedStyle(leftColumn);
-    totalHeight +=
-      (parseInt(styles.paddingTop) || 0) + (parseInt(styles.paddingBottom) || 0);
-    rightColumn.style.height = `${totalHeight}px`;
-    const sourcesContainer = rightColumn.querySelector(
-      '.sources-container',
-    ) as HTMLElement;
-    if (sourcesContainer) sourcesContainer.style.height = `${totalHeight}px`;
-  }
-};
-
-// 切换单个范文条目的折叠状态
+// 切换单个源折叠状态
 const toggleSourceItem = (messageId: string, sourceIndex: number) => {
   const key = `${messageId}-${sourceIndex}`;
   sourceCollapsed.value[key] = !sourceCollapsed.value[key];
-  nextTick(() => adjustRightColumnHeight(messageId));
 };
 
 // 格式化匹配度分数
@@ -540,7 +514,6 @@ const copySource = async (source: any) => {
       ElMessage.error('复制失败');
     }
   } else {
-    // 降级方案
     const textarea = document.createElement('textarea');
     textarea.value = text;
     document.body.appendChild(textarea);
@@ -553,17 +526,16 @@ const copySource = async (source: any) => {
   }
 };
 
-// 处理来源标题点击（PDF预览和DOC下载）
+// 处理来源标题点击
 const handleSourceTitleClick = async (source: any, event: Event) => {
-  event.stopPropagation(); // 阻止事件冒泡，避免触发父元素的折叠/展开
+  event.stopPropagation();
 
   try {
-    const fileId = source.file_id || source.id; // 根据实际字段调整
+    const fileId = source.file_id || source.id;
     if (!fileId) {
       return;
     }
 
-    // 1. 先调用 POST 接口
     const postResponse = await fetch('http://1.94.244.72:11328/download', {
       method: 'POST',
       headers: {
@@ -578,7 +550,6 @@ const handleSourceTitleClick = async (source: any, event: Event) => {
       throw new Error(`POST 请求失败: ${postResponse.status}`);
     }
 
-    // 2. 调用 GET 接口获取文件
     const fileResponse = await fetch(`http://1.94.244.72:11328/download/${fileId}`, {
       method: 'GET',
       headers: {
@@ -590,19 +561,15 @@ const handleSourceTitleClick = async (source: any, event: Event) => {
       throw new Error(`GET 请求失败: ${fileResponse.status}`);
     }
 
-    // 3. 获取文件内容和类型
     const contentType = fileResponse.headers.get('content-type') || '';
     const fileBlob = await fileResponse.blob();
 
-    // 4. 根据文件类型处理
     if (isPdfFile(fileId, contentType)) {
-      // PDF 文件：显示预览弹框
       const pdfUrl = window.URL.createObjectURL(fileBlob);
       pdfViewerUrl.value = pdfUrl;
       currentPdfTitle.value = source.title || 'PDF 预览';
       showPdfViewer.value = true;
     } else {
-      // 其他格式：直接下载
       downloadFile(fileBlob, source.title || 'document', fileId);
     }
   } catch (error) {
@@ -622,7 +589,6 @@ const isPdfFile = (fileName: string, contentType: string): boolean => {
 
 // 下载文件
 const downloadFile = (fileBlob: Blob, fileName: string, fileId: string) => {
-  // 尝试从 fileId 中提取文件扩展名
   const extension = extractFileExtension(fileId);
   const fullFileName = extension ? `${fileName}.${extension}` : fileName;
 
@@ -655,12 +621,36 @@ const closePdfViewer = () => {
   currentPdfTitle.value = '';
 };
 
+// 滚动到底部函数
 const scrollToBottom = () => {
   nextTick(() => {
-    const container = document.querySelector('.conversation-history');
-    if (container) {
-      container.scrollTop = container.scrollHeight;
+    // 方法1：尝试查找正确的滚动容器
+    const containers = [
+      document.querySelector('.qa-body'),
+      document.querySelector('.conversation-history'),
+      document.querySelector('.dynamic-content'),
+      document.querySelector('.auxiliary-draft'),
+    ];
+
+    for (const container of containers) {
+      if (container) {
+        try {
+          const isScrollable = container.scrollHeight > container.clientHeight;
+          if (isScrollable || container === containers[0]) {
+            container.scrollTop = container.scrollHeight;
+            return;
+          }
+        } catch (error) {
+          console.error('滚动失败:', error);
+        }
+      }
     }
+
+    // 方法2：如果上述方法都失败，使用全局滚动
+    window.scrollTo({
+      top: document.documentElement.scrollHeight,
+      behavior: 'smooth',
+    });
   });
 };
 
@@ -694,7 +684,8 @@ watch(
         stopTypingEffect();
       }
     }
-    scrollToBottom();
+    // 添加延迟，确保DOM更新完成
+    setTimeout(scrollToBottom, 100);
   },
   { immediate: true },
 );
@@ -720,32 +711,22 @@ watch(
   },
 );
 
+// 监听聊天数据变化
 watch(
   () => props.chatData,
   () => {
     nextTick(() => {
-      Object.keys(sourcesVisible.value).forEach((messageId) => {
-        if (sourcesVisible.value[messageId]) {
-          adjustRightColumnHeight(messageId);
-        }
-      });
+      setTimeout(scrollToBottom, 200);
     });
   },
   { deep: true },
 );
 
-// 在组件更新后也调整高度
-onUpdated(() => {
-  Object.keys(sourcesVisible.value).forEach((messageId) => {
-    if (sourcesVisible.value[messageId]) {
-      adjustRightColumnHeight(messageId);
-    }
-  });
-});
-
-// 生命周期
+// 在 onMounted 中添加延迟
 onMounted(() => {
-  scrollToBottom();
+  setTimeout(() => {
+    scrollToBottom();
+  }, 300);
 });
 
 onUnmounted(() => {
@@ -754,20 +735,19 @@ onUnmounted(() => {
 </script>
 
 <style lang="less" scoped>
-.auxiliary-draft {
+.auxiliary-draft.intelligent-qa {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  height: 100%;
-  padding: 0;
+  height: 100vh;
   background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
   position: relative;
-  overflow-y: auto;
+  overflow: hidden;
 
   .qa-header {
     text-align: center;
-    margin-bottom: 40px;
-    margin-top: 60px;
+    margin: 40px auto 20px;
+    // max-width: 800px;
+    padding: 0 20px;
 
     h1 {
       font-size: 28px;
@@ -782,81 +762,134 @@ onUnmounted(() => {
     }
   }
 
+  .qa-container {
+    display: flex;
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .qa-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 0 20px 20px;
+    box-sizing: border-box;
+    max-width: 1312px;
+    margin: 0 auto;
+    width: 100%;
+
+    // 当右侧面板显示时，留出空间
+    &:has(~ .sources-sidebar.sidebar-visible) {
+      padding-right: 250px;
+    }
+  }
+
   .conversation-history {
     flex: 1;
-    padding-top: 20px;
-    overflow-y: auto;
-    margin-bottom: 20px;
     display: flex;
     flex-direction: column;
     gap: 20px;
-    width: 80%;
+    width: 100%;
+    padding-top: 20px;
 
     .history-item {
-      margin: 0 auto;
       animation: slideIn 0.3s ease-out;
 
       &.user-message {
-        align-self: flex-end;
+        align-self: flex-end; /* 用户消息右对齐 */
         width: 100%;
+        display: flex;
+        justify-content: flex-end; /* 内容右对齐 */
 
         .message-user {
+          width: 68%;
+          // max-width: 800px;
+          display: flex;
+          justify-content: flex-end; /* 容器右对齐 */
+
           .message-header {
-            flex-direction: row-reverse;
+            display: flex;
+            justify-content: flex-end; /* 头部右对齐 */
 
             .message-info {
-              align-items: flex-end;
-              margin-right: 30px;
+              display: flex;
+              flex-direction: column;
+              align-items: flex-end; /* 内容右对齐 */
 
               .message-content {
-                background: #1c73eb;
-                color: @white;
+                background: #1c73eb; /* 用户消息背景色 */
+                color: white; /* 用户消息文字颜色 */
                 border-radius: 22px;
                 padding: 12px 20px;
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+                border: 1px solid #1a6bc7;
+                margin-left: 0;
+                text-align: right; /* 文本右对齐 */
               }
 
               .user-message-content {
                 white-space: pre-wrap;
                 word-break: break-word;
-                border-radius: 12px;
-                padding: 12px 20px;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-                font-family: inherit; /* 继承父字体，避免等宽字体 */
-                margin: 0; /* 移除 pre 标签默认的边距 */
+                font-family: inherit;
+                margin: 0;
+                font-size: 15px;
+                line-height: 1.6;
+                color: white;
                 overflow-x: auto; /* 防止长行溢出 */
-                max-width: 68%;
               }
 
               .message-time {
                 text-align: right;
+                margin-top: 8px;
+                color: #999;
+                font-size: 12px;
+                padding-right: 0;
               }
             }
           }
         }
       }
 
-      .message-assistant {
-        width: 100%;
-      }
-
       &.assistant-message {
-        align-self: flex-start;
+        align-self: flex-start; /* AI消息左对齐 */
         width: 100%;
+        // max-width: 800px;
 
         .message-header {
           .message-info {
             width: 100%;
 
             .pad {
-              padding: 20px 30px;
+              padding: 20px 40px;
+              background: #ffffff;
+              border-radius: 22px;
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+              border: 1px solid #e9ecef;
+              text-align: left; /* AI消息文本左对齐 */
             }
 
             .thinking-process {
               border-radius: 8px;
+              font-size: 16px;
               padding: 16px;
               margin-bottom: 12px;
               animation: fadeIn 0.5s ease;
+              background: #fff9e6;
+              border-left: 3px solid #faad14;
+              text-align: left; /* 思考过程左对齐 */
+            }
+
+            .message-actions {
+              display: flex;
+              align-items: center;
+              gap: 15px;
+              margin-top: 12px;
+              padding-top: 12px;
+              border-top: 1px solid #f0f0f0;
+              flex-wrap: wrap;
+              justify-content: flex-start; /* 操作按钮左对齐 */
             }
 
             .thinking-header {
@@ -874,22 +907,26 @@ onUnmounted(() => {
             .thinking-content {
               font-size: 15px;
               color: #333;
+              line-height: 1.6;
               white-space: pre-wrap;
               word-break: break-word;
               background: rgba(255, 255, 255, 0.7);
               padding: 12px;
               border-radius: 6px;
               border-left: 3px solid #fa8c16;
+              text-align: left;
             }
 
             .answer-streaming {
-              background: @white;
+              background: #ffffff;
               border-radius: 22px;
-              line-height: 1.6;
-              padding: 20px 30px;
-              border-radius: 8px;
+              padding: 20px 40px;
               animation: fadeIn 0.5s ease;
-              margin-top: 8px;
+              margin-bottom: 15px;
+              line-height: 1.6;
+              border: 1px solid #e9ecef;
+              text-align: left;
+              width: 83%;
             }
 
             .typing-container {
@@ -900,8 +937,9 @@ onUnmounted(() => {
             .typing-text {
               display: inline;
               line-height: 1.6;
-              font-size: 17px;
+              font-size: 16px;
               color: #333;
+              text-align: left;
 
               :deep(p) {
                 margin: 8px 0;
@@ -981,11 +1019,12 @@ onUnmounted(() => {
 
             .message-content {
               background: #fff;
-              margin-bottom: 15px;
               border-radius: 22px;
-              font-size: 17px;
+              margin-bottom: 15px;
+              font-size: 16px;
               line-height: 1.6;
-              word-break: break-word;
+              text-align: left;
+              width: 83%;
 
               :deep(code) {
                 background: #f5f5f5;
@@ -1010,13 +1049,18 @@ onUnmounted(() => {
                 color: #666;
                 font-style: italic;
               }
+
+              :deep(hr) {
+                margin: 10px 0;
+              }
             }
 
             .message-time {
-              font-size: 16px;
               color: #999;
               margin-top: 8px;
               padding: 0 4px;
+              font-size: 12px;
+              text-align: left; /* AI消息时间左对齐 */
             }
 
             .streaming-badge {
@@ -1045,259 +1089,268 @@ onUnmounted(() => {
     }
   }
 
-  .message-header {
-    display: flex;
-    align-items: flex-start;
-    max-width: 100%;
-
-    .message-info {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-  }
-}
-
-.dual-column-container {
-  display: flex;
-  width: 100%;
-  gap: 2%;
-  transition: all 0.3s ease;
-  align-items: flex-start;
-
-  .left-column {
-    width: 83%;
-    transition: width 0.3s ease;
-  }
-
-  .right-column {
-    width: 0;
-    opacity: 0;
-    overflow: hidden;
-    transition: all 0.3s ease;
-    border-left: 1px solid #e9ecef;
-    padding-left: 0;
-    margin-left: 0;
+  .loading-state {
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
-    max-height: none;
-  }
-
-  &.show-sources {
-    .left-column {
-      width: 63%;
-    }
-    .right-column {
-      width: 35%;
-      opacity: 1;
-      padding-left: 20px;
-      margin-left: 2%;
-    }
-  }
-}
-
-/* 推荐范文容器样式 */
-.sources-container {
-  background: #f8f9fa;
-  border-radius: 8px;
-  padding: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  height: fit-content;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  height: 100%;
-
-  .sources-header {
-    display: flex;
-    justify-content: space-between;
     align-items: center;
-    font-size: 16px;
-    font-weight: 600;
-    color: #303133;
-    margin-bottom: 12px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #e9ecef;
-    flex-shrink: 0;
-  }
+    justify-content: center;
+    height: 200px;
 
-  .sources-list {
-    flex: 1;
-    overflow-y: auto;
-    min-height: 0;
-  }
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #409eff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 16px;
+    }
 
-  .source-item {
-    background: white;
-    border-radius: 6px;
-    margin-bottom: 12px;
-    border-left: 3px solid #409eff;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-    overflow: hidden;
-    &:last-child {
-      margin-bottom: 0;
+    p {
+      color: #666;
+      font-size: 14px;
     }
   }
 
-  .source-title {
+  /* 右侧固定推荐范文面板 */
+  .sources-sidebar {
+    position: fixed;
+    right: -400px;
+    top: 70px;
+    width: 400px;
+    height: 93vh;
+    background: #ffffff;
+    border-left: 1px solid #e9ecef;
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.1);
+    transition: right 0.3s ease;
+    z-index: 100;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px;
-    font-size: 14px;
-    color: #303133;
-    cursor: pointer;
-    user-select: none;
-    background: #f0f7ff;
-    transition: background-color 0.3s ease;
-    &:hover {
-      background: #e6f7ff;
+    flex-direction: column;
+
+    &.sidebar-visible {
+      right: 0;
     }
-    .title-content {
+
+    .sources-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      flex: 1;
-      margin-right: 10px;
+      padding: 20px;
+      border-bottom: 1px solid #e9ecef;
+      background: #f8f9fa;
+
+      h3 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: #303133;
+      }
+
+      .close-btn {
+        cursor: pointer;
+        color: #909399;
+        font-size: 20px;
+
+        &:hover {
+          color: #409eff;
+        }
+      }
     }
-    .collapse-icon {
+
+    .sources-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+
+    .no-sources {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: #909399;
+      font-size: 14px;
+    }
+
+    .source-item {
+      background: #f8f9fa;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      border-left: 3px solid #409eff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      overflow: hidden;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+
+    .source-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      font-size: 14px;
+      color: #303133;
+      cursor: pointer;
+      user-select: none;
+      background: #f0f7ff;
+      transition: background-color 0.3s ease;
+
+      &:hover {
+        background: #e6f7ff;
+      }
+
+      .title-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex: 1;
+        margin-right: 10px;
+      }
+
+      .collapse-icon {
+        font-size: 12px;
+        color: #909399;
+        transition: transform 0.3s ease;
+        flex-shrink: 0;
+      }
+    }
+
+    .source-details {
+      transition: all 0.3s ease;
+      overflow: hidden;
+    }
+
+    .source-subtitle {
       font-size: 12px;
       color: #909399;
-      transition: transform 0.3s ease;
-      flex-shrink: 0;
+      padding: 0 12px 8px 12px;
+    }
+
+    .source-content {
+      font-size: 13px;
+      color: #606266;
+      line-height: 1.6;
+      padding: 0 12px 8px 12px;
+      max-height: 200px;
+      overflow-y: auto;
+      background: #ffffff;
+      margin: 0 12px 8px 12px;
+      border-radius: 4px;
+    }
+
+    .source-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: #909399;
+      padding: 8px 12px;
+      border-top: 1px solid #f0f0f0;
+    }
+
+    .source-score {
+      font-size: 12px;
+      color: #52c41a;
+      font-weight: 500;
+      background: #f6ffed;
+      padding: 2px 6px;
+      border-radius: 10px;
+      border: 1px solid #b7eb8f;
+    }
+
+    .source-title-clickable {
+      cursor: pointer;
+      color: #1890ff;
+
+      &:hover {
+        text-decoration: underline;
+      }
     }
   }
 
-  .source-details {
-    transition: all 0.3s ease;
+  /* PDF 预览弹框 */
+  .pdf-viewer-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+  }
+
+  .pdf-viewer-container {
+    width: 90%;
+    height: 90%;
+    background: white;
+    border-radius: 8px;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
   }
-  .source-subtitle {
-    font-size: 12px;
-    color: #909399;
-    padding: 0 12px 8px 12px;
-  }
-  .source-content {
-    font-size: 13px;
-    color: #606266;
-    line-height: 1.6;
-    padding: 0 12px 8px 12px;
-    max-height: 200px;
-    overflow-y: auto;
-    background: #f8f9fa;
-    margin: 0 12px 8px 12px;
-    border-radius: 4px;
-  }
-  .source-footer {
+
+  .pdf-viewer-header {
+    padding: 16px 20px;
+    background: #f5f5f5;
+    border-bottom: 1px solid #e8e8e8;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 12px;
-    color: #909399;
-    padding: 8px 12px;
-    border-top: 1px solid #f0f0f0;
-  }
-  .source-score {
-    font-size: 12px;
-    color: #52c41a;
-    font-weight: 500;
-    background: #f6ffed;
-    padding: 2px 6px;
-    border-radius: 10px;
-    border: 1px solid #b7eb8f;
-  }
-  .source-title-clickable {
-    cursor: pointer;
-    color: #1890ff;
-    &:hover {
-      text-decoration: underline;
-    }
-  }
-}
-
-//PDF 预览弹框样式
-.pdf-viewer-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 3000;
-}
-
-.pdf-viewer-container {
-  width: 90%;
-  height: 90%;
-  background: white;
-  border-radius: 8px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-}
-
-.pdf-viewer-header {
-  padding: 16px 20px;
-  background: #f5f5f5;
-  border-bottom: 1px solid #e8e8e8;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 600;
-  color: #333;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: #666;
-  padding: 0 8px;
-  transition: color 0.2s;
-
-  &:hover {
+    font-weight: 600;
     color: #333;
   }
-}
 
-.pdf-iframe {
-  flex: 1;
-  width: 100%;
-  border: none;
-}
+  .close-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #666;
+    padding: 0 8px;
+    transition: color 0.2s;
 
-.loading-pdf {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: #666;
-
-  .loading-spinner {
-    width: 50px;
-    height: 50px;
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #3498db;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-bottom: 20px;
+    &:hover {
+      color: #333;
+    }
   }
 
-  @keyframes spin {
-    0% {
-      transform: rotate(0deg);
+  .pdf-iframe {
+    flex: 1;
+    width: 100%;
+    border: none;
+  }
+
+  .loading-pdf {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #3498db;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
     }
-    100% {
-      transform: rotate(360deg);
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+      100% {
+        transform: rotate(360deg);
+      }
     }
   }
 }

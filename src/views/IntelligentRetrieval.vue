@@ -204,13 +204,13 @@
 <script setup lang="ts">
 import { ref, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import MarkdownIt from 'markdown-it';
-import { ElIcon, ElPagination } from 'element-plus';
+import { ElIcon } from 'element-plus';
 import { ArrowRight } from '@element-plus/icons-vue';
 
 // 状态变量
 const displayAnswer = ref<string>('');
 const typingSpeed = 20; // 打字速度（毫秒）
-let typingInterval: NodeJS.Timeout | null = null;
+let typingInterval: number | null = null;
 let currentTypingIndex = 0;
 const loading = ref(false);
 const isTyping = ref(false);
@@ -423,7 +423,6 @@ const toggleExpand = (chunkId: string) => {
 //   }
 //   return paginationStates[messageId].currentPage;
 // };
-
 
 // 计算分页后的数据
 const paginatedSources = (item: ChatMessage) => {

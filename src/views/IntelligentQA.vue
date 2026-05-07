@@ -353,16 +353,7 @@
 </template>
 
 <script setup lang="ts">
-import {
-  ref,
-  watch,
-  computed,
-  nextTick,
-  onMounted,
-  onUnmounted,
-  onUpdated,
-  reactive,
-} from 'vue';
+import { ref, watch, computed, nextTick, onMounted, onUnmounted } from 'vue';
 import MarkdownIt from 'markdown-it';
 import { ElMessage } from 'element-plus';
 import { ArrowRight, ArrowUp, Close } from '@element-plus/icons-vue';
@@ -668,14 +659,14 @@ const closeSourcesPanel = () => {
 };
 
 // 检查源是否折叠
-const isSourceCollapsed = (sourceIndex: number): boolean => {
+const isSourceCollapsed = (sourceIndex: string | number): boolean => {
   if (!activeSourcesItem.value) return false;
   const key = `${activeSourcesItem.value.id}-${sourceIndex}`;
   return sourceCollapsed.value[key] || false;
 };
 
 // 切换单个源折叠状态
-const toggleSourceItem = (messageId: string, sourceIndex: number) => {
+const toggleSourceItem = (messageId: string, sourceIndex: string | number) => {
   const key = `${messageId}-${sourceIndex}`;
   sourceCollapsed.value[key] = !sourceCollapsed.value[key];
 };
@@ -943,14 +934,21 @@ const scrollToBottom = () => {
       document.querySelector('.dynamic-content'),
       document.querySelector('.intelligent-qa'),
     ];
-    
+
     for (const container of containers) {
       if (container) {
         try {
           const isScrollable = container.scrollHeight > container.clientHeight;
           if (isScrollable || container === containers[0]) {
             container.scrollTop = container.scrollHeight;
-            console.log('滚动容器:', container.className, 'scrollTop:', container.scrollTop, 'scrollHeight:', container.scrollHeight);
+            console.log(
+              '滚动容器:',
+              container.className,
+              'scrollTop:',
+              container.scrollTop,
+              'scrollHeight:',
+              container.scrollHeight,
+            );
             return;
           }
         } catch (error) {
@@ -958,11 +956,11 @@ const scrollToBottom = () => {
         }
       }
     }
-    
+
     // 方法2：如果上述方法都失败，使用全局滚动
     window.scrollTo({
       top: document.documentElement.scrollHeight,
-      behavior: 'smooth'
+      behavior: 'smooth',
     });
   });
 };
@@ -1230,12 +1228,13 @@ onUnmounted(() => {
             .answer-streaming {
               background: #ffffff;
               border-radius: 22px;
-              padding: 20px;
+              padding: 20px 40px;
               animation: fadeIn 0.5s ease;
               margin-bottom: 15px;
               line-height: 1.6;
               border: 1px solid #e9ecef;
               text-align: left;
+              width: 83%;
             }
 
             .typing-container {
