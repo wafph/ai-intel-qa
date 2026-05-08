@@ -1,8 +1,7 @@
 <template>
   <div class="not-found-container">
     <!-- 动画背景 -->
-    <div class="background-animation">
-    </div>
+    <div class="background-animation"></div>
 
     <div class="content-wrapper">
       <!-- 左侧错误信息 -->
@@ -16,9 +15,7 @@
         </div>
 
         <h1 class="title">页面走丢了</h1>
-        <p class="description">
-          您访问的页面不存在
-        </p>
+        <p class="description">您访问的页面不存在</p>
 
         <div class="action-buttons">
           <el-button type="primary" size="large" @click="goHome" class="home-btn">
@@ -32,7 +29,7 @@
         </div>
 
         <!-- 快速链接 -->
-        <div class="quick-links">
+        <!-- <div class="quick-links">
           <h3>快速导航</h3>
           <div class="links">
             <el-link
@@ -48,7 +45,7 @@
               {{ link.label }}
             </el-link>
           </div>
-        </div>
+        </div> -->
       </div>
 
       <!-- 右侧插图 -->
@@ -74,26 +71,26 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   HomeFilled,
   ArrowLeft,
-  Search,
-  ChatDotRound,
-  Document,
-  View,
+  // Search,
+  // ChatDotRound,
+  // Document,
+  // View,
 } from '@element-plus/icons-vue';
 
 const router = useRouter();
 
-// 快速链接
-const quickLinks = ref([
-  { label: '智能问答', path: '/intelligent-qa', icon: ChatDotRound },
-  { label: '辅助起草', path: '/auxiliary-draft', icon: Document },
-  { label: '合规审核', path: '/compliance-review', icon: View },
-  { label: '智能检索', path: '/intelligent-retrieval', icon: Search },
-]);
+// // 快速链接
+// const quickLinks = ref([
+//   { label: '智能问答', path: '/intelligent-qa', icon: ChatDotRound },
+//   { label: '辅助起草', path: '/auxiliary-draft', icon: Document },
+//   { label: '合规审核', path: '/compliance-review', icon: View },
+//   { label: '智能检索', path: '/intelligent-retrieval', icon: Search },
+// ]);
 
 // 返回首页
 const goHome = () => {
@@ -109,13 +106,12 @@ const goBack = () => {
   }
 };
 
-// 导航到指定页面
-const navigateTo = (path: string) => {
-  router.push(path);
-};
+// // 导航到指定页面
+// const navigateTo = (path: string) => {
+//   router.push(path);
+// };
 
 // 粒子动画样式
-
 
 // 鼠标移动效果
 let mouseX = 0;
@@ -268,7 +264,6 @@ onUnmounted(() => {
   margin-bottom: 40px;
   text-align: center;
   opacity: 0.9;
-  max-width: 500px;
 
   @media (max-width: 768px) {
     font-size: 16px;
