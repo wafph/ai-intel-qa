@@ -60,7 +60,7 @@ async function getAgentToken() {
       // 将 scopes 数据存储到全局变量，供应用使用
       window.__SCOPES_DATA__ = scopesData;
     } catch (error) {
-      console.error('Failed to fetch scopes:', error);
+      router.push('/not-found');
       // 设置默认值以防接口调用失败
       window.__SCOPES_DATA__ = {
         ancestorScope: [],
