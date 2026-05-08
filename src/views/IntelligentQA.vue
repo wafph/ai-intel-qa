@@ -941,14 +941,6 @@ const scrollToBottom = () => {
           const isScrollable = container.scrollHeight > container.clientHeight;
           if (isScrollable || container === containers[0]) {
             container.scrollTop = container.scrollHeight;
-            console.log(
-              '滚动容器:',
-              container.className,
-              'scrollTop:',
-              container.scrollTop,
-              'scrollHeight:',
-              container.scrollHeight,
-            );
             return;
           }
         } catch (error) {

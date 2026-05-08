@@ -131,6 +131,20 @@ const chatStore = useChatStore();
 const userStore = useUserStore();
 const router = useRouter();
 const route = useRoute();
+
+// 新增：从全局获取 scopes 数据
+const scopesData = computed(() => {
+  return (
+    window.__SCOPES_DATA__ || {
+      ancestorScope: [],
+      descendantScope: [],
+      user: '1',
+      query: '',
+    }
+  );
+});
+
+// 在已有状态之后添加
 const inputText = ref('');
 const lastComplianceParams = ref<{
   file_url: string;
@@ -144,7 +158,7 @@ const selectedDimensions = ref<string[]>([]);
 const REVIEW_DIMENSIONS = ['合规性', '冲突性', '文本规范性'];
 const SELECT_ALL_DIMENSION = '全选';
 
-// 统一获取真正要提交给后端的审核维度，避免把“全选”传给接口或生成空 query
+// 统一获取真正要提交给后端的审核维度，避免把"全选"传给接口或生成空 query
 const getActualReviewDimensions = (dimensions: string[] = selectedDimensions.value) => {
   if (dimensions.includes(SELECT_ALL_DIMENSION)) {
     return [...REVIEW_DIMENSIONS];
@@ -172,6 +186,7 @@ let currentStreamingMessageId: string | null = null;
 // 大模型答案展示控制：首次检测到双换行后才开始把 text 展示到页面，且保留双换行本身
 let answerOutputStarted = false;
 let answerPendingText = '';
+
 // 计算属性
 const currentChatData = computed(() => {
   if (!activeChatId.value) {
@@ -541,6 +556,7 @@ const REQUEST_TIMEOUT_MAP: Record<string, number> = {
   辅助起草: 300000,
   合规审核: 15 * 60 * 1000,
 };
+
 // 流式请求
 const startStream = async (queryText: string, messageId: string) => {
   isStreaming.value = true;
@@ -551,17 +567,20 @@ const startStream = async (queryText: string, messageId: string) => {
   const id = setTimeout(() => {
     abortController?.abort();
   }, requestTimeout);
+  
   try {
     let params: any = {};
+    
     if (activeTab.value === '合规审核') {
-      //  使用保存的参数（如果有），否则使用当前值
+      // 使用保存的参数（如果有），否则使用当前值
       if (lastComplianceParams.value) {
         params = {
           inputs: {
             file_url: lastComplianceParams.value.file_url,
             query: lastComplianceParams.value.query,
-            ancestorScope: [],
-            descendantScope: [],
+            // 使用从接口获取的 scopes 数据
+            ancestorScope: scopesData.value.ancestorScope || [],
+            descendantScope: scopesData.value.descendantScope || [],
           },
         };
       } else {
@@ -569,8 +588,9 @@ const startStream = async (queryText: string, messageId: string) => {
           inputs: {
             file_url: uploadedFileUrl.value,
             query: getReviewQuery(),
-            ancestorScope: [],
-            descendantScope: [],
+            // 使用从接口获取的 scopes 数据
+            ancestorScope: scopesData.value.ancestorScope || [],
+            descendantScope: scopesData.value.descendantScope || [],
           },
         };
       }
@@ -578,17 +598,20 @@ const startStream = async (queryText: string, messageId: string) => {
       params = {
         inputs: {
           query: queryText,
-          ancestorScope: [],
-          descendantScope: [],
+          // 使用从接口获取的 scopes 数据
+          ancestorScope: scopesData.value.ancestorScope || [],
+          descendantScope: scopesData.value.descendantScope || [],
         },
       };
     } else {
+      // 智能问答和智能检索
       params = {
         inputs: {
           query: queryText,
-          ancestorScope: [],
-          descendantScope: [],
-          user: '1',
+          // 使用从接口获取的 scopes 数据和 user
+          ancestorScope: scopesData.value.ancestorScope || [],
+          descendantScope: scopesData.value.descendantScope || [],
+          user: scopesData.value.user || '1', // 使用从接口获取的 user
         },
       };
     }
@@ -623,6 +646,7 @@ const startStream = async (queryText: string, messageId: string) => {
       apiUrl = baseUrls.search + currentConversationUuid.value + version4;
     }
 
+    console.log('Request params:', params); // 调试日志
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
@@ -632,7 +656,9 @@ const startStream = async (queryText: string, messageId: string) => {
       body: JSON.stringify(params),
       signal: abortController.signal,
     });
+    
     clearTimeout(id); // 清除定时器
+    
     if (!response.ok || !response.body) {
       throw new Error(`网络响应异常: ${response.status}`);
     }
@@ -658,7 +684,9 @@ const startStream = async (queryText: string, messageId: string) => {
           try {
             const parsed: any = JSON.parse(data);
             await processStreamChunk(parsed, messageId);
-          } catch (error) {}
+          } catch (error) {
+            console.error('解析流数据失败:', error);
+          }
         }
       }
     }
@@ -711,7 +739,9 @@ const handleComplianceReview = async () => {
   }
 
   // 修改：为重新审核生成详细的用户消息内容
-  const displayDimensions = getActualReviewDimensions(lastComplianceParams.value.dimensions);
+  const displayDimensions = getActualReviewDimensions(
+    lastComplianceParams.value.dimensions,
+  );
 
   const userMessageContent = `${lastComplianceParams.value.fileName}\n审核维度：${displayDimensions.join('、')}`;
 
@@ -781,16 +811,23 @@ const startComplianceStream = async (messageId: string) => {
       inputs: {
         file_url: lastComplianceParams.value.file_url,
         query: lastComplianceParams.value.query,
+        // 使用从接口获取的 scopes 数据
+        ancestorScope: scopesData.value.ancestorScope || [],
+        descendantScope: scopesData.value.descendantScope || [],
       },
     };
+    
     const token = appStore.sharedDataToken;
     if (!token) {
       throw new Error('未找到认证token，请先登录');
     }
+    
     const apiUrl =
       '/v1/1725c43e3fa54828a078fce60f5a3773/workflows/32dd3ef3-2bfb-4ad7-a448-811ddd37924a/conversations/' +
       currentConversationUuid.value +
       '?version=1777960203166';
+      
+    console.log('Compliance request params:', params); // 调试日志
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
