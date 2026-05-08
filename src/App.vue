@@ -204,7 +204,7 @@ const currentChatData = computed(() => {
 
 // 判断是否显示完整布局
 const showFullLayout = computed(() => {
-  const excludeRoutes = ['/feedback', '/my-collections'];
+  const excludeRoutes = ['/feedback', '/my-collections', '/not-found'];
   return !excludeRoutes.includes(route.path);
 });
 
