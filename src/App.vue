@@ -124,7 +124,7 @@ import { useChatStore } from './stores/chat';
 import { useUserStore } from './stores/user';
 import type { ChatMessage, ChatSession, HistoryItem } from './types/chat';
 import { ElMessage } from 'element-plus';
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+const API_BASE_URL = window.__API_BASE_URL__
 
 const appStore = useAppStore();
 const chatStore = useChatStore();

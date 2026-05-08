@@ -6,7 +6,21 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import App from './App.vue';
 import router from './router';
 import './style.less';
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+declare global {
+  interface ImportMeta {
+    env: {
+      VITE_API_BASE_URL?: string;
+    };
+  }
+}
+declare global {
+  interface Window {
+    __API_BASE_URL__: string;
+  }
+}
+
+window.__API_BASE_URL__ = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+const API_BASE_URL = window.__API_BASE_URL__;
 async function getAgentToken() {
   let agentToken = new URLSearchParams(window.location.search).get('agentToken');
   if (!agentToken) {

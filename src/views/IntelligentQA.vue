@@ -367,7 +367,7 @@ let currentTypingIndex = 0;
 const loading = ref(false);
 const isTyping = ref(false);
 const emit = defineEmits(['regenerate', 'sources-panel-toggle'])
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+const API_BASE_URL = window.__API_BASE_URL__;
 
 // 参考来源面板状态
 const showSourcesPanel = ref(false);
