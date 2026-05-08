@@ -366,7 +366,7 @@ let typingInterval: NodeJS.Timeout | null = null;
 let currentTypingIndex = 0;
 const loading = ref(false);
 const isTyping = ref(false);
-const emit = defineEmits(['regenerate']);
+const emit = defineEmits(['regenerate', 'sources-panel-toggle'])
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
 // 参考来源面板状态
@@ -648,14 +648,14 @@ const toggleSourcesPanel = (item: ChatMessage) => {
     activeSourcesItem.value = item;
     showSourcesPanel.value = true;
   }
+  emit('sources-panel-toggle', showSourcesPanel.value);
 };
 
-// 关闭参考来源面板
 const closeSourcesPanel = () => {
   showSourcesPanel.value = false;
   activeSourcesItem.value = null;
-  // 重置所有折叠状态
   sourceCollapsed.value = {};
+  emit('sources-panel-toggle', false);
 };
 
 // 检查源是否折叠
@@ -1046,7 +1046,7 @@ onUnmounted(() => {
 .intelligent-qa {
   display: flex;
   flex-direction: column;
-  height: 74vh;
+  height: 71vh;
   background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
   position: relative;
   overflow: hidden;
@@ -1082,9 +1082,7 @@ onUnmounted(() => {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
-    padding: 0 20px 20px;
     box-sizing: border-box;
-    max-width: 1312px;
     margin: 0 auto;
     width: 100%;
 
@@ -1099,8 +1097,9 @@ onUnmounted(() => {
     display: flex;
     flex-direction: column;
     gap: 20px;
-    width: 100%;
+    width: 80%;
     padding-top: 20px;
+    margin: 0 auto;
 
     .history-item {
       animation: slideIn 0.3s ease-out;
@@ -1490,9 +1489,9 @@ onUnmounted(() => {
   /* 右侧固定参考来源面板 */
   .sources-sidebar {
     position: fixed;
-    right: -400px;
+    right: -350px;
     top: 70px;
-    width: 400px;
+    width: 350px;
     height: 93vh;
     background: #ffffff;
     border-left: 1px solid #e9ecef;

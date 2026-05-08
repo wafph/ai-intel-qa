@@ -41,11 +41,16 @@
               :current-streaming-message-id="currentStreamingMessageId"
               @stop-stream="stopStream"
               @regenerate="handleRegenerate"
+              @sources-panel-toggle="handleSourcesPanelToggle"
             />
           </div>
 
           <!-- 底部固定输入框 -->
-          <div class="input-container">
+          <div
+            class="input-container"
+            :class="{ 'sources-panel-visible': isSourcesPanelVisible }"
+            :style="inputContainerStyle"
+          >
             <ChatInput
               :placeholder="inputPlaceholder"
               :disabled="isSendDisabled"
@@ -143,7 +148,7 @@ const sidebarCollapsed = ref(false);
 const activeTab = ref<string>('智能问答');
 const activeChatId = ref<string>('');
 const currentConversationUuid = ref<string>('');
-
+const isSourcesPanelVisible = ref(false);
 // 流式相关状态
 const isStreaming = ref<boolean>(false);
 const currentReasoning = ref<string>('');
@@ -920,8 +925,7 @@ const handleTabChange = (tab: string) => {
   activeTab.value = tab;
   chatStore.setCurrentActiveTab(tab);
   resetCurrentChat();
-
-  // 切换标签时清空保存的合规审核参数
+  isSourcesPanelVisible.value = false;
   if (tab !== '合规审核') {
     lastComplianceParams.value = null;
   }
@@ -1043,6 +1047,27 @@ const handleUpdateTitle = async (chatId: string, newTitle: string) => {
       ElMessage.error('标题更新失败');
     }
   } catch {}
+};
+
+// 计算输入框容器样式
+const inputContainerStyle = computed(() => {
+  if (isSourcesPanelVisible.value) {
+    return {
+      width: '62%',
+      marginRight: '30%',
+      // 不设置 margin: auto，通过移除 auto 类来实现
+    };
+  } else {
+    return {
+      width: '80%',
+      margin: '0 auto 30px',
+    };
+  }
+});
+
+// 新增事件处理函数
+const handleSourcesPanelToggle = (visible: boolean) => {
+  isSourcesPanelVisible.value = visible;
 };
 
 // 处理置顶/取消置顶
@@ -1175,8 +1200,7 @@ onUnmounted(() => {
 
 .input-container {
   width: 80%;
-  margin: auto;
-  margin-bottom: 30px;
+  margin: 0 auto 30px;
   padding: 20px;
   border-top: 1px solid #e9ecef;
   background: #ffffff;

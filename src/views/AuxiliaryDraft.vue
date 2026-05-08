@@ -245,7 +245,7 @@ import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import MarkdownIt from 'markdown-it';
 import { ArrowRight, ArrowUp, Close } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
-const emit = defineEmits(['regenerate']);
+const emit = defineEmits(['regenerate', 'sources-panel-toggle']);
 
 interface Props {
   chatData: ChatSession | null;
@@ -293,7 +293,6 @@ const isTyping = ref(false);
 const showSourcesPanel = ref(false);
 const activeSourcesItem = ref<any>(null);
 const sourceCollapsed = ref<Record<string, boolean>>({});
-
 // PDF 预览相关状态
 const showPdfViewer = ref(false);
 const pdfViewerUrl = ref('');
@@ -452,21 +451,24 @@ const downloadConvertedFile = async (downloadUrl: string, fileName: string) => {
   }
 };
 
-// 切换推荐范文面板
+// 切换参考来源面板
 const toggleSourcesPanel = (item: DraftMessage) => {
   if (activeSourcesItem.value?.id === item.id && showSourcesPanel.value) {
+    // 如果点击的是当前已显示的面板，则关闭
     closeSourcesPanel();
   } else {
+    // 否则打开新面板
     activeSourcesItem.value = item;
     showSourcesPanel.value = true;
   }
+  emit('sources-panel-toggle', showSourcesPanel.value);
 };
 
-// 关闭推荐范文面板
 const closeSourcesPanel = () => {
   showSourcesPanel.value = false;
   activeSourcesItem.value = null;
   sourceCollapsed.value = {};
+  emit('sources-panel-toggle', false);
 };
 
 // 检查源是否折叠
@@ -738,7 +740,7 @@ onUnmounted(() => {
 .auxiliary-draft.intelligent-qa {
   display: flex;
   flex-direction: column;
-  height: 74vh;
+  height: 71vh;
   background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
   position: relative;
   overflow: hidden;
@@ -774,9 +776,7 @@ onUnmounted(() => {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
-    padding: 0 20px 20px;
     box-sizing: border-box;
-    max-width: 1312px;
     margin: 0 auto;
     width: 100%;
 
@@ -791,8 +791,9 @@ onUnmounted(() => {
     display: flex;
     flex-direction: column;
     gap: 20px;
-    width: 100%;
+    width: 80%;
     padding-top: 20px;
+    margin: 0 auto;
 
     .history-item {
       animation: slideIn 0.3s ease-out;
@@ -1115,9 +1116,9 @@ onUnmounted(() => {
   /* 右侧固定推荐范文面板 */
   .sources-sidebar {
     position: fixed;
-    right: -400px;
+    right: -350px;
     top: 70px;
-    width: 400px;
+    width: 350px;
     height: 93vh;
     background: #ffffff;
     border-left: 1px solid #e9ecef;
