@@ -3,7 +3,7 @@ import { ref, computed } from 'vue';
 import type { ChatSession, HistoryItem, ChatMessage } from '../types/chat';
 
 // API基础配置 - 使用新接口地址
-const API_BASE_URL = window.__API_BASE_URL__;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
 export const useChatStore = defineStore('chat', () => {
   const chatSessions = ref<Record<string, ChatSession>>({});

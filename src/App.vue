@@ -124,7 +124,7 @@ import { useChatStore } from './stores/chat';
 import { useUserStore } from './stores/user';
 import type { ChatMessage, ChatSession, HistoryItem } from './types/chat';
 import { ElMessage } from 'element-plus';
-const API_BASE_URL = window.__API_BASE_URL__
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
 const appStore = useAppStore();
 const chatStore = useChatStore();
@@ -567,10 +567,10 @@ const startStream = async (queryText: string, messageId: string) => {
   const id = setTimeout(() => {
     abortController?.abort();
   }, requestTimeout);
-  
+
   try {
     let params: any = {};
-    
+
     if (activeTab.value === '合规审核') {
       // 使用保存的参数（如果有），否则使用当前值
       if (lastComplianceParams.value) {
@@ -645,8 +645,6 @@ const startStream = async (queryText: string, messageId: string) => {
     } else {
       apiUrl = baseUrls.search + currentConversationUuid.value + version4;
     }
-
-    console.log('Request params:', params); // 调试日志
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
@@ -656,9 +654,9 @@ const startStream = async (queryText: string, messageId: string) => {
       body: JSON.stringify(params),
       signal: abortController.signal,
     });
-    
+
     clearTimeout(id); // 清除定时器
-    
+
     if (!response.ok || !response.body) {
       throw new Error(`网络响应异常: ${response.status}`);
     }
@@ -816,18 +814,16 @@ const startComplianceStream = async (messageId: string) => {
         descendantScope: scopesData.value.descendantScope || [],
       },
     };
-    
+
     const token = appStore.sharedDataToken;
     if (!token) {
       throw new Error('未找到认证token，请先登录');
     }
-    
+
     const apiUrl =
       '/v1/1725c43e3fa54828a078fce60f5a3773/workflows/32dd3ef3-2bfb-4ad7-a448-811ddd37924a/conversations/' +
       currentConversationUuid.value +
       '?version=1777960203166';
-      
-    console.log('Compliance request params:', params); // 调试日志
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {

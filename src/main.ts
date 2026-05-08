@@ -6,25 +6,10 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import App from './App.vue';
 import router from './router';
 import './style.less';
-declare global {
-  interface ImportMeta {
-    env: {
-      VITE_API_BASE_URL?: string;
-    };
-  }
-}
-declare global {
-  interface Window {
-    __API_BASE_URL__: string;
-  }
-}
-
-window.__API_BASE_URL__ = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
-const API_BASE_URL = window.__API_BASE_URL__;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 async function getAgentToken() {
   let agentToken = new URLSearchParams(window.location.search).get('agentToken');
   if (!agentToken) {
-    //  let targetOrigin = "http://1.94.244.72:11316 || '*"; // 或者*
     let targetOrigin = '*'; // 或者*
     await new Promise((resolve) => {
       const handler = (event: any) => {
@@ -72,7 +57,6 @@ async function getAgentToken() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const scopesData = await response.json();
-      console.log('scopesData:', scopesData);
       // 将 scopes 数据存储到全局变量，供应用使用
       window.__SCOPES_DATA__ = scopesData;
     } catch (error) {
