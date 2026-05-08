@@ -141,7 +141,21 @@ const lastComplianceParams = ref<{
 const uploadedFileName = ref('');
 const uploadedFileUrl = ref('');
 const selectedDimensions = ref<string[]>([]);
-const spliceSelectedDimensions = ref<string[]>([]);
+const REVIEW_DIMENSIONS = ['合规性', '冲突性', '文本规范性'];
+const SELECT_ALL_DIMENSION = '全选';
+
+// 统一获取真正要提交给后端的审核维度，避免把“全选”传给接口或生成空 query
+const getActualReviewDimensions = (dimensions: string[] = selectedDimensions.value) => {
+  if (dimensions.includes(SELECT_ALL_DIMENSION)) {
+    return [...REVIEW_DIMENSIONS];
+  }
+  return dimensions.filter((item) => REVIEW_DIMENSIONS.includes(item));
+};
+
+const getReviewQuery = (dimensions: string[] = selectedDimensions.value) => {
+  return getActualReviewDimensions(dimensions).join(',');
+};
+
 const sidebarCollapsed = ref(false);
 
 // 状态管理
@@ -220,7 +234,7 @@ const customUpload = async (options: any) => {
 
 const handleSelectAll = (val: boolean) => {
   if (val) {
-    selectedDimensions.value = ['全选', '合规性', '冲突性', '文本规范性'];
+    selectedDimensions.value = [SELECT_ALL_DIMENSION, ...REVIEW_DIMENSIONS];
   } else {
     selectedDimensions.value = [];
   }
@@ -417,7 +431,7 @@ const handleSendMessage = async (content: string) => {
     if (!content.trim() || isStreaming.value) return;
   }
   if (!activeChatId.value) {
-    handleNewChat();
+    await handleNewChat();
   }
   const chat = chatStore.getChatSession(activeChatId.value!);
   if (!chat) return;
@@ -427,20 +441,23 @@ const handleSendMessage = async (content: string) => {
   }
   let userMessageContent = '';
   if (activeTab.value === '合规审核') {
-    // 获取实际的审核维度（排除"全选"选项）
-    const displayDimensions = selectedDimensions.value.includes('全选')
-      ? spliceSelectedDimensions.value
-      : selectedDimensions.value;
+    // 获取实际的审核维度：全选时展开为三个真实维度，不把“全选”传给后端
+    const displayDimensions = getActualReviewDimensions();
+    const reviewQuery = getReviewQuery();
+
+    if (!reviewQuery) {
+      ElMessage.warning('请选择有效的审核维度');
+      return;
+    }
+
     // 格式：文件名 + 换行 + 审核维度
     userMessageContent = `${uploadedFileName.value}\n审核维度：${displayDimensions.join('、')}`;
 
     // 保存合规审核的参数，用于重新审核
     lastComplianceParams.value = {
       file_url: uploadedFileUrl.value,
-      query: !selectedDimensions.value.includes('全选')
-        ? selectedDimensions.value.join(',')
-        : spliceSelectedDimensions.value.join(','),
-      dimensions: [...selectedDimensions.value],
+      query: reviewQuery,
+      dimensions: displayDimensions,
       fileName: uploadedFileName.value, // 新增：保存文件名
     };
   } else {
@@ -482,7 +499,6 @@ const handleSendMessage = async (content: string) => {
     uploadedFileUrl.value = '';
     // 清空多选框状态
     selectedDimensions.value = [];
-    spliceSelectedDimensions.value = [];
     // 重置"全选"状态
     const selectAllCheckbox = document.querySelector(
       '.el-checkbox-group .el-checkbox:first-child input',
@@ -549,16 +565,10 @@ const startStream = async (queryText: string, messageId: string) => {
           },
         };
       } else {
-        if (selectedDimensions.value.includes('全选')) {
-          spliceSelectedDimensions.value = ['合规性', '冲突性', '文本规范性'];
-        }
-
         params = {
           inputs: {
             file_url: uploadedFileUrl.value,
-            query: !selectedDimensions.value.includes('全选')
-              ? selectedDimensions.value.join(',')
-              : spliceSelectedDimensions.value.join(','),
+            query: getReviewQuery(),
             ancestorScope: [],
             descendantScope: [],
           },
@@ -599,7 +609,7 @@ const startStream = async (queryText: string, messageId: string) => {
 
     const version1 = '?version=1778136208083';
     const version2 = '?version=1778135796942';
-    const version3 = '?version=1777960203166';
+    const version3 = '?version=1778208018816';
     const version4 = '?version=1778135927550';
 
     let apiUrl = '';
@@ -689,7 +699,7 @@ const handleComplianceReview = async () => {
   }
 
   if (!activeChatId.value) {
-    handleNewChat();
+    await handleNewChat();
   }
 
   const chat = chatStore.getChatSession(activeChatId.value!);
@@ -701,9 +711,7 @@ const handleComplianceReview = async () => {
   }
 
   // 修改：为重新审核生成详细的用户消息内容
-  const displayDimensions = lastComplianceParams.value.dimensions.includes('全选')
-    ? spliceSelectedDimensions.value
-    : lastComplianceParams.value.dimensions;
+  const displayDimensions = getActualReviewDimensions(lastComplianceParams.value.dimensions);
 
   const userMessageContent = `${lastComplianceParams.value.fileName}\n审核维度：${displayDimensions.join('、')}`;
 
