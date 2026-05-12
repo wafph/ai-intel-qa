@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
-import { API_BASE_URL } from '@/services/config';
+import { API } from '@/api/api';
 import {
   clearAuthSession,
   getAuthSession,
@@ -10,8 +10,8 @@ import {
   type AuthMode,
 } from '@/services/authStorage';
 import { initAgentAccess, resolveIncomingAgentToken, setDefaultScopes } from '@/services/agentAccess';
-import { parseResponseError } from '@/services/error';
-import { authFetch } from '@/services/http';
+import { parseAxiosResponseError } from '@/services/error';
+import { authRequest, isSuccessStatus, request } from '@/services/http';
 
 interface LoginForm {
   username: string;
@@ -140,17 +140,18 @@ export const useUserStore = defineStore('user', () => {
   const registerUser = async (form: RegisterForm) => {
     loading.value = true;
     try {
-      const response = await fetch(`${API_BASE_URL}/v1/auth/register`, {
+      const response = await request({
+        url: API.auth.register,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        data: form,
       });
 
-      if (!response.ok) {
-        throw await parseResponseError(response, '注册失败，请稍后重试');
+      if (!isSuccessStatus(response.status)) {
+        throw await parseAxiosResponseError(response, '注册失败，请稍后重试');
       }
 
-      const result = await response.json();
+      const result = response.data;
       if (result?.code && String(result.code) !== '200' && Number(result.code) !== 0) {
         throw new Error(result?.message || result?.msg || '注册失败，请稍后重试');
       }
@@ -163,17 +164,18 @@ export const useUserStore = defineStore('user', () => {
   const loginByPassword = async (form: LoginForm) => {
     loading.value = true;
     try {
-      const response = await fetch(`${API_BASE_URL}/v1/auth/login`, {
+      const response = await request({
+        url: API.auth.login,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        data: form,
       });
 
-      if (!response.ok) {
-        throw await parseResponseError(response, '登录失败，请检查账号或密码');
+      if (!isSuccessStatus(response.status)) {
+        throw await parseAxiosResponseError(response, '登录失败，请检查账号或密码');
       }
 
-      const result = await response.json();
+      const result = response.data;
       if (result?.code && String(result.code) !== '200' && Number(result.code) !== 0) {
         throw new Error(result?.message || '登录失败，请检查账号或密码');
       }
@@ -191,13 +193,14 @@ export const useUserStore = defineStore('user', () => {
   };
 
   const fetchCurrentUser = async () => {
-    const response = await authFetch(`${API_BASE_URL}/v1/auth/me`, {
+    const response = await authRequest({
+      url: API.auth.me,
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
     });
 
-    if (!response.ok) return false;
-    const result = await response.json();
+    if (!isSuccessStatus(response.status)) return false;
+    const result = response.data;
     const data = result?.data || result;
     if (data?.user) applyUser(data.user);
     else applyUser(data);
@@ -208,7 +211,8 @@ export const useUserStore = defineStore('user', () => {
     const currentMode = authMode.value;
     if (currentMode === 'local' && accessToken.value) {
       try {
-        await authFetch(`${API_BASE_URL}/v1/auth/logout`, {
+        await authRequest({
+          url: API.auth.logout,
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         });

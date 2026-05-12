@@ -1,7 +1,8 @@
 import router from '@/router';
-import { SCOPES_API_BASE_URL } from './config';
-import { parseResponseError, toFriendlyError } from './error';
+import { API } from '@/api/api';
+import { parseAxiosResponseError, toFriendlyError } from './error';
 import { saveAgentSession, saveNotFoundError, type FriendlyErrorInfo } from './authStorage';
+import { isSuccessStatus, request } from './http';
 
 const DEFAULT_SCOPES = {
   ancestorScope: [],
@@ -64,8 +65,6 @@ export const resolveIncomingAgentToken = async () => {
   return getAgentTokenFromUrl() || (await waitAgentTokenFromParent());
 };
 
-const scopesUrl = () => `${SCOPES_API_BASE_URL}/v1/scopes`;
-
 const normalizeScopesError = (errorInfo: FriendlyErrorInfo, status?: number) => {
   // 常见误配：/v1/scopes 被 Nginx 转发到了只包含登录管理接口的 8000 服务，
   // FastAPI 会返回 {"detail":"Not Found"}。这里把裸 JSON 改成更容易定位的中文提示。
@@ -82,30 +81,29 @@ const normalizeScopesError = (errorInfo: FriendlyErrorInfo, status?: number) => 
 };
 
 const requestScopesByAgentToken = async (agentToken: string) => {
-  const url = scopesUrl();
-
   // 保持原始前端工程的 /v1/scopes 调用方式：
   // POST /v1/scopes
   // Content-Type: application/json
   // body: { access_token: agentToken }
   // 注意：这里不要改成 GET + Authorization Bearer，否则会和原始后端接口约定不一致，
   // 可能出现 agentToken 有效但前端校验失败或跳转 404 的问题。
-  const response = await fetch(url, {
+  const response = await request({
+    url: API.scopes,
     method: 'POST',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
+    data: {
       access_token: agentToken,
-    }),
+    },
   });
 
-  if (response.ok) {
-    return await response.json();
+  if (isSuccessStatus(response.status)) {
+    return response.data;
   }
 
-  const errorInfo = await parseResponseError(response, 'agentToken 校验失败');
+  const errorInfo = await parseAxiosResponseError(response, 'agentToken 校验失败');
   throw normalizeScopesError(errorInfo, response.status);
 };
 

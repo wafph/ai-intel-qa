@@ -246,6 +246,8 @@ import MarkdownIt from 'markdown-it';
 import { ArrowRight, ArrowUp, Close } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { fetchWatermarkDocument, isPdfDocument, downloadDocumentBlob, openDocumentUrl } from '@/services/documentDownload';
+import { isSuccessStatus, request } from '@/services/http';
+import { API } from '@/api/api';
 const emit = defineEmits(['regenerate', 'sources-panel-toggle']);
 
 interface Props {
@@ -397,21 +399,22 @@ const handleExport = async () => {
 
   try {
     loading.value = true;
-    const convertResponse = await fetch('http://1.94.244.72:11327/convert', {
+    const convertResponse = await request({
+      url: API.document.convert,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
+      data: {
         markdown: draftContent,
         qa_id: qaId,
-      }),
+      },
     });
 
-    if (!convertResponse.ok) {
+    if (!isSuccessStatus(convertResponse.status)) {
       throw new Error(`转换失败: ${convertResponse.status}`);
     }
-    const convertResult = await convertResponse.json();
+    const convertResult = convertResponse.data;
     if (!convertResult.download_url) {
       throw new Error('转换结果中没有下载链接');
     }
@@ -428,17 +431,19 @@ const handleExport = async () => {
 // 下载转换后的文件
 const downloadConvertedFile = async (downloadUrl: string, fileName: string) => {
   try {
-    const response = await fetch(downloadUrl, {
+    const response = await request<Blob>({
+      url: downloadUrl,
       method: 'GET',
       headers: {
         Accept: '*/*',
       },
+      responseType: 'blob',
     });
 
-    if (!response.ok) {
+    if (!isSuccessStatus(response.status)) {
       throw new Error(`下载失败: ${response.status}`);
     }
-    const fileBlob = await response.blob();
+    const fileBlob = response.data;
     const url = window.URL.createObjectURL(fileBlob);
     const a = document.createElement('a');
     a.href = url;

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { API_BASE_URL } from '@/services/config';
+import { API } from '@/api/api';
+import { isSuccessStatus, request } from '@/services/http';
 export const useAppStore = defineStore('app', () => {
   // 侧边栏折叠状态
   const sidebarCollapsed = ref(false);
@@ -66,13 +67,13 @@ export const useAppStore = defineStore('app', () => {
     };
 
     try {
-      // 1. 使用 fetch API
-      const response = await fetch(`${API_BASE_URL}/v1/x-subject-token`, {
+      const response = await request({
+        url: API.token,
         method: 'post',
-        body: JSON.stringify(params),
+        data: params,
       });
-      if (!response.ok) throw new Error('网络请求失败');
-      const data = await response.json();
+      if (!isSuccessStatus(response.status)) throw new Error('网络请求失败');
+      const data = response.data;
       sharedDataToken.value = data['X-Subject-Token'];
       return sharedDataToken.value;
     } finally {

@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { API_BASE_URL } from '@/services/config';
+import { API } from '@/api/api';
 import type { ChatSession, HistoryItem, ChatMessage } from '../types/chat';
-import { authFetch } from '@/services/http';
+import { authRequest, isSuccessStatus } from '@/services/http';
 
 // API基础配置 - 使用新接口地址
 
@@ -146,19 +146,20 @@ export const useChatStore = defineStore('chat', () => {
         dislikeStatus: dislikeStatus,
         favoriteStatus: collectStatus,
       };
-      const response = await authFetch(`${API_BASE_URL}/v1/chat/history`, {
+      const response = await authRequest({
+        url: API.chat.history,
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        data: payload,
       });
 
-      if (!response.ok) {
+      if (!isSuccessStatus(response.status)) {
         throw new Error(`HTTP错误! 状态: ${response.status}`);
       }
 
-      const result = await response.json();
+      const result = response.data;
       return { success: true, insertId: result.insert_id };
     } catch (error) {
       return { success: false };
@@ -180,15 +181,16 @@ export const useChatStore = defineStore('chat', () => {
         historyJson: historyJson,
       };
 
-      const response = await authFetch(`${API_BASE_URL}/v1/chat/history/batch`, {
+      const response = await authRequest({
+        url: API.chat.historyBatch,
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        data: payload,
       });
 
-      if (!response.ok) {
+      if (!isSuccessStatus(response.status)) {
         throw new Error(`HTTP错误! 状态: ${response.status}`);
       }
       return true;
@@ -202,16 +204,17 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const funcId = getFuncIdByTab(currentActiveTab.value);
       const limit = 30;
-      const url = `${API_BASE_URL}/v1/chat/sessions?functionId=${funcId}&limit=${limit}`;
+      const url = API.chat.sessions(funcId, limit);
 
-      const response = await authFetch(url, {
+      const response = await authRequest({
+        url,
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
 
-      if (!response.ok) throw new Error(`HTTP错误! 状态: ${response.status}`);
+      if (!isSuccessStatus(response.status)) throw new Error(`HTTP错误! 状态: ${response.status}`);
 
-      const result = await response.json();
+      const result = response.data;
       if (result && result.code === 0 && Array.isArray(result.data)) {
         historyList.value = [];
         chatSessions.value = {};
@@ -281,15 +284,16 @@ export const useChatStore = defineStore('chat', () => {
         functionId: funcId,
         sessionTitle: newTitle,
       };
-      const response = await authFetch(`${API_BASE_URL}/v1/chat/title`, {
+      const response = await authRequest({
+        url: API.chat.title,
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        data: payload,
       });
 
-      if (!response.ok) {
+      if (!isSuccessStatus(response.status)) {
         throw new Error(`HTTP错误! 状态: ${response.status}`);
       }
 
@@ -327,15 +331,16 @@ export const useChatStore = defineStore('chat', () => {
         favoriteStatus: isCollected ? 1 : 0,
       };
 
-      const response = await authFetch(`${API_BASE_URL}/v1/chat/favorite`, {
+      const response = await authRequest({
+        url: API.chat.favorite,
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        data: payload,
       });
 
-      if (!response.ok) {
+      if (!isSuccessStatus(response.status)) {
         throw new Error(`HTTP错误! 状态: ${response.status}`);
       }
       return true;
@@ -361,16 +366,17 @@ export const useChatStore = defineStore('chat', () => {
         likeStatus: likeStatus,
         dislikeStatus: dislikeStatus,
       };
-      const url = `${API_BASE_URL}/v1/chat/status`;
-      const response = await authFetch(url, {
+      const url = API.chat.status;
+      const response = await authRequest({
+        url,
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        data: payload,
       });
 
-      if (!response.ok) {
+      if (!isSuccessStatus(response.status)) {
         throw new Error(`HTTP错误! 状态: ${response.status}, URL: ${url}`);
       }
       return true;
@@ -415,19 +421,20 @@ export const useChatStore = defineStore('chat', () => {
   const deleteConversationBySession = async (sessionUuid: string): Promise<boolean> => {
     try {
       const funcId = getFuncIdByTab(currentActiveTab.value);
-      const url = `${API_BASE_URL}/v1/chat/history?functionId=${funcId}&sessionId=${sessionUuid}`;
-      const response = await authFetch(url, {
+      const url = API.chat.historyDetail(funcId, sessionUuid);
+      const response = await authRequest({
+        url,
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
         },
       });
 
-      if (!response.ok) {
+      if (!isSuccessStatus(response.status)) {
         throw new Error(`HTTP错误! 状态: ${response.status}`);
       }
 
-      const result = await response.json();
+      const result = response.data;
       // 假设后端返回格式：{ code: 0, msg: 'success' }
       if (result && result.code === 0) {
         // 从本地删除
@@ -450,21 +457,18 @@ export const useChatStore = defineStore('chat', () => {
     limit: number = 30,
   ): Promise<{ success: boolean; data?: any[] }> => {
     try {
-      let url = `${API_BASE_URL}/v1/chat/favorites?limit=${limit}`;
-
-      if (functionId && functionId.trim() !== '') {
-        url += `&functionId=${functionId}`;
-      }
-      const response = await authFetch(url, {
+      const url = API.chat.favorites(limit, functionId?.trim() || undefined);
+      const response = await authRequest({
+        url,
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
 
-      if (!response.ok) {
+      if (!isSuccessStatus(response.status)) {
         throw new Error(`HTTP错误! 状态: ${response.status}`);
       }
 
-      const result = await response.json();
+      const result = response.data;
       if (result && result.code === 0 && Array.isArray(result.data)) {
         return { success: true, data: result.data };
       } else {
@@ -481,17 +485,18 @@ export const useChatStore = defineStore('chat', () => {
     functionId: string,
   ): Promise<{ success: boolean; data?: any }> => {
     try {
-      const url = `${API_BASE_URL}/v1/chat/favorites/detail?functionId=${functionId}&sessionId=${sessionUuid}`;
-      const response = await authFetch(url, {
+      const url = API.chat.favoriteDetail(functionId, sessionUuid);
+      const response = await authRequest({
+        url,
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
 
-      if (!response.ok) {
+      if (!isSuccessStatus(response.status)) {
         throw new Error(`HTTP错误! 状态: ${response.status}`);
       }
 
-      const result = await response.json();
+      const result = response.data;
       if (result && result.code === 0 && result.data) {
         return { success: true, data: result.data };
       } else {
@@ -573,19 +578,20 @@ export const useChatStore = defineStore('chat', () => {
     funcId: string,
   ): Promise<ChatMessage[]> => {
     try {
-      const url = `${API_BASE_URL}/v1/chat/history?functionId=${funcId}&sessionId=${sessionUuid}`;
-      const response = await authFetch(url, {
+      const url = API.chat.historyDetail(funcId, sessionUuid);
+      const response = await authRequest({
+        url,
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
       });
 
-      if (!response.ok) {
+      if (!isSuccessStatus(response.status)) {
         throw new Error(`HTTP错误! 状态: ${response.status}`);
       }
 
-      const result = await response.json();
+      const result = response.data;
       const messages: ChatMessage[] = [];
       // 适应新的数据结构
       if (

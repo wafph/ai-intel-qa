@@ -1,6 +1,7 @@
-import { WATERMARK_API_BASE_URL } from './config';
-import { parseResponseError } from './error';
+import { API } from '@/api/api';
+import { parseAxiosResponseError } from './error';
 import { getCurrentDownloadUserName } from './authStorage';
+import { isSuccessStatus, request } from './http';
 
 export interface DownloadDocumentResult {
   fileId: string;
@@ -20,8 +21,7 @@ export interface DownloadDocumentResult {
 const trimTrailingSlash = (value: string) => value.replace(/\/$/, '');
 
 const buildWatermarkDownloadUrl = () => {
-  const base = trimTrailingSlash(WATERMARK_API_BASE_URL);
-  return `${base}/watermark/download`;
+  return API.document.watermarkDownload;
 };
 
 const isJsonContent = (contentType: string) =>
@@ -29,7 +29,7 @@ const isJsonContent = (contentType: string) =>
 
 const buildAbsoluteUrl = (url: string) => {
   if (/^https?:\/\//i.test(url)) return url;
-  const base = trimTrailingSlash(WATERMARK_API_BASE_URL);
+  const base = trimTrailingSlash(API.document.watermarkBase);
   return `${base}${url.startsWith('/') ? '' : '/'}${url}`;
 };
 
@@ -93,7 +93,7 @@ const resolveDocumentFromJson = (json: any, fileId: string, title: string): Down
   const downloadUrl = getDownloadUrlFromJson(json);
 
   // 关键修复：水印服务返回 download_url 时，直接交给浏览器打开/下载，
-  // 不再使用 fetch(download_url) 二次取文件，避免跨端口文件服务 8001 未开启 CORS 时出现 Failed to fetch。
+  // 不再二次请求文件地址，避免跨端口文件服务 8001 未开启 CORS 时失败。
   if (downloadUrl) {
     return {
       fileId,
@@ -130,26 +130,28 @@ export const fetchWatermarkDocument = async (
     throw new Error('文件ID为空，无法查看文档');
   }
 
-  const response = await fetch(buildWatermarkDownloadUrl(), {
+  const response = await request<Blob>({
+    url: buildWatermarkDownloadUrl(),
     method: 'POST',
     headers: {
       Accept: 'application/json, */*',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
+    data: {
       file_id: fileId,
       user_name: getCurrentDownloadUserName(),
-    }),
+    },
+    responseType: 'blob',
   });
 
-  if (!response.ok) {
-    throw await parseResponseError(response, '水印生成失败，请稍后重试');
+  if (!isSuccessStatus(response.status)) {
+    throw await parseAxiosResponseError(response, '水印生成失败，请稍后重试');
   }
 
-  const contentType = response.headers.get('content-type') || '';
+  const contentType = String(response.headers['content-type'] || '');
 
   if (isJsonContent(contentType)) {
-    const json = await response.json();
+    const json = JSON.parse(await response.data.text());
     return resolveDocumentFromJson(json, fileId, title);
   }
 
@@ -157,7 +159,7 @@ export const fetchWatermarkDocument = async (
     fileId,
     title,
     contentType,
-    blob: await response.blob(),
+    blob: response.data,
   };
 };
 

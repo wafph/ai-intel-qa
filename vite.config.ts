@@ -45,7 +45,6 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api/, ''), // 移除前缀
       },
       '/watermark-api': {
-        target: 'http://1.94.244.72:11328', // 水印文件下载服务地址
         target: 'http://101.245.75.75:11328', // 水印文件下载服务地址
         changeOrigin: true,
         secure: false,

@@ -358,8 +358,8 @@ import MarkdownIt from 'markdown-it';
 import { ElMessage } from 'element-plus';
 import { ArrowRight, ArrowUp, Close } from '@element-plus/icons-vue';
 import { useChatStore } from '@/stores/chat';
-import { API_BASE_URL } from '@/services/config';
-import { authFetch } from '@/services/http';
+import { API } from '@/api/api';
+import { authRequest, isSuccessStatus } from '@/services/http';
 import { fetchWatermarkDocument, isPdfDocument, downloadDocumentBlob, openDocumentUrl } from '@/services/documentDownload';
 const chatStore = useChatStore();
 
@@ -779,15 +779,16 @@ const submitDislikeFeedback = async () => {
       dislikeStatus: 1,
       dislikeReason: finalReason,
     };
-    const response = await authFetch(`${API_BASE_URL}/v1/chat/status`, {
+    const response = await authRequest({
+      url: API.chat.status,
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(payload),
+      data: payload,
     });
 
-    if (!response.ok) {
+    if (!isSuccessStatus(response.status)) {
       throw new Error(`HTTP错误! 状态: ${response.status}`);
     }
     ElMessage.success('感谢您的反馈！');
