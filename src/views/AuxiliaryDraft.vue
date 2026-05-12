@@ -245,7 +245,12 @@ import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import MarkdownIt from 'markdown-it';
 import { ArrowRight, ArrowUp, Close } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
-import { fetchWatermarkDocument, isPdfDocument, downloadDocumentBlob, openDocumentUrl } from '@/services/documentDownload';
+import {
+  fetchWatermarkDocument,
+  isPdfDocument,
+  downloadDocumentBlob,
+  openDocumentUrl,
+} from '@/services/documentDownload';
 import { isSuccessStatus, request } from '@/services/http';
 import { API } from '@/api/api';
 const emit = defineEmits(['regenerate', 'sources-panel-toggle']);
@@ -644,8 +649,6 @@ watch(
         stopTypingEffect();
       }
     }
-    // 添加延迟，确保DOM更新完成
-    setTimeout(scrollToBottom, 100);
   },
   { immediate: true },
 );
@@ -676,7 +679,7 @@ watch(
   () => props.chatData,
   () => {
     nextTick(() => {
-      setTimeout(scrollToBottom, 200);
+      scrollToBottom();
     });
   },
   { deep: true },
@@ -684,9 +687,7 @@ watch(
 
 // 在 onMounted 中添加延迟
 onMounted(() => {
-  setTimeout(() => {
-    scrollToBottom();
-  }, 300);
+  scrollToBottom();
 });
 
 onUnmounted(() => {
