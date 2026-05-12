@@ -9,6 +9,8 @@ declare global {
       descendantScope: any[];
       user: string;
       query: string;
+      username?: string;
+      nickname?: string;
     };
   }
 }

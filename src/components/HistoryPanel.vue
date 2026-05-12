@@ -2,7 +2,8 @@
   <div class="history-panel" :class="{ 'is-collapsed': collapsed }">
     <!-- 顶部区域 -->
     <div class="logo" v-show="!collapsed">
-      <img src="/images/logos.png" alt="Logo" />
+      <!-- 左上角小 logo 暂时不展示，保留代码便于后续恢复。 -->
+      <!-- <img src="/images/logos.png" alt="Logo" /> -->
       <span>AI+规章制度智能体</span>
     </div>
 
@@ -162,7 +163,8 @@
           class="user-avatar"
         />
         <div class="user-details">
-          <span class="user-name">{{ user.name || '用户' }}</span>
+          <span class="user-name">{{ displayUserName }}</span>
+          <span class="auth-mode">{{ authMode === 'agent' ? '外部授权' : '账号登录' }}</span>
         </div>
         <i class="arrow-icon" :class="{ rotated: showUserMenu }">▼</i>
       </div>
@@ -173,6 +175,10 @@
           <span>我的收藏</span>
         </div>
         <div class="menu-divider"></div>
+        <div class="menu-item logout" @click="handleLogout">
+          <span class="logout-icon">↩</span>
+          <span>退出登录</span>
+        </div>
       </div>
     </div>
   </div>
@@ -183,6 +189,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessageBox, ElMessage } from 'element-plus';
 import type { InputInstance } from 'element-plus';
+import { StarFilled } from '@element-plus/icons-vue';
 
 interface Props {
   historyList: any[];
@@ -190,6 +197,7 @@ interface Props {
   user: any;
   collapsed?: boolean;
   activeTab: string; // 
+  authMode?: string; // 新增：local/agent，用于在左下角用户区域展示登录方式
 }
 
 const props = defineProps<Props>();
@@ -203,6 +211,7 @@ const emit = defineEmits<{
   'toggle-collapse': [];
   'update-title': [chatId: string, newTitle: string];
   'toggle-pin': [chatId: string, topStatus: number]; // 
+  logout: []; // 新增：退出登录放到左侧历史面板底部
 }>();
 
 const router = useRouter();
@@ -213,6 +222,8 @@ const visibleMenuId = ref<string | null>(null);
 const editingId = ref<string | null>(null);
 const editingTitle = ref('');
 const titleInputRef = ref<InputInstance>();
+
+const displayUserName = computed(() => props.user?.nickname || props.user?.name || props.user?.username || '用户');
 
 // 计算属性
 const filteredHistory = computed(() => {
@@ -458,6 +469,11 @@ const toggleUserMenu = () => {
 const goToMyCollections = () => {
   showUserMenu.value = false;
   router.push('/my-collections');
+};
+
+const handleLogout = () => {
+  showUserMenu.value = false;
+  emit('logout');
 };
 
 const handleClickOutsideUserMenu = (event: MouseEvent) => {
@@ -1016,5 +1032,30 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.auth-mode {
+  width: fit-content;
+  max-width: 90px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: #1c73eb;
+  background: #eaf3ff;
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.user-menu .menu-item.logout {
+  color: #d93026;
+}
+
+.logout-icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
 }
 </style>

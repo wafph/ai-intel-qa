@@ -8,6 +8,7 @@
         :user="userStore.user"
         :collapsed="sidebarCollapsed"
         :active-tab="activeTab"
+        :auth-mode="userStore.authMode"
         @select-chat="handleSelectChat"
         @new-chat="handleNewChat"
         @delete-chat="handleDeleteChat"
@@ -15,6 +16,7 @@
         @update-title="handleUpdateTitle"
         @toggle-favorite="handleToggleFavorite"
         @toggle-pin="handleTogglePin"
+        @logout="handleLogout"
       />
 
       <!-- 右侧主内容区 -->
@@ -124,7 +126,8 @@ import { useChatStore } from './stores/chat';
 import { useUserStore } from './stores/user';
 import type { ChatMessage, ChatSession, HistoryItem } from './types/chat';
 import { ElMessage } from 'element-plus';
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+import { authFetch } from './services/http';
+import { API_BASE_URL } from './services/config';
 
 const appStore = useAppStore();
 const chatStore = useChatStore();
@@ -204,7 +207,7 @@ const currentChatData = computed(() => {
 
 // 判断是否显示完整布局
 const showFullLayout = computed(() => {
-  const excludeRoutes = ['/feedback', '/my-collections', '/not-found'];
+  const excludeRoutes = ['/feedback', '/my-collections', '/not-found', '/login'];
   return !excludeRoutes.includes(route.path);
 });
 
@@ -961,6 +964,12 @@ const processStreamChunk = async (chunk: any, messageId: string) => {
   }
 };
 
+const handleLogout = async () => {
+  stopStream();
+  await userStore.logout();
+  router.replace({ path: '/login', query: { redirect: route.fullPath } });
+};
+
 const handleTabChange = (tab: string) => {
   stopStream();
   activeTab.value = tab;
@@ -1120,7 +1129,7 @@ const handleTogglePin = async (chatId: string, topStatus: number) => {
       functionId: funcId,
       topStatus: topStatus,
     };
-    const response = await fetch(`${API_BASE_URL}/v1/chat/pin`, {
+    const response = await authFetch(`${API_BASE_URL}/v1/chat/pin`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -1151,6 +1160,7 @@ const handleTogglePin = async (chatId: string, topStatus: number) => {
 let hasAutoCreated = false;
 
 onMounted(async () => {
+  if (!showFullLayout.value) return;
   await queryConversationsForCurrentRoute();
 
   const sessionId = route.query.id as string;
@@ -1173,6 +1183,7 @@ onMounted(async () => {
 watch(
   () => route.fullPath,
   async () => {
+    if (!showFullLayout.value) return;
     await queryConversationsForCurrentRoute();
 
     const sessionId = route.query.id as string;

@@ -206,6 +206,7 @@ import { ref, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import MarkdownIt from 'markdown-it';
 import { ElIcon } from 'element-plus';
 import { ArrowRight } from '@element-plus/icons-vue';
+import { fetchWatermarkDocument, isPdfDocument, downloadDocumentBlob, openDocumentUrl } from '@/services/documentDownload';
 
 // 状态变量
 const displayAnswer = ref<string>('');
@@ -318,96 +319,42 @@ const handleViewDocument = async (fileId: string, title: string) => {
   isDownloading[fileId] = true;
 
   try {
-    // 1. 先调用 POST 接口
-    const postResponse = await fetch('http://1.94.244.72:11328/download', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        file_ids: [fileId],
-      }),
-    });
+    // 新版问答引用下载接口：直接 POST /watermark/download，
+    // 请求体使用 { file_id, user_name }；agentToken 场景 user_name 暂时固定为“丽丽”。
+    const result = await fetchWatermarkDocument(fileId, title || 'document');
 
-    if (!postResponse.ok) {
-      throw new Error(`POST 请求失败: ${postResponse.status}`);
-    }
-
-    // 2. 调用 GET 接口获取文件
-    const fileResponse = await fetch(`http://1.94.244.72:11328/download/${fileId}`, {
-      method: 'GET',
-      headers: {
-        Accept: '*/*',
-      },
-    });
-
-    if (!fileResponse.ok) {
-      throw new Error(`GET 请求失败: ${fileResponse.status}`);
-    }
-
-    // 3. 获取文件内容和类型
-    const contentType = fileResponse.headers.get('content-type') || '';
-    const fileBlob = await fileResponse.blob();
-
-    // 4. 根据文件类型处理
-    if (isPdfFile(fileId, contentType)) {
-      // PDF 文件：显示预览弹框
-      const pdfUrl = window.URL.createObjectURL(fileBlob);
-      pdfViewerUrl.value = pdfUrl;
+    if (isPdfDocument(fileId, result.contentType, title, result.downloadUrl)) {
+      // PDF 文件：显示预览弹框。download_url 直接赋给 iframe，避免二次 fetch 跨域。
+      if (result.downloadUrl) {
+        pdfViewerUrl.value = result.downloadUrl;
+      } else if (result.blob) {
+        pdfViewerUrl.value = window.URL.createObjectURL(result.blob);
+      } else {
+        throw new Error('水印接口未返回可预览的文档地址');
+      }
       showPdfViewer.value = true;
+    } else if (result.downloadUrl) {
+      // 其他格式：直接打开后端返回的下载地址。
+      openDocumentUrl(result.downloadUrl);
+    } else if (result.blob) {
+      downloadDocumentBlob(result.blob, title, fileId);
     } else {
-      // 其他格式：直接下载
-      downloadFile(fileBlob, title, fileId);
+      throw new Error('水印接口未返回可下载的文档内容');
     }
-  } catch (error) {
-    alert('获取文档失败，请稍后重试');
+  } catch (error: any) {
+    alert(error?.message || '获取文档失败，请稍后重试');
   } finally {
     // 清除加载状态
     isDownloading[fileId] = false;
   }
 };
 
-// 判断是否为 PDF 文件
-const isPdfFile = (fileName: string, contentType: string): boolean => {
-  const lowerFileName = fileName.toLowerCase();
-  return (
-    lowerFileName.endsWith('.pdf') ||
-    contentType.includes('pdf') ||
-    contentType.includes('application/pdf')
-  );
-};
-
-// 下载文件
-const downloadFile = (fileBlob: Blob, fileName: string, fileId: string) => {
-  // 尝试从 fileId 中提取文件扩展名
-  const extension = extractFileExtension(fileId);
-  const fullFileName = extension ? `${fileName}.${extension}` : fileName;
-
-  const url = window.URL.createObjectURL(fileBlob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fullFileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  window.URL.revokeObjectURL(url);
-};
-
-// 从 fileId 提取文件扩展名
-const extractFileExtension = (fileId: string): string => {
-  const parts = fileId.split('.');
-  if (parts.length > 1) {
-    return parts[parts.length - 1];
-  }
-  return '';
-};
-
 // 关闭 PDF 查看器
 const closePdfViewer = () => {
-  if (pdfViewerUrl.value) {
+  if (pdfViewerUrl.value && pdfViewerUrl.value.startsWith('blob:')) {
     window.URL.revokeObjectURL(pdfViewerUrl.value);
-    pdfViewerUrl.value = '';
   }
+  pdfViewerUrl.value = '';
   showPdfViewer.value = false;
 };
 

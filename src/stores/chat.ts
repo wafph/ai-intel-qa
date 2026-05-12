@@ -1,9 +1,10 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import { API_BASE_URL } from '@/services/config';
 import type { ChatSession, HistoryItem, ChatMessage } from '../types/chat';
+import { authFetch } from '@/services/http';
 
 // API基础配置 - 使用新接口地址
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
 export const useChatStore = defineStore('chat', () => {
   const chatSessions = ref<Record<string, ChatSession>>({});
@@ -145,7 +146,7 @@ export const useChatStore = defineStore('chat', () => {
         dislikeStatus: dislikeStatus,
         favoriteStatus: collectStatus,
       };
-      const response = await fetch(`${API_BASE_URL}/v1/chat/history`, {
+      const response = await authFetch(`${API_BASE_URL}/v1/chat/history`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -179,7 +180,7 @@ export const useChatStore = defineStore('chat', () => {
         historyJson: historyJson,
       };
 
-      const response = await fetch(`${API_BASE_URL}/v1/chat/history/batch`, {
+      const response = await authFetch(`${API_BASE_URL}/v1/chat/history/batch`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -203,7 +204,7 @@ export const useChatStore = defineStore('chat', () => {
       const limit = 30;
       const url = `${API_BASE_URL}/v1/chat/sessions?functionId=${funcId}&limit=${limit}`;
 
-      const response = await fetch(url, {
+      const response = await authFetch(url, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -280,7 +281,7 @@ export const useChatStore = defineStore('chat', () => {
         functionId: funcId,
         sessionTitle: newTitle,
       };
-      const response = await fetch(`${API_BASE_URL}/v1/chat/title`, {
+      const response = await authFetch(`${API_BASE_URL}/v1/chat/title`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -326,7 +327,7 @@ export const useChatStore = defineStore('chat', () => {
         favoriteStatus: isCollected ? 1 : 0,
       };
 
-      const response = await fetch(`${API_BASE_URL}/v1/chat/favorite`, {
+      const response = await authFetch(`${API_BASE_URL}/v1/chat/favorite`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -361,7 +362,7 @@ export const useChatStore = defineStore('chat', () => {
         dislikeStatus: dislikeStatus,
       };
       const url = `${API_BASE_URL}/v1/chat/status`;
-      const response = await fetch(url, {
+      const response = await authFetch(url, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -415,7 +416,7 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const funcId = getFuncIdByTab(currentActiveTab.value);
       const url = `${API_BASE_URL}/v1/chat/history?functionId=${funcId}&sessionId=${sessionUuid}`;
-      const response = await fetch(url, {
+      const response = await authFetch(url, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -454,7 +455,7 @@ export const useChatStore = defineStore('chat', () => {
       if (functionId && functionId.trim() !== '') {
         url += `&functionId=${functionId}`;
       }
-      const response = await fetch(url, {
+      const response = await authFetch(url, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -481,7 +482,7 @@ export const useChatStore = defineStore('chat', () => {
   ): Promise<{ success: boolean; data?: any }> => {
     try {
       const url = `${API_BASE_URL}/v1/chat/favorites/detail?functionId=${functionId}&sessionId=${sessionUuid}`;
-      const response = await fetch(url, {
+      const response = await authFetch(url, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -573,7 +574,7 @@ export const useChatStore = defineStore('chat', () => {
   ): Promise<ChatMessage[]> => {
     try {
       const url = `${API_BASE_URL}/v1/chat/history?functionId=${funcId}&sessionId=${sessionUuid}`;
-      const response = await fetch(url, {
+      const response = await authFetch(url, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

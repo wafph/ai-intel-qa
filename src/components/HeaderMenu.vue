@@ -22,6 +22,8 @@
         <span class="tab-label">{{ tab.label }}</span>
       </button>
     </nav>
+
+    <!-- 用户信息与退出登录已移至左侧历史面板底部，顶部只保留功能导航。 -->
   </header>
 </template>
 
@@ -62,6 +64,7 @@ const emit = defineEmits<{
   'tab-change': [tabName: string];
   'toggle-sidebar': []; // 新增折叠事件
 }>();
+
 
 const tabs = computed<TabItem[]>(() => {
   const allTabs = [
@@ -170,6 +173,43 @@ const tabs = computed<TabItem[]>(() => {
   display: flex;
   align-items: center;
   margin-left: auto;
+}
+
+.user-entry {
+  min-width: 160px;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid #e6edf7;
+  background: #f8fbff;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.user-entry:hover {
+  border-color: #1c73eb;
+  box-shadow: 0 4px 14px rgba(28, 115, 235, 0.14);
+}
+
+.user-name {
+  max-width: 86px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #1f2d3d;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.auth-tag {
+  color: #1c73eb;
+  background: #eaf3ff;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 12px;
 }
 
 .user-btn {

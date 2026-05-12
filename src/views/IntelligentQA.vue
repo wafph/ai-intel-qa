@@ -358,6 +358,9 @@ import MarkdownIt from 'markdown-it';
 import { ElMessage } from 'element-plus';
 import { ArrowRight, ArrowUp, Close } from '@element-plus/icons-vue';
 import { useChatStore } from '@/stores/chat';
+import { API_BASE_URL } from '@/services/config';
+import { authFetch } from '@/services/http';
+import { fetchWatermarkDocument, isPdfDocument, downloadDocumentBlob, openDocumentUrl } from '@/services/documentDownload';
 const chatStore = useChatStore();
 
 const displayAnswer = ref<string>('');
@@ -367,7 +370,6 @@ let currentTypingIndex = 0;
 const loading = ref(false);
 const isTyping = ref(false);
 const emit = defineEmits(['regenerate', 'sources-panel-toggle']);
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
 // 参考来源面板状态
 const showSourcesPanel = ref(false);
@@ -549,91 +551,39 @@ const handleSourceTitleClick = async (source: any, event: Event) => {
       return;
     }
 
-    // 1. 先调用 POST 接口
-    const postResponse = await fetch('http://1.94.244.72:11328/download', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        file_ids: [fileId],
-      }),
-    });
+    // 新版问答引用下载接口：直接 POST /watermark/download，
+    // 请求体使用 { file_id, user_name }；agentToken 场景 user_name 暂时固定为“丽丽”。
+    const result = await fetchWatermarkDocument(fileId, source.title || 'document');
 
-    if (!postResponse.ok) {
-      throw new Error(`POST 请求失败: ${postResponse.status}`);
-    }
-
-    // 2. 调用 GET 接口获取文件
-    const fileResponse = await fetch(`http://1.94.244.72:11328/download/${fileId}`, {
-      method: 'GET',
-      headers: {
-        Accept: '*/*',
-      },
-    });
-
-    if (!fileResponse.ok) {
-      throw new Error(`GET 请求失败: ${fileResponse.status}`);
-    }
-
-    // 3. 获取文件内容和类型
-    const contentType = fileResponse.headers.get('content-type') || '';
-    const fileBlob = await fileResponse.blob();
-
-    // 4. 根据文件类型处理
-    if (isPdfFile(fileId, contentType)) {
-      const pdfUrl = window.URL.createObjectURL(fileBlob);
-      pdfViewerUrl.value = pdfUrl;
+    if (isPdfDocument(fileId, result.contentType, source.title, result.downloadUrl)) {
+      // 水印服务返回 download_url 时直接用于 iframe 预览，避免再次 fetch 跨端口文件服务导致 Failed to fetch。
+      if (result.downloadUrl) {
+        pdfViewerUrl.value = result.downloadUrl;
+      } else if (result.blob) {
+        pdfViewerUrl.value = window.URL.createObjectURL(result.blob);
+      } else {
+        throw new Error('水印接口未返回可预览的文档地址');
+      }
       currentPdfTitle.value = source.title || 'PDF 预览';
       showPdfViewer.value = true;
+    } else if (result.downloadUrl) {
+      openDocumentUrl(result.downloadUrl);
+    } else if (result.blob) {
+      downloadDocumentBlob(result.blob, source.title || 'document', fileId);
     } else {
-      downloadFile(fileBlob, source.title || 'document', fileId);
+      throw new Error('水印接口未返回可下载的文档内容');
     }
-  } catch (error) {
-    ElMessage.error('获取文档失败，请稍后重试');
+  } catch (error: any) {
+    ElMessage.error(error?.message || '获取文档失败，请稍后重试');
   }
-};
-
-// 判断是否为 PDF 文件
-const isPdfFile = (fileName: string, contentType: string): boolean => {
-  const lowerFileName = fileName.toLowerCase();
-  return (
-    lowerFileName.endsWith('.pdf') ||
-    contentType.includes('pdf') ||
-    contentType.includes('application/pdf')
-  );
-};
-
-// 下载文件
-const downloadFile = (fileBlob: Blob, fileName: string, fileId: string) => {
-  const extension = extractFileExtension(fileId);
-  const fullFileName = extension ? `${fileName}.${extension}` : fileName;
-
-  const url = window.URL.createObjectURL(fileBlob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fullFileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  window.URL.revokeObjectURL(url);
-};
-
-// 提取文件扩展名
-const extractFileExtension = (fileId: string): string => {
-  const parts = fileId.split('.');
-  if (parts.length > 1) {
-    return parts[parts.length - 1];
-  }
-  return '';
 };
 
 // 关闭 PDF 查看器
 const closePdfViewer = () => {
-  if (pdfViewerUrl.value) {
+  if (pdfViewerUrl.value && pdfViewerUrl.value.startsWith('blob:')) {
     window.URL.revokeObjectURL(pdfViewerUrl.value);
-    pdfViewerUrl.value = '';
   }
+  pdfViewerUrl.value = '';
   showPdfViewer.value = false;
   currentPdfTitle.value = '';
 };
@@ -829,7 +779,7 @@ const submitDislikeFeedback = async () => {
       dislikeStatus: 1,
       dislikeReason: finalReason,
     };
-    const response = await fetch(`${API_BASE_URL}/v1/chat/status`, {
+    const response = await authFetch(`${API_BASE_URL}/v1/chat/status`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -1644,7 +1594,6 @@ onUnmounted(() => {
 
     .feedback-radio-group {
       display: flex;
-      flex-direction: column;
       gap: 12px;
     }
 

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+import { API_BASE_URL } from '@/services/config';
 export const useAppStore = defineStore('app', () => {
   // 侧边栏折叠状态
   const sidebarCollapsed = ref(false);
@@ -9,7 +9,7 @@ export const useAppStore = defineStore('app', () => {
   const activeMenu = ref('qa');
   const sharedDataToken = ref<string | undefined>();
   const loading = ref(false);
-  const error = ref(null);
+  const error = ref<string | null>(null);
   // 菜单项
   const menuItems = ref([
     { id: 'qa', name: '智能问答', icon: 'ChatDotRound' },
@@ -80,7 +80,10 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  fetchTokenFromBackend();
+  fetchTokenFromBackend().catch((err) => {
+    // 保留原有自动获取 AgentArts X-Subject-Token 的逻辑；失败时只记录错误，不阻断登录页面或业务页面渲染。
+    error.value = err?.message || '获取 X-Subject-Token 失败';
+  });
   const addHistory = (query: string) => {
     const today = new Date().toLocaleDateString('zh-CN', {
       month: '2-digit',

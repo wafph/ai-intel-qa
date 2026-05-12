@@ -6,91 +6,28 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import App from './App.vue';
 import router from './router';
 import './style.less';
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
-async function getAgentToken() {
-  let agentToken = new URLSearchParams(window.location.search).get('agentToken');
-  if (!agentToken) {
-    let targetOrigin = '*'; // 或者*
-    await new Promise((resolve) => {
-      const handler = (event: any) => {
-        targetOrigin = event.origin || '*';
-        if (event.data?.data?.type === 'SET_AGENTTOKEN') {
-          agentToken = event.data.data.value;
-          window.removeEventListener('message', handler);
-          resolve(event);
-        }
-      };
-      window.addEventListener('message', handler);
+import { useUserStore } from './stores/user';
 
-      // 通知父页面：智能体已 ready
-      window.parent.postMessage(
-        {
-          platform: '制度智能体',
-          timestamp: Date.now(),
-          data: {
-            type: 'READY',
-            value: '',
-          },
-        },
-        targetOrigin,
-      );
-    });
+const bootstrap = async () => {
+  const app = createApp(App);
+  const pinia = createPinia();
+
+  // 注册 Element Plus 图标
+  for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
+    app.component(key, component);
   }
 
-  // 3. 存 token
-  window.__AGENT_TOKEN__ = agentToken;
+  app.use(pinia);
+  app.use(ElementPlus);
 
-  // 4. 调用 /v1/scopes 接口获取 scopes 数据
-  if (agentToken) {
-    try {
-      const response = await fetch(`${API_BASE_URL}/v1/scopes`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          access_token: agentToken,
-        }),
-      });
+  // 注意：必须先初始化认证上下文，再安装 router。
+  // 否则首次访问带 agentToken 的业务 URL 时，路由守卫可能先判定未登录并跳到 /login。
+  const userStore = useUserStore();
+  await userStore.initializeAuth();
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const scopesData = await response.json();
-      // 将 scopes 数据存储到全局变量，供应用使用
-      window.__SCOPES_DATA__ = scopesData;
-    } catch (error) {
-      router.push('/not-found');
-      // 设置默认值以防接口调用失败
-      window.__SCOPES_DATA__ = {
-        ancestorScope: [],
-        descendantScope: [],
-        user: '1',
-        query: '',
-      };
-    }
-  } else {
-    // 如果没有 token，设置默认值
-    window.__SCOPES_DATA__ = {
-      ancestorScope: [],
-      descendantScope: [],
-      user: '1',
-      query: '',
-    };
-  }
-}
+  app.use(router);
+  await router.isReady();
+  app.mount('#app');
+};
 
-getAgentToken();
-
-const app = createApp(App);
-const pinia = createPinia();
-
-// 注册Element Plus图标
-for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
-  app.component(key, component);
-}
-
-app.use(pinia);
-app.use(router);
-app.use(ElementPlus);
-app.mount('#app');
+bootstrap();
