@@ -497,7 +497,9 @@ const renderMarkdown = (content: string) => {
 
 const scrollToBottom = () => {
   nextTick(() => {
-    const container = document.querySelector('.conversation-history');
+    const container =
+      document.querySelector('.dynamic-content') ||
+      document.querySelector('.conversation-history');
     if (container) {
       container.scrollTop = container.scrollHeight;
     }
@@ -580,21 +582,23 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   height: 100%;
-  padding: 0;
   background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
   position: relative;
-  overflow-y: auto;
+  overflow: visible;
 }
 
 .conversation-history {
   flex: 1;
-  overflow-y: auto;
+  overflow: visible;
   margin-bottom: 20px;
+  height: 98%;
   padding-top: 20px;
+  padding-bottom: 48px;
   display: flex;
   flex-direction: column;
   gap: 20px;
   width: 80%;
+  box-sizing: border-box;
 
   .history-item {
     margin: 0 auto;

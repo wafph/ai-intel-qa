@@ -34,9 +34,11 @@ const lastComplianceParams = ref<{
   query: string;
   dimensions: string[];
   fileName: string;
+  originalText: string;
 } | null>(null);
 const uploadedFileName = ref('');
 const uploadedFileUrl = ref('');
+const uploadedOriginalText = ref('');
 const selectedDimensions = ref<string[]>([]);
 const REVIEW_DIMENSIONS = ['合规性', '冲突性', '文本规范性'];
 const SELECT_ALL_DIMENSION = '全选';
@@ -96,6 +98,163 @@ const filteredHistory = computed(() => {
   return chatStore.filteredHistory;
 });
 
+const getTextFromUploadResult = (result: any) => {
+  return (
+    result?.content ||
+    result?.text ||
+    result?.document_content ||
+    result?.documentContent ||
+    result?.data?.content ||
+    result?.data?.text ||
+    ''
+  );
+};
+
+const readUint16 = (view: DataView, offset: number) => view.getUint16(offset, true);
+const readUint32 = (view: DataView, offset: number) => view.getUint32(offset, true);
+
+const decompressDeflateRaw = async (data: Uint8Array) => {
+  const DecompressionStreamConstructor = (window as any).DecompressionStream;
+  if (!DecompressionStreamConstructor) {
+    throw new Error('当前浏览器不支持解压 docx 内容');
+  }
+
+  const compressedBuffer = new ArrayBuffer(data.byteLength);
+  new Uint8Array(compressedBuffer).set(data);
+  const stream = new Blob([compressedBuffer]).stream().pipeThrough(
+    new DecompressionStreamConstructor('deflate-raw'),
+  );
+  const buffer = await new Response(stream).arrayBuffer();
+  return new Uint8Array(buffer);
+};
+
+const parseDocxXmlText = (xmlText: string) => {
+  const xml = new DOMParser().parseFromString(xmlText, 'application/xml');
+  const parserError = xml.querySelector('parsererror');
+  if (parserError) return '';
+
+  const paragraphs = Array.from(xml.getElementsByTagNameNS('*', 'p'));
+  const readNodeText = (node: Element) => {
+    let text = '';
+    node.childNodes.forEach((child) => {
+      if (child.nodeType === Node.TEXT_NODE) {
+        text += child.textContent || '';
+        return;
+      }
+
+      if (child.nodeType !== Node.ELEMENT_NODE) return;
+      const childElement = child as Element;
+      if (childElement.localName === 't') {
+        text += childElement.textContent || '';
+      } else if (childElement.localName === 'tab') {
+        text += '\t';
+      } else if (childElement.localName === 'br' || childElement.localName === 'cr') {
+        text += '\n';
+      } else {
+        text += readNodeText(childElement);
+      }
+    });
+    return text;
+  };
+
+  return paragraphs
+    .map((paragraph) => readNodeText(paragraph).trim())
+    .filter(Boolean)
+    .join('\n');
+};
+
+const extractDocxText = async (file: File): Promise<string> => {
+  const buffer = await file.arrayBuffer();
+  const view = new DataView(buffer);
+  const bytes = new Uint8Array(buffer);
+  const decoder = new TextDecoder('utf-8');
+  const eocdSignature = 0x06054b50;
+  let eocdOffset = -1;
+
+  for (let offset = bytes.length - 22; offset >= 0; offset--) {
+    if (readUint32(view, offset) === eocdSignature) {
+      eocdOffset = offset;
+      break;
+    }
+  }
+
+  if (eocdOffset === -1) return '';
+
+  const centralDirectoryEntries = readUint16(view, eocdOffset + 10);
+  const centralDirectoryOffset = readUint32(view, eocdOffset + 16);
+  let centralOffset = centralDirectoryOffset;
+
+  for (let index = 0; index < centralDirectoryEntries; index++) {
+    if (readUint32(view, centralOffset) !== 0x02014b50) break;
+
+    const compressionMethod = readUint16(view, centralOffset + 10);
+    const compressedSize = readUint32(view, centralOffset + 20);
+    const fileNameLength = readUint16(view, centralOffset + 28);
+    const extraLength = readUint16(view, centralOffset + 30);
+    const commentLength = readUint16(view, centralOffset + 32);
+    const localHeaderOffset = readUint32(view, centralOffset + 42);
+    const fileName = decoder.decode(
+      bytes.slice(centralOffset + 46, centralOffset + 46 + fileNameLength),
+    );
+
+    if (fileName === 'word/document.xml') {
+      if (readUint32(view, localHeaderOffset) !== 0x04034b50) return '';
+
+      const localFileNameLength = readUint16(view, localHeaderOffset + 26);
+      const localExtraLength = readUint16(view, localHeaderOffset + 28);
+      const dataStart = localHeaderOffset + 30 + localFileNameLength + localExtraLength;
+      const compressedData = bytes.slice(dataStart, dataStart + compressedSize);
+      const xmlBytes =
+        compressionMethod === 0
+          ? compressedData
+          : compressionMethod === 8
+            ? await decompressDeflateRaw(compressedData)
+            : new Uint8Array();
+
+      return parseDocxXmlText(decoder.decode(xmlBytes));
+    }
+
+    centralOffset += 46 + fileNameLength + extraLength + commentLength;
+  }
+
+  return '';
+};
+
+const extractReadableFileText = async (file: File): Promise<string> => {
+  const extension = file.name.split('.').pop()?.toLowerCase() || '';
+  if (extension === 'docx') {
+    try {
+      return await extractDocxText(file);
+    } catch {
+      return '';
+    }
+  }
+
+  const readableExtensions = [
+    'txt',
+    'md',
+    'markdown',
+    'csv',
+    'json',
+    'xml',
+    'html',
+    'htm',
+    'log',
+    'yml',
+    'yaml',
+  ];
+
+  if (file.type.startsWith('text/') || readableExtensions.includes(extension)) {
+    try {
+      return await file.text();
+    } catch {
+      return '';
+    }
+  }
+
+  return '';
+};
+
 const customUpload = async (options: any) => {
   const { file, onSuccess, onError } = options;
   const token = appStore.sharedDataToken;
@@ -107,6 +266,7 @@ const customUpload = async (options: any) => {
   formData.append('file', file);
   formData.append('is_image', 'false');
   try {
+    const localOriginalText = await extractReadableFileText(file);
     const response = await request({
       url: API.agent.uploadFile,
       method: 'POST',
@@ -123,6 +283,7 @@ const customUpload = async (options: any) => {
     onSuccess(result, file);
     uploadedFileName.value = file.name;
     uploadedFileUrl.value = result?.url || file.name;
+    uploadedOriginalText.value = getTextFromUploadResult(result) || localOriginalText;
   } catch (error) {
     onError(error);
   }
@@ -355,6 +516,7 @@ const handleSendMessage = async (content: string) => {
       query: reviewQuery,
       dimensions: displayDimensions,
       fileName: uploadedFileName.value, // 新增：保存文件名
+      originalText: uploadedOriginalText.value,
     };
   } else {
     userMessageContent = content.trim();
@@ -393,6 +555,7 @@ const handleSendMessage = async (content: string) => {
     // 清空上传文件状态
     uploadedFileName.value = '';
     uploadedFileUrl.value = '';
+    uploadedOriginalText.value = '';
     // 清空多选框状态
     selectedDimensions.value = [];
     // 重置"全选"状态
@@ -416,6 +579,13 @@ const handleSendMessage = async (content: string) => {
     reasoning: '',
     timestamp: new Date() as any,
     streaming: true,
+    metadata:
+      activeTab.value === '合规审核' && lastComplianceParams.value
+        ? {
+            complianceOriginalText: lastComplianceParams.value.originalText,
+            complianceFileName: lastComplianceParams.value.fileName,
+          }
+        : undefined,
   };
   chat.messages.push(aiMessage);
   currentStreamingMessageId.value = aiMessageId;
@@ -635,6 +805,10 @@ const handleComplianceReview = async () => {
     reasoning: '',
     timestamp: new Date() as any,
     streaming: true,
+    metadata: {
+      complianceOriginalText: lastComplianceParams.value.originalText,
+      complianceFileName: lastComplianceParams.value.fileName,
+    },
   };
   chat.messages.push(aiMessage);
   currentStreamingMessageId.value = aiMessageId;

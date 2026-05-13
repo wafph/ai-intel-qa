@@ -699,15 +699,14 @@ onUnmounted(() => {
 .auxiliary-draft.intelligent-qa {
   display: flex;
   flex-direction: column;
-  height: 71vh;
+  height: 98%;
   background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
   position: relative;
   overflow: hidden;
 
   .qa-header {
     text-align: center;
-    margin: 40px auto 20px;
-    // max-width: 800px;
+    margin: 60px auto 20px;
     padding: 0 20px;
 
     h1 {

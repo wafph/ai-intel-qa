@@ -132,6 +132,7 @@ export const useChatStore = defineStore('chat', () => {
       const answer = {
         responseContent: assistantMessage.content || '',
         data_json: assistantMessage.sources || [],
+        metadata: assistantMessage.metadata || {},
       };
 
       const payload = {
@@ -630,6 +631,7 @@ export const useChatStore = defineStore('chat', () => {
             dislikeCount: qa.dislikeStatus || 0,
             sources: sources,
             match_score: matchScore,
+            metadata: qa.answer?.metadata || undefined,
           });
         });
       } else if (
@@ -665,6 +667,7 @@ export const useChatStore = defineStore('chat', () => {
             dislikeCount: qa.dislikeStatus || 0,
             sources: sources,
             match_score: matchScore,
+            metadata: qa.answer?.metadata || undefined,
           });
         });
       } else {

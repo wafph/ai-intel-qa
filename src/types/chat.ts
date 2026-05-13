@@ -12,6 +12,8 @@ export interface ChatMessage {
   metadata?: {
     type?: string;
     wordCount?: number;
+    complianceOriginalText?: string;
+    complianceFileName?: string;
   };
   sources?: SourceInfo[]; // ✅ 新增来源信息字段
   match_score?: number; // ✅ 新增：消息级别的
