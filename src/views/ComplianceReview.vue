@@ -94,7 +94,7 @@
                     plain
                     @click="toggleOriginalPanel(item)"
                   >
-                    原文标记<el-icon class="el-icon--right"><Document /></el-icon>
+                    原文标记
                   </el-button>
                   <el-button
                     link
@@ -1144,7 +1144,7 @@ onUnmounted(() => {
             }
 
             .message-time {
-              font-size: 16px;
+              font-size: 15px;
               color: #999;
               margin-top: 8px;
               padding: 0 4px;

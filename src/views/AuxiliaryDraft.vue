@@ -803,7 +803,7 @@ onUnmounted(() => {
                 text-align: right;
                 margin-top: 8px;
                 color: #999;
-                font-size: 12px;
+                font-size: 15px;
                 padding-right: 0;
               }
             }
@@ -1018,7 +1018,7 @@ onUnmounted(() => {
               color: #999;
               margin-top: 8px;
               padding: 0 4px;
-              font-size: 12px;
+              font-size: 15px;
               text-align: left; /* AI消息时间左对齐 */
             }
 

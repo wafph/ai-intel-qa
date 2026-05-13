@@ -825,7 +825,7 @@ onUnmounted(() => {
           }
 
           .message-time {
-            font-size: 16px;
+            font-size: 15px;
             color: #999;
             margin-top: 8px;
             padding: 0 4px;
