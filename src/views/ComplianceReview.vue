@@ -81,20 +81,11 @@
                   <el-button
                     link
                     class="btnbottom"
-                    type="success"
-                    plain
-                    @click="handleRestart(index)"
-                  >
-                    重新审核<el-icon class="el-icon--right"><ArrowRight /></el-icon>
-                  </el-button>
-                  <el-button
-                    link
-                    class="btnbottom"
                     type="warning"
                     plain
                     @click="toggleOriginalPanel(item)"
                   >
-                    原文标记
+                    原文标记<el-icon class="el-icon--right"><ArrowRight /></el-icon>
                   </el-button>
                   <el-button
                     link
@@ -106,6 +97,15 @@
                     :disabled="loading"
                   >
                     {{ loading ? '转换中...' : '导出报告' }}
+                  </el-button>
+                  <el-button
+                    link
+                    class="btnbottom"
+                    type="success"
+                    plain
+                    @click="handleRestart(index)"
+                  >
+                    重新审核
                   </el-button>
                 </div>
               </div>
@@ -555,8 +555,7 @@ const findCompactMatch = (source: string, candidate: string) => {
   if (compactIndex === -1) return null;
 
   const start = sourcePositions[compactIndex];
-  const end =
-    sourcePositions[compactIndex + compactCandidate.length - 1] + 1 || start;
+  const end = sourcePositions[compactIndex + compactCandidate.length - 1] + 1 || start;
   return source.slice(start, end);
 };
 
@@ -577,9 +576,7 @@ const findOriginalMatch = (source: string, text: string) => {
 
 const scrollToOriginalMatch = () => {
   nextTick(() => {
-    const mark = originalContentRef.value?.querySelector(
-      '[data-original-mark="active"]',
-    );
+    const mark = originalContentRef.value?.querySelector('[data-original-mark="active"]');
     mark?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   });
 };
