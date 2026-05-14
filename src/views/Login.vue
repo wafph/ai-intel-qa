@@ -13,11 +13,28 @@
       </div>
 
       <div class="mode-switch">
-        <button :class="['mode-btn', { active: mode === 'login' }]" @click="switchMode('login')">账号登录</button>
-        <button :class="['mode-btn', { active: mode === 'register' }]" @click="switchMode('register')">用户注册</button>
+        <button
+          :class="['mode-btn', { active: mode === 'login' }]"
+          @click="switchMode('login')"
+        >
+          账号登录
+        </button>
+        <button
+          :class="['mode-btn', { active: mode === 'register' }]"
+          @click="switchMode('register')"
+        >
+          用户注册
+        </button>
       </div>
 
-      <el-form ref="formRef" class="login-form" :model="form" :rules="rules" label-position="top" @keyup.enter="handleSubmit">
+      <el-form
+        ref="formRef"
+        class="login-form"
+        :model="form"
+        :rules="rules"
+        label-position="top"
+        @keyup.enter="handleSubmit"
+      >
         <el-form-item label="账号" prop="username">
           <el-input
             v-model.trim="form.username"
@@ -52,25 +69,48 @@
           </el-form-item>
 
           <el-form-item label="姓名/昵称" prop="nickname">
-            <el-input v-model.trim="form.nickname" size="large" placeholder="请输入姓名或昵称" clearable />
+            <el-input
+              v-model.trim="form.nickname"
+              size="large"
+              placeholder="请输入姓名或昵称"
+              clearable
+            />
           </el-form-item>
 
           <el-form-item label="手机号" prop="phone">
-            <el-input v-model.trim="form.phone" size="large" placeholder="请输入手机号，可选" clearable />
+            <el-input
+              v-model.trim="form.phone"
+              size="large"
+              placeholder="请输入手机号，可选"
+              clearable
+            />
           </el-form-item>
 
           <el-form-item label="邮箱" prop="email">
-            <el-input v-model.trim="form.email" size="large" placeholder="请输入邮箱，可选" clearable />
+            <el-input
+              v-model.trim="form.email"
+              size="large"
+              placeholder="请输入邮箱，可选"
+              clearable
+            />
           </el-form-item>
         </template>
 
-        <el-button class="login-btn" type="primary" size="large" :loading="userStore.loading" @click="handleSubmit">
+        <el-button
+          class="login-btn"
+          type="primary"
+          size="large"
+          :loading="userStore.loading"
+          @click="handleSubmit"
+        >
           {{ mode === 'login' ? '登录' : '注册' }}
         </el-button>
 
         <div class="form-tip">
           <template v-if="mode === 'login'">
-            没有账号？<button type="button" @click="switchMode('register')">立即注册</button>
+            没有账号？<button type="button" @click="switchMode('register')">
+              立即注册
+            </button>
           </template>
           <template v-else>
             已有账号？<button type="button" @click="switchMode('login')">返回登录</button>
@@ -135,7 +175,8 @@ const switchMode = (nextMode: 'login' | 'register') => {
 };
 
 const afterLoginRedirect = () => {
-  const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/intelligent-qa';
+  const redirect =
+    typeof route.query.redirect === 'string' ? route.query.redirect : '/intelligent-qa';
   router.replace(redirect);
 };
 
@@ -167,7 +208,10 @@ const handleSubmit = async () => {
     if (mode.value === 'login') await handleLogin();
     else await handleRegister();
   } catch (error: any) {
-    ElMessage.error(error?.message || (mode.value === 'login' ? '登录失败，请检查账号或密码' : '注册失败，请稍后重试'));
+    ElMessage.error(
+      error?.message ||
+        (mode.value === 'login' ? '登录失败，请检查账号或密码' : '注册失败，请稍后重试'),
+    );
   }
 };
 </script>
@@ -282,6 +326,10 @@ const handleSubmit = async () => {
   :deep(.el-form-item__label) {
     color: #334155;
     font-weight: 600;
+  }
+
+  :deep(.el-form-item--label-top) {
+    margin-bottom: 20px;
   }
 
   :deep(.el-input__wrapper) {
