@@ -62,6 +62,8 @@ const activeTab = ref<string>('智能问答');
 const activeChatId = ref<string>('');
 const currentConversationUuid = ref<string>('');
 const isSourcesPanelVisible = ref(false);
+const isHistoryChatActive = ref(false);
+const isSelectingHistoryChat = ref(false);
 // 流式相关状态
 const isStreaming = ref<boolean>(false);
 const currentReasoning = ref<string>('');
@@ -328,6 +330,7 @@ const resetCurrentChat = () => {
   currentReasoning.value = '';
   currentAnswer.value = '';
   currentStreamingMessageId.value = null;
+  isHistoryChatActive.value = false;
 };
 
 // 切换侧边栏折叠状态
@@ -336,29 +339,19 @@ const toggleSidebar = () => {
 };
 let isCreatingChat = false;
 let creationPromise: Promise<void> | null = null;
-const handleNewChat = async () => {
-  // 如果当前已经是空白新会话，则不再重复创建
-  if (activeChatId.value) {
-    const currentChat = chatStore.getChatSession(activeChatId.value);
-    const isEmptyNewChat =
-      currentChat &&
-      currentChat.messages.length === 0 &&
-      currentChat.preview !== '已有内容';
-    if (isEmptyNewChat) {
-      return;
-    }
-  }
-  if (isCreatingChat) {
-    return;
-  }
+const createChatForMessage = async () => {
   if (creationPromise) {
     await creationPromise;
+    return;
+  }
+  if (isCreatingChat) {
     return;
   }
   isCreatingChat = true;
   creationPromise = (async () => {
     try {
       const newChatId = generateUUID();
+      isHistoryChatActive.value = false;
       activeChatId.value = newChatId;
       currentConversationUuid.value = newChatId;
       const chatTitle = activeTab.value;
@@ -393,53 +386,67 @@ const handleNewChat = async () => {
   creationPromise = null;
 };
 
+const handleNewChat = async () => {
+  stopStream();
+  resetCurrentChat();
+  isSourcesPanelVisible.value = false;
+  scrollToBottom();
+};
+
 // 修改 handleSelectChat 函数，确保能正确加载会话
 const handleSelectChat = async (chatId: string) => {
   if (isStreaming.value) {
     stopStream();
   }
-  hasAutoCreated = false;
-  // 先清空，再设置，确保触发响应式更新
-  activeChatId.value = '';
-  await nextTick();
-  const session = chatStore.getChatSession(chatId);
-  if (!session) {
-    try {
-      const funcId = chatStore.getFuncIdByTab(activeTab.value);
-      const messages = await chatStore.querySessionHistory(chatId, funcId);
-      if (messages && messages.length > 0) {
-        // 创建新的会话对象
-        const newSession: ChatSession = {
-          id: chatId,
-          title: '从收藏加载的会话',
-          time: Date.now(),
-          type: activeTab.value as any,
-          messages: messages,
-          menuType: activeTab.value,
-          conversationUuid: chatId,
-        };
+  isSelectingHistoryChat.value = true;
+  isHistoryChatActive.value = true;
+  try {
+    hasAutoCreated = false;
+    // 先清空，再设置，确保触发响应式更新
+    activeChatId.value = '';
+    await nextTick();
+    let session = chatStore.getChatSession(chatId);
+    if (!session) {
+      try {
+        const funcId = chatStore.getFuncIdByTab(activeTab.value);
+        const messages = await chatStore.querySessionHistory(chatId, funcId);
+        if (messages && messages.length > 0) {
+          // 创建新的会话对象
+          const newSession: ChatSession = {
+            id: chatId,
+            title: '从收藏加载的会话',
+            time: Date.now(),
+            type: activeTab.value as any,
+            messages: messages,
+            menuType: activeTab.value,
+            conversationUuid: chatId,
+          };
 
-        chatStore.addChatSession(newSession);
-      } else {
+          chatStore.addChatSession(newSession);
+          session = newSession;
+        } else {
+          return;
+        }
+      } catch (error) {
         return;
       }
-    } catch (error) {
-      return;
     }
+    // 设置当前会话UUID
+    if (session && !(session as any).conversationUuid) {
+      (session as any).conversationUuid = chatId;
+    }
+    currentConversationUuid.value = chatId;
+    // 加载会话历史
+    if (session && (!session.messages || session.messages.length === 0)) {
+      await chatStore.loadSessionHistory(chatId).catch(() => {});
+    }
+    activeChatId.value = chatId;
+    resetStreamState();
+    scrollToBottom();
+    lastComplianceParams.value = null;
+  } finally {
+    isSelectingHistoryChat.value = false;
   }
-  // 设置当前会话UUID
-  if (session && !(session as any).conversationUuid) {
-    (session as any).conversationUuid = chatId;
-  }
-  currentConversationUuid.value = chatId;
-  // 加载会话历史
-  if (session && (!session.messages || session.messages.length === 0)) {
-    await chatStore.loadSessionHistory(chatId).catch(() => {});
-  }
-  activeChatId.value = chatId;
-  resetStreamState();
-  scrollToBottom();
-  lastComplianceParams.value = null;
 };
 
 const handleDeleteChat = async (chatId: string) => {
@@ -447,6 +454,7 @@ const handleDeleteChat = async (chatId: string) => {
   if (activeChatId.value === chatId) {
     if (chatStore.historyList.length > 0) {
       activeChatId.value = chatStore.historyList[0].id;
+      isHistoryChatActive.value = true;
       const chat = chatStore.getChatSession(chatStore.historyList[0].id);
       if (chat && (chat as any).conversationUuid) {
         currentConversationUuid.value = (chat as any).conversationUuid;
@@ -454,6 +462,7 @@ const handleDeleteChat = async (chatId: string) => {
     } else {
       activeChatId.value = '';
       currentConversationUuid.value = '';
+      isHistoryChatActive.value = false;
     }
   }
 };
@@ -465,6 +474,7 @@ const handleClearHistory = async () => {
 
   activeChatId.value = '';
   currentConversationUuid.value = '';
+  isHistoryChatActive.value = false;
   resetStreamState();
 };
 
@@ -486,15 +496,6 @@ const handleSendMessage = async (content: string) => {
     }
   } else {
     if (!content.trim() || isStreaming.value) return;
-  }
-  if (!activeChatId.value) {
-    await handleNewChat();
-  }
-  const chat = chatStore.getChatSession(activeChatId.value!);
-  if (!chat) return;
-  if (!currentConversationUuid.value) {
-    currentConversationUuid.value = generateUUID();
-    (chat as any).conversationUuid = currentConversationUuid.value;
   }
   let userMessageContent = '';
   if (activeTab.value === '合规审核') {
@@ -520,6 +521,16 @@ const handleSendMessage = async (content: string) => {
     };
   } else {
     userMessageContent = content.trim();
+  }
+
+  if (!activeChatId.value) {
+    await createChatForMessage();
+  }
+  const chat = chatStore.getChatSession(activeChatId.value!);
+  if (!chat) return;
+  if (!currentConversationUuid.value) {
+    currentConversationUuid.value = generateUUID();
+    (chat as any).conversationUuid = currentConversationUuid.value;
   }
 
   // 添加用户消息
@@ -755,8 +766,15 @@ const handleComplianceReview = async () => {
     return;
   }
 
+  // 修改：为重新审核生成详细的用户消息内容
+  const displayDimensions = getActualReviewDimensions(
+    lastComplianceParams.value.dimensions,
+  );
+
+  const userMessageContent = `${lastComplianceParams.value.fileName}\n审核维度：${displayDimensions.join('、')}`;
+
   if (!activeChatId.value) {
-    await handleNewChat();
+    await createChatForMessage();
   }
 
   const chat = chatStore.getChatSession(activeChatId.value!);
@@ -766,13 +784,6 @@ const handleComplianceReview = async () => {
     currentConversationUuid.value = generateUUID();
     (chat as any).conversationUuid = currentConversationUuid.value;
   }
-
-  // 修改：为重新审核生成详细的用户消息内容
-  const displayDimensions = getActualReviewDimensions(
-    lastComplianceParams.value.dimensions,
-  );
-
-  const userMessageContent = `${lastComplianceParams.value.fileName}\n审核维度：${displayDimensions.join('、')}`;
 
   // 添加用户消息
   const userMessage: ChatMessage = {
@@ -1272,7 +1283,9 @@ onUnmounted(() => {
     handleUpdateTitle,
     inputContainerStyle,
     inputPlaceholder,
+    isHistoryChatActive,
     isSendDisabled,
+    isSelectingHistoryChat,
     isSourcesPanelVisible,
     isStreaming,
     selectedDimensions,

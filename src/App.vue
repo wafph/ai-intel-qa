@@ -33,7 +33,7 @@
           <!-- 路由视图区域 -->
           <div class="dynamic-content">
             <router-view
-              v-if="activeTab && currentChatData"
+              v-if="shouldRenderContentView"
               :key="activeChatId"
               :chat-data="currentChatData"
               :streaming="isStreaming"
@@ -90,7 +90,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import HeaderMenu from './components/HeaderMenu.vue';
 import HistoryPanel from './components/HistoryPanel.vue';
 import ChatInput from './components/ChatInput.vue';
@@ -123,7 +123,9 @@ const {
   handleUpdateTitle,
   inputContainerStyle,
   inputPlaceholder,
+  isHistoryChatActive,
   isSendDisabled,
+  isSelectingHistoryChat,
   isSourcesPanelVisible,
   isStreaming,
   selectedDimensions,
@@ -134,6 +136,16 @@ const {
   uploadedFileName,
   userStore,
 } = useAppShell();
+
+const shouldRenderContentView = computed(() => {
+  const hasCurrentMessages = (currentChatData.value?.messages?.length || 0) > 0;
+
+  return Boolean(
+    activeTab.value &&
+      !isSelectingHistoryChat.value &&
+      (!isHistoryChatActive.value || hasCurrentMessages),
+  );
+});
 
 const handleHeaderTabChange = async (tabName: string) => {
   handleTabChange(tabName);
