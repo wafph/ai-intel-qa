@@ -119,6 +119,11 @@ const focusInput = () => {
   }
 };
 
+const clearInput = () => {
+  inputText.value = '';
+  resetTextareaHeight();
+};
+
 // 处理组合输入
 const handleCompositionStart = () => {
   isComposing.value = true;
@@ -159,6 +164,7 @@ watch(
 // 暴露方法
 defineExpose({
   focusInput,
+  clearInput,
 });
 </script>
 

@@ -25,7 +25,7 @@
         <HeaderMenu
           :active-tab="activeTab"
           :collapsed="sidebarCollapsed"
-          @tab-change="handleTabChange"
+          @tab-change="handleHeaderTabChange"
           @toggle-sidebar="toggleSidebar"
         />
 
@@ -54,6 +54,7 @@
             :style="inputContainerStyle"
           >
             <ChatInput
+              ref="chatInputRef"
               :placeholder="inputPlaceholder"
               :disabled="isSendDisabled"
               :is-compliance-mode="activeTab === '合规审核'"
@@ -90,11 +91,14 @@
 </template>
 
 <script setup lang="ts">
+import { nextTick, ref } from 'vue';
 import HeaderMenu from './components/HeaderMenu.vue';
 import HistoryPanel from './components/HistoryPanel.vue';
 import ChatInput from './components/ChatInput.vue';
 import ComplianceReviewExtras from './components/ComplianceReviewExtras.vue';
 import { useAppShell } from './composables/useAppShell';
+
+const chatInputRef = ref<InstanceType<typeof ChatInput> | null>(null);
 
 const {
   activeChatId,
@@ -131,6 +135,12 @@ const {
   uploadedFileName,
   userStore,
 } = useAppShell();
+
+const handleHeaderTabChange = async (tabName: string) => {
+  handleTabChange(tabName);
+  await nextTick();
+  chatInputRef.value?.clearInput();
+};
 </script>
 
 <style src="./styles/app-shell.less" lang="less" scoped></style>
