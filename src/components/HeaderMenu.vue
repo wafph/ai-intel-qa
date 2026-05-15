@@ -1,17 +1,6 @@
 <template>
   <header class="header-menu">
     <!-- 折叠按钮 -->
-    <div class="header-left">
-      <button class="collapse-btn" @click="$emit('toggle-sidebar')">
-        <el-icon v-if="collapsed">
-          <Expand />
-        </el-icon>
-        <el-icon v-else>
-          <Fold />
-        </el-icon>
-      </button>
-    </div>
-
     <nav class="nav-tabs">
       <button
         v-for="tab in tabs"
@@ -29,7 +18,6 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Expand, Fold } from '@element-plus/icons-vue';
 
 interface Props {
   activeTab: string;
@@ -83,7 +71,7 @@ const tabs = computed<TabItem[]>(() => {
   height: 70px;
   display: flex;
   align-items: center;
-  padding: 0 24px;
+  padding: 0 54px;
   box-shadow: 0 2px 8px rgba(24, 144, 255, 0.2);
   z-index: 100;
   position: relative;

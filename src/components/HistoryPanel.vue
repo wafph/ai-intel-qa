@@ -1,5 +1,17 @@
 <template>
   <div class="history-panel" :class="{ 'is-collapsed': collapsed }">
+    <button
+      class="sidebar-collapse-btn"
+      :aria-label="collapsed ? '展开侧边栏' : '折叠侧边栏'"
+      @click="$emit('toggle-collapse')"
+    >
+      <el-icon v-if="collapsed">
+        <Expand />
+      </el-icon>
+      <el-icon v-else>
+        <Fold />
+      </el-icon>
+    </button>
     <!-- 顶部区域 -->
     <div class="logo" v-show="!collapsed">
       <!-- 左上角小 logo 暂时不展示，保留代码便于后续恢复。 -->
@@ -189,7 +201,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessageBox, ElMessage } from 'element-plus';
 import type { InputInstance } from 'element-plus';
-import { StarFilled } from '@element-plus/icons-vue';
+import { Expand, Fold, StarFilled } from '@element-plus/icons-vue';
 
 interface Props {
   historyList: any[];
@@ -501,7 +513,7 @@ onUnmounted(() => {
   border-right: 1px solid #e9ecef;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   position: relative;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
   transition: width 0.3s ease; /* 添加过渡动画 */
@@ -536,6 +548,45 @@ onUnmounted(() => {
   &.is-collapsed {
     width: 0; /* 折叠后的宽度 */
   }
+}
+
+.history-panel.is-collapsed {
+  border-right: none;
+  box-shadow: none;
+}
+
+.history-panel.is-collapsed .panel-header {
+  display: none;
+}
+
+.sidebar-collapse-btn {
+  position: absolute;
+  top: 17px;
+  left: calc(100% - 38px);
+  z-index: 350;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: #fff;
+  color: #606266;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  transition:
+    left 0.3s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.sidebar-collapse-btn:hover {
+  color: #1c73eb;
+  box-shadow: 0 5px 16px rgba(28, 115, 235, 0.22);
+}
+
+.history-panel.is-collapsed .sidebar-collapse-btn {
+  left: 8px;
 }
 
 .panel-header {

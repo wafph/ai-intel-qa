@@ -16,6 +16,7 @@
         @update-title="handleUpdateTitle"
         @toggle-favorite="handleToggleFavorite"
         @toggle-pin="handleTogglePin"
+        @toggle-collapse="toggleSidebar"
         @logout="handleLogout"
       />
 
@@ -24,9 +25,7 @@
         <!-- 顶部菜单 -->
         <HeaderMenu
           :active-tab="activeTab"
-          :collapsed="sidebarCollapsed"
           @tab-change="handleHeaderTabChange"
-          @toggle-sidebar="toggleSidebar"
         />
 
         <!-- 内容区域 -->
