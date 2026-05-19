@@ -52,13 +52,6 @@
             :class="{ 'sources-panel-visible': isSourcesPanelVisible }"
             :style="inputContainerStyle"
           >
-            <ChatInput
-              ref="chatInputRef"
-              :placeholder="inputPlaceholder"
-              :disabled="isSendDisabled"
-              :is-compliance-mode="activeTab === '合规审核'"
-              @send="handleSendMessage"
-            />
             <!-- 流式传输控制 -->
             <div v-if="isStreaming" class="stream-controls">
               <el-button
@@ -71,6 +64,13 @@
                 停止生成
               </el-button>
             </div>
+            <ChatInput
+              ref="chatInputRef"
+              :placeholder="inputPlaceholder"
+              :disabled="isSendDisabled"
+              :is-compliance-mode="activeTab === '合规审核'"
+              @send="handleSendMessage"
+            />
 
             <ComplianceReviewExtras
               v-if="activeTab === '合规审核'"

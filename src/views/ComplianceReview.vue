@@ -668,25 +668,47 @@ const closeOriginalPanel = () => {
 
 const scrollToBottom = () => {
   nextTick(() => {
-    const container =
-      document.querySelector('.dynamic-content') ||
-      document.querySelector('.conversation-history');
-    if (container) {
-      container.scrollTop = container.scrollHeight;
-    }
+    const scrollContainers = () => {
+      const containers = [
+        document.querySelector('.dynamic-content'),
+        document.querySelector('.conversation-history'),
+        document.querySelector('.intelligent-qa'),
+      ];
+
+      for (const container of containers) {
+        if (!container) continue;
+        try {
+          container.scrollTop = container.scrollHeight;
+        } catch {}
+      }
+
+      window.scrollTo({
+        top: document.documentElement.scrollHeight,
+        behavior: 'auto',
+      });
+    };
+
+    requestAnimationFrame(() => {
+      scrollContainers();
+      requestAnimationFrame(scrollContainers);
+    });
   });
 };
 
 watch(
   () => props.currentAnswer,
   (newAnswer, oldAnswer = '') => {
+    if (!newAnswer) {
+      displayAnswer.value = '';
+      stopTypingEffect();
+      scrollToBottom();
+      return;
+    }
+
     if (newAnswer && newAnswer !== oldAnswer) {
       const newText = newAnswer.substring(oldAnswer.length);
       if (newText) {
         appendToTypingQueue(newText);
-      } else if (newAnswer === '') {
-        displayAnswer.value = '';
-        stopTypingEffect();
       }
     }
     scrollToBottom();
@@ -718,7 +740,10 @@ watch(
   (newId) => {
     if (!newId) {
       stopTypingEffect();
+      return;
     }
+    displayAnswer.value = '';
+    stopTypingEffect();
   },
 );
 

@@ -48,6 +48,7 @@ const lastComplianceParams = ref<ComplianceReviewParams | null>(null);
 const uploadedFileName = ref('');
 const uploadedFileUrl = ref('');
 const uploadedOriginalText = ref('');
+const uploadedFileRef = ref<File | null>(null);
 const selectedDimensions = ref<string[]>([]);
 const REVIEW_DIMENSIONS = ['合规性', '冲突性', '文本规范性'];
 const SELECT_ALL_DIMENSION = '全选';
@@ -88,6 +89,37 @@ const buildComplianceMetadata = (params: ComplianceReviewParams) => ({
   complianceFileName: params.fileName,
   complianceParams: { ...params },
 });
+
+const isTemporaryFileUrlExpired = (fileUrl: string) => {
+  try {
+    const url = new URL(fileUrl);
+    const expires = Number(url.searchParams.get('Expires'));
+    if (!expires) return false;
+    return expires <= Math.floor(Date.now() / 1000);
+  } catch {
+    return false;
+  }
+};
+
+const refreshComplianceParamsFileUrl = async (params: ComplianceReviewParams) => {
+  const file = uploadedFileRef.value;
+  if (!file || file.name !== params.fileName) {
+    if (isTemporaryFileUrlExpired(params.file_url)) {
+      throw new Error('上传文件链接已过期，请重新上传文件后再审核');
+    }
+    return params;
+  }
+
+  const uploadResult = await uploadComplianceFile(file);
+  const refreshedParams = {
+    ...params,
+    file_url: uploadResult.fileUrl,
+    fileName: uploadResult.fileName,
+    originalText: uploadResult.originalText || params.originalText,
+  };
+  lastComplianceParams.value = refreshedParams;
+  return refreshedParams;
+};
 
 const getComplianceParamsFromSession = (session?: ChatSession | null) => {
   if (!session?.messages) return null;
@@ -303,35 +335,49 @@ const extractReadableFileText = async (file: File): Promise<string> => {
   return '';
 };
 
-const customUpload = async (options: any) => {
-  const { file, onSuccess, onError } = options;
+const uploadComplianceFile = async (file: File) => {
   const token = appStore.sharedDataToken;
   if (!token) {
-    onError(new Error('未找到认证 token'));
-    return;
+    throw new Error('未找到认证 token');
   }
+
   const formData = new FormData();
   formData.append('file', file);
   formData.append('is_image', 'false');
-  try {
-    const localOriginalText = await extractReadableFileText(file);
-    const response = await request({
+
+  const [localOriginalText, response] = await Promise.all([
+    extractReadableFileText(file),
+    request({
       url: API.agent.uploadFile,
       method: 'POST',
       headers: {
         'X-Auth-Token': token,
       },
       data: formData,
-    });
+    }),
+  ]);
 
-    if (!isSuccessStatus(response.status)) {
-      throw new Error(`上传失败: ${response.status}`);
-    }
-    const result = response.data;
-    onSuccess(result, file);
-    uploadedFileName.value = file.name;
-    uploadedFileUrl.value = result?.url || file.name;
-    uploadedOriginalText.value = getTextFromUploadResult(result) || localOriginalText;
+  if (!isSuccessStatus(response.status)) {
+    throw new Error(`上传失败: ${response.status}`);
+  }
+
+  const result = response.data;
+  return {
+    fileName: file.name,
+    fileUrl: result?.url || file.name,
+    originalText: getTextFromUploadResult(result) || localOriginalText,
+  };
+};
+
+const customUpload = async (options: any) => {
+  const { file, onSuccess, onError } = options;
+  try {
+    const uploadResult = await uploadComplianceFile(file);
+    onSuccess(uploadResult, file);
+    uploadedFileRef.value = file;
+    uploadedFileName.value = uploadResult.fileName;
+    uploadedFileUrl.value = uploadResult.fileUrl;
+    uploadedOriginalText.value = uploadResult.originalText;
   } catch (error) {
     onError(error);
   }
@@ -649,12 +695,12 @@ const handleSendMessage = async (content: string) => {
         : undefined,
   };
   chat.messages.push(aiMessage);
-  currentStreamingMessageId.value = aiMessageId;
   chatStore.updateHistoryItem(activeChatId.value!, {
     preview: userMessageContent, // 使用新的消息内容作为预览
     time: Date.now(),
   });
   resetStreamState();
+  currentStreamingMessageId.value = aiMessageId;
 
   // 开始流式输出
   await startStream(content, aiMessageId);
@@ -775,7 +821,11 @@ const startStream = async (queryText: string, messageId: string) => {
             const parsed: any = JSON.parse(data);
             await processStreamChunk(parsed, messageId);
           } catch (error) {
-            console.error('解析流数据失败:', error);
+            if (error instanceof SyntaxError) {
+              console.error('解析流数据失败:', error);
+            } else {
+              throw error;
+            }
           }
         }
       }
@@ -825,6 +875,15 @@ const handleRegenerate = (payload: RegeneratePayload) => {
 const handleComplianceReview = async () => {
   if (!lastComplianceParams.value) {
     ElMessage.warning('没有找到上一次审核的参数');
+    return;
+  }
+
+  try {
+    lastComplianceParams.value = await refreshComplianceParamsFileUrl(
+      lastComplianceParams.value,
+    );
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '重新上传文件失败');
     return;
   }
 
@@ -882,12 +941,12 @@ const handleComplianceReview = async () => {
     metadata: buildComplianceMetadata(lastComplianceParams.value),
   };
   chat.messages.push(aiMessage);
-  currentStreamingMessageId.value = aiMessageId;
   chatStore.updateHistoryItem(activeChatId.value!, {
     preview: userMessageContent, // 使用新的消息内容作为预览
     time: Date.now(),
   });
   resetStreamState();
+  currentStreamingMessageId.value = aiMessageId;
   // 使用保存的参数开始流式输出
   await startComplianceStream(aiMessageId);
   scrollToBottom();
@@ -968,7 +1027,11 @@ const startComplianceStream = async (messageId: string) => {
             const parsed: any = JSON.parse(data);
             await processStreamChunk(parsed, messageId);
           } catch (error) {
-            console.error('解析流数据失败:', error);
+            if (error instanceof SyntaxError) {
+              console.error('解析流数据失败:', error);
+            } else {
+              throw error;
+            }
           }
         }
       }
@@ -1028,6 +1091,15 @@ const flushPendingModelOutput = (messageId: string) => {
 };
 
 const processStreamChunk = async (chunk: any, messageId: string) => {
+  if (chunk.event === 'error') {
+    const message =
+      chunk.data?.message ||
+      chunk.data?.error_msg ||
+      chunk.data?.error_reason ||
+      '工作流执行失败';
+    throw new Error(message);
+  }
+
   if (chunk.event === 'message' && chunk.data?.reasoning_content) {
     currentReasoning.value += chunk.data.reasoning_content;
     const chat = chatStore.getChatSession(activeChatId.value!);
@@ -1184,10 +1256,30 @@ const resetStreamState = () => {
 
 const scrollToBottom = () => {
   nextTick(() => {
-    const container = document.querySelector('.dynamic-content');
-    if (container) {
-      container.scrollTop = container.scrollHeight;
-    }
+    const scrollContainers = () => {
+      const containers = [
+        document.querySelector('.dynamic-content'),
+        document.querySelector('.conversation-history'),
+        document.querySelector('.intelligent-qa'),
+      ];
+
+      for (const container of containers) {
+        if (!container) continue;
+        try {
+          container.scrollTop = container.scrollHeight;
+        } catch {}
+      }
+
+      window.scrollTo({
+        top: document.documentElement.scrollHeight,
+        behavior: 'auto',
+      });
+    };
+
+    requestAnimationFrame(() => {
+      scrollContainers();
+      requestAnimationFrame(scrollContainers);
+    });
   });
 };
 
@@ -1373,4 +1465,3 @@ onUnmounted(() => {
     userStore,
   };
 }
-
