@@ -8,11 +8,11 @@ export const API = {
     workflowConversation: (workflowId: string, conversationId: string, version: string) =>
       `${AGENT_APP_BASE}/workflows/${workflowId}/conversations/${conversationId}?version=${version}`,
     workflows: {
-      qa: { id: '36ef6120-e675-4982-9add-4ab960165014', version: '1778136208083' },
-      draft: { id: '1808592a-3c09-41a1-b1b6-225c9985ee00', version: '1778135796942' },
-      review: { id: '32dd3ef3-2bfb-4ad7-a448-811ddd37924a', version: '1778208018816' },
-      reviewRegenerate: { id: '32dd3ef3-2bfb-4ad7-a448-811ddd37924a', version: '1777960203166' },
-      search: { id: 'c206107e-ec31-47d8-9aaf-5c1262931168', version: '1778135927550' },
+      qa: { id: '36ef6120-e675-4982-9add-4ab960165014', version: '1779182453662' },
+      draft: { id: '1808592a-3c09-41a1-b1b6-225c9985ee00', version: '1779096918260' },
+      review: { id: '32dd3ef3-2bfb-4ad7-a448-811ddd37924a', version: '1779098225579' },
+      reviewRegenerate: { id: '32dd3ef3-2bfb-4ad7-a448-811ddd37924a', version: '1779098225579' },
+      search: { id: 'c206107e-ec31-47d8-9aaf-5c1262931168', version: '1779098087856' },
     },
   },
   auth: {
