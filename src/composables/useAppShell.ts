@@ -29,13 +29,22 @@ const scopesData = computed(() => {
 
 // 在已有状态之后添加
 const inputText = ref('');
-const lastComplianceParams = ref<{
+type ComplianceReviewParams = {
   file_url: string;
   query: string;
   dimensions: string[];
   fileName: string;
   originalText: string;
-} | null>(null);
+};
+
+type RegeneratePayload =
+  | string
+  | {
+      content: string;
+      complianceParams?: ComplianceReviewParams | null;
+    };
+
+const lastComplianceParams = ref<ComplianceReviewParams | null>(null);
 const uploadedFileName = ref('');
 const uploadedFileUrl = ref('');
 const uploadedOriginalText = ref('');
@@ -53,6 +62,43 @@ const getActualReviewDimensions = (dimensions: string[] = selectedDimensions.val
 
 const getReviewQuery = (dimensions: string[] = selectedDimensions.value) => {
   return getActualReviewDimensions(dimensions).join(',');
+};
+
+const normalizeComplianceParams = (params: any): ComplianceReviewParams | null => {
+  if (!params || !params.file_url || !params.query) return null;
+
+  const dimensions = Array.isArray(params.dimensions)
+    ? getActualReviewDimensions(params.dimensions)
+    : String(params.query)
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+  return {
+    file_url: params.file_url,
+    query: params.query,
+    dimensions,
+    fileName: params.fileName || params.file_name || params.name || '合规审核文件',
+    originalText: params.originalText || params.original_text || '',
+  };
+};
+
+const buildComplianceMetadata = (params: ComplianceReviewParams) => ({
+  complianceOriginalText: params.originalText,
+  complianceFileName: params.fileName,
+  complianceParams: { ...params },
+});
+
+const getComplianceParamsFromSession = (session?: ChatSession | null) => {
+  if (!session?.messages) return null;
+
+  for (let index = session.messages.length - 1; index >= 0; index--) {
+    const message = session.messages[index] as any;
+    const params = normalizeComplianceParams(message.metadata?.complianceParams);
+    if (params) return params;
+  }
+
+  return null;
 };
 
 const sidebarCollapsed = ref(false);
@@ -443,7 +489,10 @@ const handleSelectChat = async (chatId: string) => {
     activeChatId.value = chatId;
     resetStreamState();
     scrollToBottom();
-    lastComplianceParams.value = null;
+    lastComplianceParams.value =
+      activeTab.value === '合规审核'
+        ? getComplianceParamsFromSession(chatStore.getChatSession(chatId))
+        : null;
   } finally {
     isSelectingHistoryChat.value = false;
   }
@@ -539,6 +588,10 @@ const handleSendMessage = async (content: string) => {
     role: 'user',
     content: userMessageContent, // 使用新的消息内容
     timestamp: new Date() as any,
+    metadata:
+      activeTab.value === '合规审核' && lastComplianceParams.value
+        ? buildComplianceMetadata(lastComplianceParams.value)
+        : undefined,
   };
 
   chat.messages.push(userMessage);
@@ -592,10 +645,7 @@ const handleSendMessage = async (content: string) => {
     streaming: true,
     metadata:
       activeTab.value === '合规审核' && lastComplianceParams.value
-        ? {
-            complianceOriginalText: lastComplianceParams.value.originalText,
-            complianceFileName: lastComplianceParams.value.fileName,
-          }
+        ? buildComplianceMetadata(lastComplianceParams.value)
         : undefined,
   };
   chat.messages.push(aiMessage);
@@ -742,16 +792,28 @@ const startStream = async (queryText: string, messageId: string) => {
   }
 };
 
-const handleRegenerate = (content: string) => {
+const handleRegenerate = (payload: RegeneratePayload) => {
   if (isStreaming.value) {
     stopStream();
   }
+
+  const content = typeof payload === 'string' ? payload : payload.content;
+
   if (activeTab.value === '合规审核') {
-    if (lastComplianceParams.value) {
+    const payloadParams =
+      typeof payload === 'string'
+        ? null
+        : normalizeComplianceParams(payload.complianceParams);
+    const sessionParams = getComplianceParamsFromSession(
+      chatStore.getChatSession(activeChatId.value),
+    );
+    const params = payloadParams || lastComplianceParams.value || sessionParams;
+
+    if (params) {
+      lastComplianceParams.value = params;
       handleComplianceReview();
     } else {
-      console.warn('没有找到保存的审核参数，使用默认流程');
-      handleSendMessage(content);
+      ElMessage.error('没有找到审核参数，无法重新审核');
     }
   } else {
     // 非合规审核，正常重新生成
@@ -791,6 +853,7 @@ const handleComplianceReview = async () => {
     role: 'user',
     content: userMessageContent, // 使用新的消息内容
     timestamp: new Date() as any,
+    metadata: buildComplianceMetadata(lastComplianceParams.value),
   };
 
   chat.messages.push(userMessage);
@@ -816,10 +879,7 @@ const handleComplianceReview = async () => {
     reasoning: '',
     timestamp: new Date() as any,
     streaming: true,
-    metadata: {
-      complianceOriginalText: lastComplianceParams.value.originalText,
-      complianceFileName: lastComplianceParams.value.fileName,
-    },
+    metadata: buildComplianceMetadata(lastComplianceParams.value),
   };
   chat.messages.push(aiMessage);
   currentStreamingMessageId.value = aiMessageId;
@@ -953,6 +1013,20 @@ const appendModelOutputText = async (text: string, messageId: string) => {
   scrollToBottom();
 };
 
+const flushPendingModelOutput = (messageId: string) => {
+  if (answerOutputStarted || !answerPendingText) return;
+
+  answerOutputStarted = true;
+  currentAnswer.value += answerPendingText;
+  answerPendingText = '';
+
+  const chat = chatStore.getChatSession(activeChatId.value!);
+  if (chat) {
+    const msg = chat.messages.find((m: any) => m.id === messageId);
+    if (msg) msg.content = currentAnswer.value;
+  }
+};
+
 const processStreamChunk = async (chunk: any, messageId: string) => {
   if (chunk.event === 'message' && chunk.data?.reasoning_content) {
     currentReasoning.value += chunk.data.reasoning_content;
@@ -971,6 +1045,7 @@ const processStreamChunk = async (chunk: any, messageId: string) => {
 
   if (chunk.event === 'workflow_finished') {
     try {
+      flushPendingModelOutput(messageId);
       const chat = chatStore.getChatSession(activeChatId.value!);
       if (!chat || chat.messages.length < 2) return;
       const userMessage = chat.messages[chat.messages.length - 2];
@@ -1036,6 +1111,7 @@ const handleTabChange = (tab: string) => {
   }
 };
 const finishStream = (messageId: string) => {
+  flushPendingModelOutput(messageId);
   isStreaming.value = false;
   currentStreamingMessageId.value = null;
   currentReasoning.value = '';

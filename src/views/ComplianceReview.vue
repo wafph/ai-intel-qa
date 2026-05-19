@@ -195,7 +195,16 @@ interface ChatMessage {
   metadata?: {
     complianceOriginalText?: string;
     complianceFileName?: string;
+    complianceParams?: ComplianceReviewParams;
   };
+}
+
+interface ComplianceReviewParams {
+  file_url: string;
+  query: string;
+  dimensions: string[];
+  fileName: string;
+  originalText: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -262,7 +271,8 @@ const startTypingEffect = (targetText: string) => {
 const handleRestart = (index: number) => {
   if (!props.chatData || !props.chatData.messages) return;
 
-  let userMessage = null;
+  const assistantMessage = props.chatData.messages[index];
+  let userMessage: ChatMessage | null = null;
   for (let i = index - 1; i >= 0; i--) {
     if (props.chatData.messages[i].role === 'user') {
       userMessage = props.chatData.messages[i];
@@ -271,7 +281,13 @@ const handleRestart = (index: number) => {
   }
 
   if (userMessage) {
-    emit('regenerate', userMessage.content);
+    emit('regenerate', {
+      content: userMessage.content,
+      complianceParams:
+        assistantMessage?.metadata?.complianceParams ||
+        userMessage.metadata?.complianceParams ||
+        null,
+    });
   }
 };
 
