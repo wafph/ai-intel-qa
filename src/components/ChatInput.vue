@@ -1,7 +1,11 @@
 <template>
   <div
     class="chat-input-container"
-    :class="{ 'has-content': inputText.trim(), 'is-disabled': disabled }"
+    :class="{
+      'has-content': hasInputContent,
+      'is-disabled': disabled && !streaming,
+      'is-streaming': streaming,
+    }"
   >
     <div class="input-wrapper">
       <div class="textarea-container">
@@ -11,78 +15,105 @@
           :placeholder="placeholder"
           :disabled="isComplianceMode ? false : disabled"
           class="chat-textarea"
+          rows="1"
           @keydown.enter.exact.prevent="handleSend"
           @keydown.enter.shift.exact.prevent="handleNewLine"
           @input="handleInput"
-          rows="1"
         />
-        <div v-if="inputText.trim()" class="word-count">{{ inputText.length }}/2000</div>
       </div>
 
       <div class="action-buttons">
-         <button
-          class="send-btn"
-          :disabled="isSendButtonDisabled"
-          @click="handleSend"
-        >
-          <svg class="send-icon" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+        <button class="add-btn" type="button" aria-label="添加" title="添加">
+          <svg class="add-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
           </svg>
         </button>
 
-        <div v-if="disabled && !isComplianceMode" class="loading-indicator"> <!-- ✅ 修复：只在非合规审核模式下显示加载指示器 -->
-          <div class="loading-spinner"></div>
-        </div>
+        <button
+          v-if="streaming"
+          class="send-btn stop-btn"
+          type="button"
+          aria-label="停止回答"
+          @click="handleStop"
+        >
+          <span class="stop-tooltip">停止回答</span>
+          <svg class="stop-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <rect x="8" y="8" width="8" height="8" rx="1.5" />
+          </svg>
+        </button>
+
+        <button
+          v-else
+          class="send-btn"
+          type="button"
+          :disabled="isSendButtonDisabled"
+          aria-label="发送"
+          @click="handleSend"
+        >
+          <svg class="send-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 5.5 5.75 12H10v6h4v-6h4.25L12 5.5Z" />
+          </svg>
+        </button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, watch, onMounted, computed, onUnmounted } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
 interface Props {
   placeholder?: string;
   disabled?: boolean;
-  isComplianceMode?: boolean; // 是否为合规审核模式
+  isComplianceMode?: boolean;
+  streaming?: boolean;
 }
-
 
 const props = withDefaults(defineProps<Props>(), {
   placeholder: '请输入内容...',
   disabled: false,
-  isComplianceMode: false, // 默认为false
+  isComplianceMode: false,
+  streaming: false,
 });
 
 const emit = defineEmits<{
   send: [content: string];
+  stop: [];
 }>();
 
-// 响应式状态
 const inputText = ref<string>('');
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const isComposing = ref<boolean>(false);
+const hasInputContent = computed(() => Boolean(inputText.value.trim()));
+
 const isSendButtonDisabled = computed(() => {
+  if (props.streaming) return false;
   if (props.disabled) return true;
-  if (props.isComplianceMode) {
-    return false;
-  }
-  return !inputText.value.trim();
+  if (props.isComplianceMode) return false;
+  return !hasInputContent.value;
 });
 
 const handleSend = () => {
-  if (isComposing.value || props.disabled) {
+  if (isComposing.value || props.disabled || props.streaming) {
     return;
   }
 
   const content = inputText.value.trim();
+  if (!content && !props.isComplianceMode) {
+    return;
+  }
+
   emit('send', content);
   inputText.value = '';
   resetTextareaHeight();
 };
 
+const handleStop = () => {
+  emit('stop');
+};
+
 const handleNewLine = () => {
-  if (props.disabled) return;
+  if (props.disabled || props.streaming) return;
   inputText.value += '\n';
   nextTick(() => {
     autoResize();
@@ -103,7 +134,7 @@ const autoResize = () => {
 
     textareaRef.value.style.height = 'auto';
     const newHeight = Math.min(textareaRef.value.scrollHeight, 150);
-    textareaRef.value.style.height = newHeight + 'px';
+    textareaRef.value.style.height = `${newHeight}px`;
   });
 };
 
@@ -114,9 +145,7 @@ const resetTextareaHeight = () => {
 };
 
 const focusInput = () => {
-  if (textareaRef.value) {
-    textareaRef.value.focus();
-  }
+  textareaRef.value?.focus();
 };
 
 const clearInput = () => {
@@ -124,7 +153,6 @@ const clearInput = () => {
   resetTextareaHeight();
 };
 
-// 处理组合输入
 const handleCompositionStart = () => {
   isComposing.value = true;
 };
@@ -133,7 +161,6 @@ const handleCompositionEnd = () => {
   isComposing.value = false;
 };
 
-// 生命周期
 onMounted(() => {
   if (textareaRef.value) {
     textareaRef.value.addEventListener('compositionstart', handleCompositionStart);
@@ -149,7 +176,6 @@ onUnmounted(() => {
   }
 });
 
-// 监听disabled状态变化
 watch(
   () => props.disabled,
   (newVal) => {
@@ -161,7 +187,6 @@ watch(
   },
 );
 
-// 暴露方法
 defineExpose({
   focusInput,
   clearInput,
@@ -170,41 +195,42 @@ defineExpose({
 
 <style lang="less" scoped>
 .chat-input-container {
-  border-radius: 12px;
-  border: 2px solid #e4e7ed;
-  transition: all 0.3s;
-  overflow: hidden;
+  width: 100%;
+  min-height: 100px;
+  border: 1px solid #e6e6e6;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(20, 24, 31, 0.08);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+  overflow: visible;
   position: relative;
 }
 
-.chat-input-container.has-content {
-  border-color: #1890ff;
-  box-shadow: 0 0 0 3px rgba(24, 144, 255, 0.1);
+.chat-input-container.has-content,
+.chat-input-container.is-streaming {
+  border-color: #d9d9d9;
 }
 
 .chat-input-container.is-disabled {
-  background: #fafafa;
-  border-color: #f0f0f0;
-  opacity: 0.8;
-  cursor: not-allowed;
-}
-
-.chat-input-container.is-disabled .chat-textarea {
-  background: #fafafa;
-  cursor: not-allowed;
+  cursor: default;
 }
 
 .input-wrapper {
+  min-height: 105px;
   display: flex;
   align-items: flex-end;
-  gap: 12px;
-  padding: 12px;
+  gap: 16px;
+  padding: 16px 20px 18px;
   position: relative;
 }
 
 .textarea-container {
   flex: 1;
-  position: relative;
+  align-self: stretch;
+  display: flex;
+  align-items: flex-start;
 }
 
 .chat-textarea {
@@ -215,69 +241,80 @@ defineExpose({
   outline: none;
   resize: none;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 22px;
   color: #333;
-  background: transparent;
+  // background: transparent;
   font-family: inherit;
   padding: 0;
+  margin-top: 3px;
   overflow-y: auto;
 }
 
 .chat-textarea::placeholder {
-  color: #bfbfbf;
+  color: #8c8c8c;
 }
 
 .chat-textarea:disabled {
-  color: #bfbfbf;
-  cursor: not-allowed;
-  background: #f5f5f5;
-  border-radius: 6px;
-  padding: 8px;
-}
-
-.word-count {
-  position: absolute;
-  bottom: -10px;
-  right: 0;
-  font-size: 12px;
-  color: #bfbfbf;
-  opacity: 0.7;
-  transition: all 0.3s;
-}
-
-.chat-input-container.has-content .word-count {
-  color: #1890ff;
-  opacity: 1;
+  cursor: default;
+  color: #333;
+  background: transparent;
+  -webkit-text-fill-color: #333;
 }
 
 .action-buttons {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 14px;
+  flex-shrink: 0;
 }
 
+.add-btn,
 .send-btn {
-  width: 40px;
-  height: 40px;
-  background: #1890ff;
-  padding: 10px;
+  width: 30px;
+  height: 30px;
   border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s;
-  display: flex;
+  border-radius: 50%;
+  padding: 0;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  position: relative;
-  overflow: hidden;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.add-btn {
+  background: transparent;
+  color: #6b5f54;
+  cursor: default;
+}
+
+.add-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.send-btn {
+  background: #1f7af0;
   color: #fff;
+  cursor: pointer;
+  position: relative;
+}
+
+.send-icon {
+  width: 17px;
+  height: 17px;
 }
 
 .send-btn:hover:not(:disabled) {
-  background: #40a9ff;
+  background: #126fe8;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.2);
 }
 
 .send-btn:active:not(:disabled) {
@@ -285,6 +322,50 @@ defineExpose({
 }
 
 .send-btn:disabled {
-  background: #d9d9d9;
+  background: #e6e6e8;
+  color: #fff;
+  cursor: default;
+}
+
+.stop-btn {
+  overflow: visible;
+}
+
+.stop-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.stop-tooltip {
+  position: absolute;
+  right: -8px;
+  bottom: calc(100% + 10px);
+  padding: 7px 9px;
+  border-radius: 5px;
+  background: #2f2f2f;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+
+.stop-tooltip::after {
+  content: '';
+  position: absolute;
+  right: 13px;
+  top: 100%;
+  border: 5px solid transparent;
+  border-top-color: #2f2f2f;
+}
+
+.stop-btn:hover .stop-tooltip {
+  opacity: 1;
+  transform: translateY(0);
 }
 </style>
