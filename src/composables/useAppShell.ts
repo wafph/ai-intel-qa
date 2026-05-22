@@ -53,6 +53,22 @@ const selectedDimensions = ref<string[]>([]);
 const REVIEW_DIMENSIONS = ['合规性', '冲突性', '文本规范性'];
 const SELECT_ALL_DIMENSION = '全选';
 
+const formatFileSize = (size: number) => {
+  if (!Number.isFinite(size) || size <= 0) return '';
+  if (size < 1024) return `${size}B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(2)}KB`;
+  return `${(size / 1024 / 1024).toFixed(2)}MB`;
+};
+
+const uploadedFileMeta = computed(() => {
+  const file = uploadedFileRef.value;
+  if (!file) return '';
+
+  const extension = file.name.split('.').pop()?.toUpperCase() || 'FILE';
+  const sizeText = formatFileSize(file.size);
+  return sizeText ? `${extension} | ${sizeText}` : extension;
+});
+
 // 统一获取真正要提交给后端的审核维度，避免把"全选"传给接口或生成空 query
 const getActualReviewDimensions = (dimensions: string[] = selectedDimensions.value) => {
   if (dimensions.includes(SELECT_ALL_DIMENSION)) {
@@ -1461,6 +1477,7 @@ onUnmounted(() => {
     sidebarCollapsed,
     stopStream,
     toggleSidebar,
+    uploadedFileMeta,
     uploadedFileName,
     userStore,
   };

@@ -58,17 +58,18 @@
               :disabled="isSendDisabled"
               :is-compliance-mode="activeTab === '合规审核'"
               :streaming="isStreaming"
+              :custom-upload="customUpload"
+              :uploaded-file-name="uploadedFileName"
+              :uploaded-file-meta="uploadedFileMeta"
               @send="handleSendMessage"
               @stop="stopStream"
-            />
-
-            <ComplianceReviewExtras
-              v-if="activeTab === '合规审核'"
-              v-model:selected-dimensions="selectedDimensions"
-              :uploaded-file-name="uploadedFileName"
-              :custom-upload="customUpload"
-              @select-all="handleSelectAll"
-            />
+            >
+              <ComplianceReviewExtras
+                v-if="activeTab === '合规审核'"
+                v-model:selected-dimensions="selectedDimensions"
+                @select-all="handleSelectAll"
+              />
+            </ChatInput>
           </div>
         </div>
       </div>
@@ -123,6 +124,7 @@ const {
   sidebarCollapsed,
   stopStream,
   toggleSidebar,
+  uploadedFileMeta,
   uploadedFileName,
   userStore,
 } = useAppShell();
