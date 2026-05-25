@@ -193,3 +193,21 @@ body {
 .ml-auto {
   margin-left: auto;
 }
+.history-search-hit {
+  animation: historySearchHit 1.6s ease;
+}
+
+@keyframes historySearchHit {
+  0% {
+    box-shadow: 0 0 0 0 rgba(28, 115, 235, 0.35);
+    background: rgba(28, 115, 235, 0.08);
+  }
+  60% {
+    box-shadow: 0 0 0 12px rgba(28, 115, 235, 0);
+    background: rgba(28, 115, 235, 0.06);
+  }
+  100% {
+    box-shadow: none;
+    background: transparent;
+  }
+}

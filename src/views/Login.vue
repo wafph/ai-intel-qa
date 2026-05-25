@@ -1,3 +1,7 @@
+<!--
+  登录页面，支持平台登录、agentToken 鉴权入口和本地登录兼容。
+  本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+-->
 <template>
   <div class="login-page">
     <div class="login-bg login-bg-one"></div>
@@ -12,19 +16,22 @@
         </div>
       </div>
 
-      <div class="mode-switch">
+      <div class="mode-switch" :class="{ single: !isLocalAuthMode }">
         <button
           :class="['mode-btn', { active: mode === 'login' }]"
           @click="switchMode('login')"
         >
           账号登录
         </button>
+        <!-- 注册逻辑暂时注释：V12 默认走中台 platform 登录，不展示首页注册入口。
         <button
+          v-if="isLocalAuthMode"
           :class="['mode-btn', { active: mode === 'register' }]"
           @click="switchMode('register')"
         >
           用户注册
         </button>
+        -->
       </div>
 
       <el-form
@@ -106,7 +113,8 @@
           {{ mode === 'login' ? '登录' : '注册' }}
         </el-button>
 
-        <div class="form-tip">
+        <!-- 注册入口暂时注释。local 模式需要恢复注册入口时，可打开下面这段提示。
+        <div v-if="isLocalAuthMode" class="form-tip">
           <template v-if="mode === 'login'">
             没有账号？<button type="button" @click="switchMode('register')">
               立即注册
@@ -116,6 +124,7 @@
             已有账号？<button type="button" @click="switchMode('login')">返回登录</button>
           </template>
         </div>
+        -->
       </el-form>
     </section>
   </div>
@@ -127,12 +136,14 @@ import { useRoute, useRouter } from 'vue-router';
 import type { FormInstance, FormRules } from 'element-plus';
 import { ElMessage } from 'element-plus';
 import { useUserStore } from '@/stores/user';
+import { FRONTEND_AUTH_MODE } from '@/services/config';
 
 const router = useRouter();
 const route = useRoute();
 const userStore = useUserStore();
 const formRef = ref<FormInstance>();
 const mode = ref<'login' | 'register'>('login');
+const isLocalAuthMode = FRONTEND_AUTH_MODE === 'local';
 
 const form = reactive({
   username: '',
@@ -143,6 +154,7 @@ const form = reactive({
   email: '',
 });
 
+/** 封装当前模块内的业务逻辑：rules。 */
 const rules = computed<FormRules>(() => {
   const baseRules: FormRules = {
     username: [{ required: true, message: '请输入账号', trigger: 'blur' }],
@@ -169,23 +181,28 @@ const rules = computed<FormRules>(() => {
   return baseRules;
 });
 
+/** 封装当前模块内的业务逻辑：switchMode。 */
 const switchMode = (nextMode: 'login' | 'register') => {
+  if (nextMode === 'register' && !isLocalAuthMode) return;
   mode.value = nextMode;
   formRef.value?.clearValidate();
 };
 
+/** 封装当前模块内的业务逻辑：afterLoginRedirect。 */
 const afterLoginRedirect = () => {
   const redirect =
     typeof route.query.redirect === 'string' ? route.query.redirect : '/intelligent-qa';
   router.replace(redirect);
 };
 
+/** 处理用户交互或组件事件：handleLogin。 */
 const handleLogin = async () => {
   await userStore.loginByPassword({ username: form.username, password: form.password });
   ElMessage.success('登录成功');
   afterLoginRedirect();
 };
 
+/** 处理用户交互或组件事件：handleRegister。 */
 const handleRegister = async () => {
   await userStore.registerUser({
     username: form.username,
@@ -200,7 +217,9 @@ const handleRegister = async () => {
   form.confirmPassword = '';
 };
 
+/** 处理用户交互或组件事件：handleSubmit。 */
 const handleSubmit = async () => {
+  /** 封装当前模块内的业务逻辑：valid。 */
   const valid = await formRef.value?.validate().catch(() => false);
   if (!valid) return;
 
@@ -297,11 +316,17 @@ const handleSubmit = async () => {
 
 .mode-switch {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   padding: 4px;
   margin-bottom: 24px;
   border-radius: 14px;
   background: #eef5ff;
+
+  &.single {
+    max-width: 220px;
+    margin-left: auto;
+    margin-right: auto;
+  }
 }
 
 .mode-btn {

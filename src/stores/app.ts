@@ -1,7 +1,13 @@
+/**
+ * Pinia 应用状态仓库，维护当前功能页、全局加载与布局状态。
+ *
+ * 本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+ */
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { API } from '@/api/api';
 import { isSuccessStatus, request } from '@/services/http';
+/** 封装当前模块内的业务逻辑：useAppStore。 */
 export const useAppStore = defineStore('app', () => {
   // 侧边栏折叠状态
   const sidebarCollapsed = ref(false);
@@ -36,6 +42,7 @@ export const useAppStore = defineStore('app', () => {
     sidebarCollapsed.value = !sidebarCollapsed.value;
   };
 
+  /** 封装当前模块内的业务逻辑：switchMenu。 */
   const switchMenu = (menuId: string) => {
     activeMenu.value = menuId;
   };
@@ -85,6 +92,7 @@ export const useAppStore = defineStore('app', () => {
     // 保留原有自动获取 AgentArts X-Subject-Token 的逻辑；失败时只记录错误，不阻断登录页面或业务页面渲染。
     error.value = err?.message || '获取 X-Subject-Token 失败';
   });
+  /** 封装当前模块内的业务逻辑：addHistory。 */
   const addHistory = (query: string) => {
     const today = new Date().toLocaleDateString('zh-CN', {
       month: '2-digit',

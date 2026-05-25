@@ -1,3 +1,7 @@
+<!--
+  404 页面，用于未知路由兜底展示。
+  本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+-->
 <template>
   <div class="not-found-page">
     <section class="not-found-card">
@@ -32,10 +36,12 @@ const defaultError: FriendlyErrorInfo = {
 // 404 页面只保留简洁提示，不再展示状态码、访问地址、发生时间和错误详情。
 const errorInfo = consumeNotFoundError() || defaultError;
 
+/** 封装当前模块内的业务逻辑：goHome。 */
 const goHome = () => {
   router.push('/');
 };
 
+/** 封装当前模块内的业务逻辑：goBack。 */
 const goBack = () => {
   if (window.history.length > 1) router.back();
   else router.push('/');

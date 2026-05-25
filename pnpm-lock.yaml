@@ -29,6 +29,9 @@ importers:
       pinia:
         specifier: ^2.1.0
         version: 2.3.1(typescript@5.9.3)(vue@3.5.30(typescript@5.9.3))
+      sm-crypto:
+        specifier: ^0.3.13
+        version: 0.3.14
       vue:
         specifier: ^3.5.30
         version: 3.5.30(typescript@5.9.3)
@@ -559,6 +562,9 @@ packages:
   js-tokens@9.0.1:
     resolution: {integrity: sha512-mxa9E9ITFOt0ban3j6L5MpjwegGz6lBQmM1IJkWeBZGcMxto50+eWdjC/52xDbS2vy0k7vIMK0Fe2wfL9OQSpQ==}
 
+  jsbn@1.1.0:
+    resolution: {integrity: sha512-4bYVV3aAMtDTTu4+xsDYa6sy9GyJ69/amsu9sYF2zqjiEoZA5xJi3BrfX3uY+/IekIu7MwdObdbDWpoZdBv3/A==}
+
   jspdf@4.2.1:
     resolution: {integrity: sha512-YyAXyvnmjTbR4bHQRLzex3CuINCDlQnBqoSYyjJwTP2x9jDLuKDzy7aKUl0hgx3uhcl7xzg32agn5vlie6HIlQ==}
 
@@ -809,6 +815,9 @@ packages:
   semver@5.7.2:
     resolution: {integrity: sha512-cBznnQ9KjJqU67B52RMC65CMarK2600WFnbkcaiwWq3xy/5haFJlshgnpjovMVJ+Hff49d8GEn0b87C5pDQ10g==}
     hasBin: true
+
+  sm-crypto@0.3.14:
+    resolution: {integrity: sha512-sR7NuGAJH93Om8keAF2/rj1EqFzEiUey4aKGyDo3nQ2BiVqhgq8UkiIoIp5qhV9w4pG7qArhfqyewcG8AbhXbg==}
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -1462,6 +1471,8 @@ snapshots:
 
   js-tokens@9.0.1: {}
 
+  jsbn@1.1.0: {}
+
   jspdf@4.2.1:
     dependencies:
       '@babel/runtime': 7.29.2
@@ -1709,6 +1720,10 @@ snapshots:
 
   semver@5.7.2:
     optional: true
+
+  sm-crypto@0.3.14:
+    dependencies:
+      jsbn: 1.1.0
 
   source-map-js@1.2.1: {}
 

@@ -1,3 +1,7 @@
+<!--
+  智能检索页面，展示检索答案、来源详情和文档预览。
+  本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+-->
 <template>
   <div class="intelligent-qa">
     <!-- 头部区域 -->
@@ -119,12 +123,12 @@
                               class="view-detail"
                               href="javascript:;"
                               @click.prevent="
-                                handleViewDocument(source.file_id, source.title)
+                                handleViewDocument(source)
                               "
-                              :class="{ disabled: isDownloading[source.file_id] }"
+                              :class="{ disabled: isDownloading[getSourceFileId(source) || getSourceDirectUrl(source) || source.title] }"
                             >
                               {{
-                                isDownloading[source.file_id] ? '加载中...' : '查看详情 →'
+                                isDownloading[getSourceFileId(source) || getSourceDirectUrl(source) || source.title] ? '加载中...' : '查看详情 →'
                               }}
                             </a>
                           </div>
@@ -204,9 +208,10 @@
 <script setup lang="ts">
 import { ref, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import MarkdownIt from 'markdown-it';
-import { ElIcon } from 'element-plus';
+import { ElIcon, ElMessage } from 'element-plus';
 import { ArrowRight } from '@element-plus/icons-vue';
 import { fetchWatermarkDocument, isPdfDocument, downloadDocumentBlob, openDocumentUrl } from '@/services/documentDownload';
+import { getSourceDirectUrl, getSourceFileId, getSourceTitle } from '@/services/sourceUtils';
 
 // 状态变量
 const displayAnswer = ref<string>('');
@@ -311,20 +316,35 @@ const shouldShowExpand = (source: SourceInfo) => {
   return content.length > 150;
 };
 
-const handleViewDocument = async (fileId: string, title: string) => {
-  // 防止重复点击
-  if (isDownloading[fileId]) return;
+/** 处理用户交互或组件事件：handleViewDocument。 */
+const handleViewDocument = async (source: SourceInfo | any) => {
+  const fileId = getSourceFileId(source);
+  const title = getSourceTitle(source, 'document');
+  const directUrl = getSourceDirectUrl(source);
+  const loadingKey = fileId || directUrl || title;
 
-  // 设置加载状态
-  isDownloading[fileId] = true;
+  if (isDownloading[loadingKey]) return;
+  isDownloading[loadingKey] = true;
 
   try {
-    // 新版问答引用下载接口：直接 POST /watermark/download，
-    // 请求体使用 { file_id, user_name }；agentToken 场景 user_name 暂时固定为“丽丽”。
-    const result = await fetchWatermarkDocument(fileId, title || 'document');
+    // 按早期可用版本逻辑：检索详情优先使用 source.file_id 调用独立水印下载服务。
+    // 只有缺少 file_id 时，才兜底打开来源自带直链。
+    if (!fileId) {
+      if (directUrl) {
+        if (isPdfDocument(directUrl, 'application/pdf', title, directUrl)) {
+          pdfViewerUrl.value = directUrl;
+          showPdfViewer.value = true;
+        } else {
+          openDocumentUrl(directUrl);
+        }
+        return;
+      }
+      throw new Error('检索结果缺少文件ID或预览地址，无法查看详情');
+    }
+
+    const result = await fetchWatermarkDocument(fileId, title);
 
     if (isPdfDocument(fileId, result.contentType, title, result.downloadUrl)) {
-      // PDF 文件：显示预览弹框。download_url 直接赋给 iframe，避免二次 fetch 跨域。
       if (result.downloadUrl) {
         pdfViewerUrl.value = result.downloadUrl;
       } else if (result.blob) {
@@ -334,7 +354,6 @@ const handleViewDocument = async (fileId: string, title: string) => {
       }
       showPdfViewer.value = true;
     } else if (result.downloadUrl) {
-      // 其他格式：直接打开后端返回的下载地址。
       openDocumentUrl(result.downloadUrl);
     } else if (result.blob) {
       downloadDocumentBlob(result.blob, title, fileId);
@@ -342,10 +361,9 @@ const handleViewDocument = async (fileId: string, title: string) => {
       throw new Error('水印接口未返回可下载的文档内容');
     }
   } catch (error: any) {
-    alert(error?.message || '获取文档失败，请稍后重试');
+    ElMessage.error(error?.message || '获取文档失败，请稍后重试');
   } finally {
-    // 清除加载状态
-    isDownloading[fileId] = false;
+    isDownloading[loadingKey] = false;
   }
 };
 
@@ -473,6 +491,7 @@ const formatTime = (date: Date) => {
   });
 };
 
+/** 处理用户交互或组件事件：handleRestart。 */
 const handleRestart = (index: number) => {
   if (!props.chatData || !props.chatData.messages) return;
 
@@ -490,11 +509,13 @@ const handleRestart = (index: number) => {
   }
 };
 
+/** 封装当前模块内的业务逻辑：renderMarkdown。 */
 const renderMarkdown = (content: string) => {
   if (!content) return '';
   return md.render(content);
 };
 
+/** 封装当前模块内的业务逻辑：scrollToBottom。 */
 const scrollToBottom = () => {
   nextTick(() => {
     const container =

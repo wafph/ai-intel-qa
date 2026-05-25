@@ -1,3 +1,7 @@
+<!--
+  左侧历史会话面板，支持搜索、切换、新建、收藏、置顶和标题编辑。
+  本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+-->
 <template>
   <div class="history-panel" :class="{ 'is-collapsed': collapsed }">
     <button
@@ -20,6 +24,25 @@
     </div>
 
     <div class="panel-header">
+      <div class="history-search" v-show="!collapsed">
+        <span class="search-icon">🔍</span>
+        <input
+          v-model="localSearchKeyword"
+          class="history-search-input"
+          type="text"
+          placeholder="搜索历史对话"
+          @input="handleSearchInput"
+        />
+        <button
+          v-if="localSearchKeyword"
+          class="search-clear-btn"
+          type="button"
+          aria-label="清除搜索"
+          @click="clearSearch"
+        >
+          ×
+        </button>
+      </div>
       <button class="new-chat-btn" v-show="!collapsed" @click="handleNewChat">
         <img src="/images/chats.png" alt="" />
         <span class="btn-text">新聊天</span>
@@ -39,6 +62,37 @@
         </button>
       </div>
 
+      <template v-if="isSearchMode">
+        <div v-if="searchLoading" class="empty-state search-state">
+          <div class="empty-icon">🔎</div>
+          <p>正在搜索历史对话...</p>
+        </div>
+
+        <div v-else-if="searchResults.length === 0" class="empty-state search-state">
+          <div class="empty-icon">🔍</div>
+          <p>未找到相关历史对话</p>
+          <p class="empty-tip">可尝试输入问题关键词或答案中的句子</p>
+        </div>
+
+        <div v-else class="history-items search-result-list">
+          <div
+            v-for="result in normalizedSearchResults"
+            :key="`${result.sessionId}-${result.qaId || result.id}`"
+            class="history-item search-result-item"
+            @click="handleSelectSearchResult(result)"
+          >
+            <div class="item-content">
+              <div class="item-title">{{ result.sessionTitle || result.title || '历史会话' }}</div>
+              <div class="search-snippet" v-html="result.highlightText"></div>
+              <div class="item-meta">
+                <span class="item-time">{{ formatRelativeTime(result.createTime || result.answerTime || result.time || Date.now()) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <template v-else>
       <div v-if="filteredHistory.length === 0" class="empty-state">
         <div class="empty-icon">📁</div>
         <p>暂无历史对话</p>
@@ -160,6 +214,7 @@
           </div>
         </div>
       </div>
+      </template>
     </div>
 
     <!-- 右下角个人中心 -->
@@ -176,7 +231,8 @@
         />
         <div class="user-details">
           <span class="user-name">{{ displayUserName }}</span>
-          <span class="auth-mode">{{ authMode === 'agent' ? '外部授权' : '账号登录' }}</span>
+          <!-- 左侧外部授权/账号登录状态暂不展示，保留代码便于后续恢复。 -->
+          <!-- <span class="auth-mode">{{ authMode === 'agent' ? '外部授权' : '账号登录' }}</span> -->
         </div>
         <i class="arrow-icon" :class="{ rotated: showUserMenu }">▼</i>
       </div>
@@ -197,7 +253,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessageBox, ElMessage } from 'element-plus';
 import type { InputInstance } from 'element-plus';
@@ -210,6 +266,9 @@ interface Props {
   collapsed?: boolean;
   activeTab: string; // 
   authMode?: string; // 新增：local/agent，用于在左下角用户区域展示登录方式
+  searchKeyword?: string;
+  searchResults?: any[];
+  searchLoading?: boolean;
 }
 
 const props = defineProps<Props>();
@@ -223,6 +282,9 @@ const emit = defineEmits<{
   'toggle-collapse': [];
   'update-title': [chatId: string, newTitle: string];
   'toggle-pin': [chatId: string, topStatus: number]; // 
+  'search-history': [keyword: string];
+  'clear-search': [];
+  'select-search-result': [result: any];
   logout: []; // 新增：退出登录放到左侧历史面板底部
 }>();
 
@@ -234,7 +296,10 @@ const visibleMenuId = ref<string | null>(null);
 const editingId = ref<string | null>(null);
 const editingTitle = ref('');
 const titleInputRef = ref<InputInstance>();
+const localSearchKeyword = ref(props.searchKeyword || '');
+let searchTimer: number | null = null;
 
+/** 封装当前模块内的业务逻辑：displayUserName。 */
 const displayUserName = computed(() => props.user?.nickname || props.user?.name || props.user?.username || '用户');
 
 // 计算属性
@@ -242,6 +307,42 @@ const filteredHistory = computed(() => {
   return props.historyList || [];
 });
 
+/** 封装当前模块内的业务逻辑：searchResults。 */
+const searchResults = computed(() => props.searchResults || []);
+/** 封装当前模块内的业务逻辑：searchLoading。 */
+const searchLoading = computed(() => Boolean(props.searchLoading));
+/** 判断条件是否成立：isSearchMode。 */
+const isSearchMode = computed(() => Boolean(localSearchKeyword.value.trim()));
+
+/** 获取并归一化业务数据：getHighlightText。 */
+const getHighlightText = (result: any) => {
+  const highlight = result.highlight || {};
+  const question = Array.isArray(highlight.questionContent)
+    ? highlight.questionContent[0]
+    : highlight.questionContent;
+  const answer = Array.isArray(highlight.answerContent)
+    ? highlight.answerContent[0]
+    : highlight.answerContent;
+  return (
+    question ||
+    answer ||
+    result.questionContent ||
+    result.answerPreview ||
+    result.answerContent ||
+    result.matchedText ||
+    '点击查看命中的历史会话'
+  );
+};
+
+/** 标准化后端/历史数据结构：normalizedSearchResults。 */
+const normalizedSearchResults = computed(() =>
+  searchResults.value.map((item) => ({
+    ...item,
+    highlightText: getHighlightText(item),
+  })),
+);
+
+/** 封装当前模块内的业务逻辑：sortedHistory。 */
 const sortedHistory = computed(() => {
   const groups: Record<string, any[]> = {};
 
@@ -319,6 +420,7 @@ const sortedHistory = computed(() => {
   return result;
 });
 
+/** 格式化展示内容：formatRelativeTime。 */
 const formatRelativeTime = (timestamp: number | string) => {
   let date: Date;
 
@@ -366,16 +468,40 @@ const formatRelativeTime = (timestamp: number | string) => {
     .padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
 };
 
+/** 处理用户交互或组件事件：handleSelectChat。 */
 const handleSelectChat = (chatId: string) => {
   emit('select-chat', chatId);
   closeMenu();
 };
 
+/** 处理用户交互或组件事件：handleNewChat。 */
 const handleNewChat = () => {
   emit('new-chat');
   closeMenu();
 };
 
+/** 处理用户交互或组件事件：handleSearchInput。 */
+const handleSearchInput = () => {
+  if (searchTimer) window.clearTimeout(searchTimer);
+  const keyword = localSearchKeyword.value.trim();
+  searchTimer = window.setTimeout(() => {
+    emit('search-history', keyword);
+  }, 300);
+};
+
+/** 清理输入、搜索或缓存状态：clearSearch。 */
+const clearSearch = () => {
+  localSearchKeyword.value = '';
+  emit('clear-search');
+};
+
+/** 处理用户交互或组件事件：handleSelectSearchResult。 */
+const handleSelectSearchResult = (result: any) => {
+  emit('select-search-result', result);
+  closeMenu();
+};
+
+/** 处理用户交互或组件事件：handleDeleteChat。 */
 const handleDeleteChat = (chatId: string) => {
   ElMessageBox.confirm('确定要删除这条对话记录吗？', '提示', {
     confirmButtonText: '确定',
@@ -390,6 +516,7 @@ const handleDeleteChat = (chatId: string) => {
     .catch(() => {});
 };
 
+/** 处理用户交互或组件事件：handleClearAllHistory。 */
 const handleClearAllHistory = () => {
   ElMessageBox.confirm('确定删除对话？删除后，聊天记录将不可恢复。', '提示', {
     confirmButtonText: '确定',
@@ -405,17 +532,20 @@ const handleClearAllHistory = () => {
     .catch(() => {});
 };
 
+/** 处理用户交互或组件事件：handleToggleFavorite。 */
 const handleToggleFavorite = (chatId: string) => {
   emit('toggle-favorite', chatId);
   closeMenu();
 };
 
+/** 处理用户交互或组件事件：handleTogglePin。 */
 const handleTogglePin = (chatId: string, isPinned: boolean) => {
   const topStatus = isPinned ? 0 : 1; // 如果已经置顶，则取消置顶；否则置顶
   emit('toggle-pin', chatId, topStatus);
   closeMenu();
 };
 
+/** 开始编辑、订阅或交互：startEdit。 */
 const startEdit = (chatId: string, currentTitle: string) => {
   editingId.value = chatId;
   editingTitle.value = currentTitle;
@@ -431,6 +561,7 @@ const startEdit = (chatId: string, currentTitle: string) => {
   });
 };
 
+/** 保存会话、标题或业务上下文：saveTitle。 */
 const saveTitle = (chatId: string) => {
   if (!editingTitle.value.trim()) {
     ElMessage.warning('标题不能为空');
@@ -443,30 +574,36 @@ const saveTitle = (chatId: string) => {
   }
 };
 
+/** 封装当前模块内的业务逻辑：cancelEdit。 */
 const cancelEdit = () => {
   editingId.value = null;
   editingTitle.value = '';
 };
 
+/** 处理用户交互或组件事件：handleMouseEnter。 */
 const handleMouseEnter = (itemId: string) => {
   hoveredItemId.value = itemId;
 };
 
+/** 处理用户交互或组件事件：handleMouseLeave。 */
 const handleMouseLeave = (itemId: string) => {
   if (hoveredItemId.value === itemId && visibleMenuId.value !== itemId) {
     hoveredItemId.value = null;
   }
 };
 
+/** 切换面板、菜单或状态：toggleMenu。 */
 const toggleMenu = (itemId: string) => {
   visibleMenuId.value = visibleMenuId.value === itemId ? null : itemId;
 };
 
+/** 关闭面板、菜单或弹窗：closeMenu。 */
 const closeMenu = () => {
   visibleMenuId.value = null;
   hoveredItemId.value = null;
 };
 
+/** 处理用户交互或组件事件：handleClickOutsideMenu。 */
 const handleClickOutsideMenu = (event: MouseEvent) => {
   const menuContainer = document.querySelector('.item-menu-container');
   if (menuContainer && !menuContainer.contains(event.target as Node)) {
@@ -474,26 +611,37 @@ const handleClickOutsideMenu = (event: MouseEvent) => {
   }
 };
 
+/** 切换面板、菜单或状态：toggleUserMenu。 */
 const toggleUserMenu = () => {
   showUserMenu.value = !showUserMenu.value;
 };
 
+/** 封装当前模块内的业务逻辑：goToMyCollections。 */
 const goToMyCollections = () => {
   showUserMenu.value = false;
   router.push('/my-collections');
 };
 
+/** 处理用户交互或组件事件：handleLogout。 */
 const handleLogout = () => {
   showUserMenu.value = false;
   emit('logout');
 };
 
+/** 处理用户交互或组件事件：handleClickOutsideUserMenu。 */
 const handleClickOutsideUserMenu = (event: MouseEvent) => {
   const userCenter = document.querySelector('.user-center-bottom');
   if (userCenter && !userCenter.contains(event.target as Node)) {
     showUserMenu.value = false;
   }
 };
+
+watch(
+  () => props.searchKeyword,
+  (value) => {
+    if ((value || '') !== localSearchKeyword.value) localSearchKeyword.value = value || '';
+  },
+);
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutsideMenu);
@@ -590,11 +738,72 @@ onUnmounted(() => {
 }
 
 .panel-header {
-  padding: 20px;
+  padding: 16px 20px 20px;
   border-bottom: 1px solid #e9ecef;
   background: #ffffff;
   z-index: 10;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.history-search {
+  height: 44px;
+  margin-bottom: 12px;
+  border: 1px solid #dbe6f5;
+  border-radius: 20px;
+  background: #f8fbff;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 6px;
+}
+
+.search-icon {
+  font-size: 14px;
+  color: #8c8c8c;
+}
+
+.history-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #333;
+  font-size: 13px;
+}
+
+.search-clear-btn {
+  border: none;
+  background: transparent;
+  color: #8c8c8c;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.search-result-item {
+  min-height: 76px;
+}
+
+.search-snippet {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+  max-height: 38px;
+  overflow: hidden;
+}
+
+.search-snippet :deep(em),
+.search-snippet em {
+  color: #1c73eb;
+  font-style: normal;
+  font-weight: 700;
+  background: rgba(28, 115, 235, 0.1);
+}
+
+.search-state {
+  justify-content: flex-start;
+  padding-top: 60px;
 }
 
 .new-chat-btn {

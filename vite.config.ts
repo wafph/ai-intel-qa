@@ -1,3 +1,8 @@
+/**
+ * Vite 构建配置，包含 Vue 插件、自动导入、组件自动注册和开发代理。
+ *
+ * 本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+ */
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import AutoImport from 'unplugin-auto-import/vite';

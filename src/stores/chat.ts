@@ -1,8 +1,16 @@
+/**
+ * Pinia 会话仓库，维护会话列表、消息、收藏、置顶和历史状态。
+ *
+ * 本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+ */
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { API } from '@/api/api';
 import type { ChatSession, HistoryItem, ChatMessage } from '../types/chat';
 import { authRequest, isSuccessStatus } from '@/services/http';
+import { getApiData, getApiMessage, isApiSuccessCode } from '@/services/response';
+import { extractSourcesFromAny, safeJsonParse } from '@/services/sourceUtils';
+import { stripReviewProgressText } from '@/services/reviewProgress';
 
 // API基础配置 - 使用新接口地址
 
@@ -16,12 +24,12 @@ export const useChatStore = defineStore('chat', () => {
   // 获取功能ID映射
   const getFuncIdByTab = (tab: string): string => {
     const funcIdMap: Record<string, string> = {
-      智能问答: 'knowledge_qa',
-      智能检索: 'knowledge_search',
-      辅助起草: 'knowledge_draft',
-      合规审核: 'knowledge_review',
+      智能问答: 'qa',
+      智能检索: 'search',
+      辅助起草: 'draft',
+      合规审核: 'review',
     };
-    return funcIdMap[tab] || 'knowledge_qa';
+    return funcIdMap[tab] || 'qa';
   };
 
   // 格式化时间为标准格式
@@ -33,6 +41,104 @@ export const useChatStore = defineStore('chat', () => {
     const minutes = String(date.getMinutes()).padStart(2, '0');
     const seconds = String(date.getSeconds()).padStart(2, '0');
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  };
+
+  /** 判断条件是否成立：isRunningMessageStatus。 */
+  const isRunningMessageStatus = (status: any) => {
+    const normalized = String(status || '').toLowerCase();
+    return normalized === 'pending' || normalized === 'running';
+  };
+
+
+  /** 标准化后端/历史数据结构：normalizeSources。 */
+  const normalizeSources = (...values: any[]): any[] => extractSourcesFromAny(...values);
+
+  /** 标准化后端/历史数据结构：normalizeAnswerPayload。 */
+  const normalizeAnswerPayload = (qa: any) => {
+    const rawAnswer = qa.answer || qa.answerJson || qa.answer_json || qa.answerContent || qa.answer_content || {};
+    const parsed = safeJsonParse(rawAnswer);
+    if (typeof parsed === 'string') {
+      return { responseContent: parsed, data_json: [] };
+    }
+    if (parsed && typeof parsed === 'object') return parsed;
+    return {};
+  };
+
+  /**
+   * 从后端 answer_json 中恢复引用、检索结果或起草推荐范文。
+   *
+   * v12.2.7 后端会在前端刷新/切换后仍把 workflow_finished 的结构化结果
+   * 持久化到 data_json / sources / recommendations / templates / workflowOutputs / userFields。
+   * 这里按多字段统一解析，避免实时订阅断开后历史回显丢失来源、详情或范文。
+   */
+  const getAnswerSources = (answerPayload: any) =>
+    normalizeSources(
+      answerPayload.data_json,
+      answerPayload.dataJson,
+      answerPayload.sources,
+      answerPayload.references,
+      answerPayload.citations,
+      answerPayload.recommendations,
+      answerPayload.templates,
+      answerPayload.examples,
+      answerPayload.workflowOutputs,
+      answerPayload.workflow_outputs,
+      answerPayload.userFields,
+      answerPayload.user_fields,
+      answerPayload,
+    );
+
+  /** 获取并归一化业务数据：getAnswerContent。 */
+  const getAnswerContent = (qa: any, answerPayload: any) =>
+    String(
+      answerPayload.responseContent ||
+        answerPayload.answerContent ||
+        answerPayload.answer_content ||
+        answerPayload.content ||
+        answerPayload.text ||
+        qa.answerContent ||
+        qa.answer_content ||
+        '',
+    );
+
+  /** 获取并归一化业务数据：getAnswerMetadata。 */
+  const getAnswerMetadata = (qa: any, answerPayload: any) => {
+    const baseMetadata =
+      answerPayload.metadata ||
+      answerPayload.meta ||
+      qa.metadata ||
+      qa.answerMetadata ||
+      qa.answer_metadata ||
+      undefined;
+
+    const reviewContext =
+      answerPayload.reviewContext ||
+      answerPayload.review_context ||
+      qa.reviewContext ||
+      qa.review_context ||
+      undefined;
+
+    if (!reviewContext) return baseMetadata;
+
+    return {
+      ...(baseMetadata || {}),
+      reviewContext,
+      complianceOriginalText:
+        baseMetadata?.complianceOriginalText ||
+        reviewContext.originalText ||
+        reviewContext.original_text ||
+        '',
+      complianceFileName:
+        baseMetadata?.complianceFileName ||
+        reviewContext.fileName ||
+        reviewContext.file_name ||
+        '',
+      complianceParams:
+        baseMetadata?.complianceParams ||
+        reviewContext.reviewParams ||
+        reviewContext.review_params ||
+        undefined,
+    };
   };
 
   // 过滤后的历史记录（基于当前菜单）
@@ -57,7 +163,9 @@ export const useChatStore = defineStore('chat', () => {
     currentConversationUuid.value = uuid;
   };
 
+  /** 封装当前模块内的业务逻辑：addHistoryItem。 */
   const addHistoryItem = (item: HistoryItem) => {
+    /** 封装当前模块内的业务逻辑：exists。 */
     const exists = historyList.value.some((h) => h.id === item.id);
     if (exists) return;
 
@@ -69,6 +177,7 @@ export const useChatStore = defineStore('chat', () => {
 
   // 更新历史记录
   const updateHistoryItem = (id: string, updates: Partial<HistoryItem>) => {
+    /** 封装当前模块内的业务逻辑：index。 */
     const index = historyList.value.findIndex((item) => item.id === id);
     if (index !== -1) {
       historyList.value[index] = { ...historyList.value[index], ...updates };
@@ -77,6 +186,7 @@ export const useChatStore = defineStore('chat', () => {
 
   // 删除历史记录（只更新内存状态）
   const deleteHistoryItem = (id: string) => {
+    /** 封装当前模块内的业务逻辑：index。 */
     const index = historyList.value.findIndex((item) => item.id === id);
     if (index !== -1) {
       historyList.value.splice(index, 1);
@@ -85,6 +195,7 @@ export const useChatStore = defineStore('chat', () => {
 
   // 切换收藏状态
   const toggleCollect = (id: string) => {
+    /** 封装当前模块内的业务逻辑：index。 */
     const index = historyList.value.findIndex((item: any) => item.id === id);
     if (index !== -1) {
       const newCollectStatus = !historyList.value[index].isCollected;
@@ -113,9 +224,10 @@ export const useChatStore = defineStore('chat', () => {
     assistantMessage: ChatMessage,
     likeStatus: number,
     dislikeStatus: number,
+    functionIdOverride?: string,
   ): Promise<{ success: boolean; insertId?: string }> => {
     try {
-      const funcId = getFuncIdByTab(currentActiveTab.value);
+      const funcId = functionIdOverride || getFuncIdByTab(currentActiveTab.value);
       const inputTime = formatDateTime(new Date(userMessage.timestamp));
       const outputTime = formatDateTime(new Date(assistantMessage.timestamp));
 
@@ -128,11 +240,21 @@ export const useChatStore = defineStore('chat', () => {
         ? 1
         : 0;
 
-      // 准备answer对象
+      // 准备 answer 对象。
+      // 合规审核的原文缓存最早挂在用户消息 metadata 上；任务化流式切换/恢复后，
+      // 如果 assistantMessage.metadata 为空，必须用 userMessage.metadata 兜底，否则原文标记和导出会丢字段。
+      const mergedMetadata = {
+        ...(userMessage as any).metadata,
+        ...(assistantMessage as any).metadata,
+      };
       const answer = {
         responseContent: assistantMessage.content || '',
         data_json: assistantMessage.sources || [],
-        metadata: assistantMessage.metadata || {},
+        sources: assistantMessage.sources || [],
+        metadata: mergedMetadata,
+        taskId: assistantMessage.taskId || undefined,
+        taskStatus: assistantMessage.taskStatus || undefined,
+        streamEventCount: assistantMessage.streamEventId || undefined,
       };
 
       const payload = {
@@ -204,8 +326,8 @@ export const useChatStore = defineStore('chat', () => {
   const queryConversationsByFunc = async (): Promise<any> => {
     try {
       const funcId = getFuncIdByTab(currentActiveTab.value);
-      const limit = 30;
-      const url = API.chat.sessions(funcId, limit);
+      const limit = 100;
+      const url = API.chat.sessions(funcId, limit, 0);
 
       const response = await authRequest({
         url,
@@ -216,16 +338,19 @@ export const useChatStore = defineStore('chat', () => {
       if (!isSuccessStatus(response.status)) throw new Error(`HTTP错误! 状态: ${response.status}`);
 
       const result = response.data;
-      if (result && result.code === 0 && Array.isArray(result.data)) {
-        historyList.value = [];
-        chatSessions.value = {};
+      const data = getApiData(result);
+      const sessionItems = Array.isArray(data) ? data : data?.items || data?.sessions || [];
+      if (result && isApiSuccessCode(result.code) && Array.isArray(sessionItems)) {
+        const currentTab = currentActiveTab.value;
+        const nextHistoryItems: HistoryItem[] = [];
+        const nextChatSessions: Record<string, ChatSession> = {};
 
-        for (const sessionData of result.data) {
+        for (const sessionData of sessionItems) {
           const sessionUuid = sessionData.sessionId;
           const sessionTitle = sessionData.sessionTitle || '新会话';
-          const historyCount = sessionData.historyCount || 0;
-          const lastMessageTime = sessionData.lastMessageTime;
-          const createTime = sessionData.createTime || lastMessageTime;
+          const historyCount = sessionData.historyCount || sessionData.messageCount || sessionData.message_count || 0;
+          const lastMessageTime = sessionData.lastMessageTime || sessionData.last_message_time || sessionData.updateTime || sessionData.update_time;
+          const createTime = sessionData.createTime || sessionData.create_time || lastMessageTime;
 
           const createTimestamp = new Date(createTime).getTime();
           if (isNaN(createTimestamp)) continue;
@@ -259,11 +384,40 @@ export const useChatStore = defineStore('chat', () => {
             topStatus: sessionData.topStatus || 0, // ✅ 从服务器获取置顶状态
           };
 
-          chatSessions.value[sessionUuid] = session;
-          historyList.value.push(historyItem);
+          nextChatSessions[sessionUuid] = session;
+          nextHistoryItems.push(historyItem);
         }
 
-        historyList.value.sort((a, b) => b.time - a.time);
+        /** 封装当前模块内的业务逻辑：serverSessionIds。 */
+        const serverSessionIds = new Set(nextHistoryItems.map((item) => item.id));
+        /** 封装当前模块内的业务逻辑：preservedCurrentTabHistory。 */
+        const preservedCurrentTabHistory = historyList.value.filter((item: any) => {
+          if (item.menuType !== currentTab || serverSessionIds.has(item.id)) return false;
+          const localSession = chatSessions.value[item.id];
+          return Boolean(
+            localSession?.messages?.some(
+              (message: any) => message.streaming || ['pending', 'running'].includes(String(message.taskStatus || '').toLowerCase()),
+            ),
+          );
+        });
+        /** 封装当前模块内的业务逻辑：otherTabHistory。 */
+        const otherTabHistory = historyList.value.filter((item: any) => item.menuType !== currentTab);
+
+        const mergedSessions: Record<string, ChatSession> = {};
+        [...otherTabHistory, ...preservedCurrentTabHistory].forEach((item: any) => {
+          const session = chatSessions.value[item.id];
+          if (session) mergedSessions[item.id] = session;
+        });
+
+        chatSessions.value = {
+          ...mergedSessions,
+          ...nextChatSessions,
+        };
+        historyList.value = [
+          ...otherTabHistory,
+          ...preservedCurrentTabHistory,
+          ...nextHistoryItems,
+        ].sort((a, b) => b.time - a.time);
       }
 
       return result;
@@ -305,6 +459,7 @@ export const useChatStore = defineStore('chat', () => {
         session.sessionTitle = newTitle;
       }
 
+      /** 封装当前模块内的业务逻辑：historyItem。 */
       const historyItem = historyList.value.find((item: any) => item.id === sessionUuid);
       if (historyItem) {
         historyItem.title = newTitle;
@@ -356,17 +511,23 @@ export const useChatStore = defineStore('chat', () => {
     likeStatus: number,
     dislikeStatus: number,
     sessionUuid: string,
+    dislikeReason?: string,
   ): Promise<boolean> => {
     try {
       const funcId = getFuncIdByTab(currentActiveTab.value);
 
-      const payload = {
+      const payload: Record<string, any> = {
         sessionId: sessionUuid,
         functionId: funcId,
         qaId: qaId,
         likeStatus: likeStatus,
         dislikeStatus: dislikeStatus,
       };
+
+      // 取消点踩或切换为点赞时，前端显式传空点踩理由，避免后端保留旧原因。
+      if (typeof dislikeReason === 'string') {
+        payload.dislikeReason = dislikeReason;
+      }
       const url = API.chat.status;
       const response = await authRequest({
         url,
@@ -395,6 +556,7 @@ export const useChatStore = defineStore('chat', () => {
     const session = chatSessions.value[sessionId];
     if (!session) return;
 
+    /** 封装当前模块内的业务逻辑：message。 */
     const message = session.messages.find((msg: any) => msg.id === messageId);
     if (!message) return;
 
@@ -415,7 +577,8 @@ export const useChatStore = defineStore('chat', () => {
     // 同步到服务器
     const likeStatus = vote === 'like' ? 1 : 0;
     const dislikeStatus = vote === 'dislike' ? 1 : 0;
-    syncLikeStatus(messageId, likeStatus, dislikeStatus, sessionId);
+    const dislikeReason = dislikeStatus === 0 ? '' : undefined;
+    syncLikeStatus(messageId, likeStatus, dislikeStatus, sessionId, dislikeReason);
   };
 
   // 删除会话（调用后端接口）
@@ -437,7 +600,7 @@ export const useChatStore = defineStore('chat', () => {
 
       const result = response.data;
       // 假设后端返回格式：{ code: 0, msg: 'success' }
-      if (result && result.code === 0) {
+      if (result && isApiSuccessCode(result.code)) {
         // 从本地删除
         deleteHistoryItem(sessionUuid);
         delete chatSessions.value[sessionUuid];
@@ -470,8 +633,8 @@ export const useChatStore = defineStore('chat', () => {
       }
 
       const result = response.data;
-      if (result && result.code === 0 && Array.isArray(result.data)) {
-        return { success: true, data: result.data };
+      if (result && isApiSuccessCode(result.code) && Array.isArray(getApiData(result))) {
+        return { success: true, data: getApiData(result) };
       } else {
         return { success: false };
       }
@@ -498,8 +661,8 @@ export const useChatStore = defineStore('chat', () => {
       }
 
       const result = response.data;
-      if (result && result.code === 0 && result.data) {
-        return { success: true, data: result.data };
+      if (result && isApiSuccessCode(result.code) && getApiData(result)) {
+        return { success: true, data: getApiData(result) };
       } else {
         return { success: false };
       }
@@ -597,11 +760,11 @@ export const useChatStore = defineStore('chat', () => {
       // 适应新的数据结构
       if (
         result &&
-        result.code === 0 &&
-        result.data &&
-        Array.isArray(result.data.historyJson)
+        isApiSuccessCode(result.code) &&
+        getApiData(result) &&
+        Array.isArray(getApiData(result).historyJson)
       ) {
-        const historyJson = result.data.historyJson;
+        const historyJson = getApiData(result).historyJson;
 
         historyJson.forEach((qa: any) => {
           // 用户消息
@@ -614,34 +777,87 @@ export const useChatStore = defineStore('chat', () => {
           });
 
           // AI消息
-          const sources = qa.answer?.data_json || [];
+          const answerPayload = normalizeAnswerPayload(qa);
+          const sources = getAnswerSources(answerPayload);
           const matchScore =
             sources.length > 0
               ? Math.max(...sources.map((s: any) => parseFloat(s.score || '0')))
               : 0;
+          const messageStatus = qa.messageStatus || qa.message_status || answerPayload.messageStatus || answerPayload.message_status || answerPayload.taskStatus || answerPayload.task_status || '';
+          const taskId = qa.taskId || qa.task_id || answerPayload.taskId || answerPayload.task_id || '';
 
           messages.push({
             id: qa.qaId,
             role: 'assistant',
-            content: qa.answer?.responseContent || '',
+            content: stripReviewProgressText(getAnswerContent(qa, answerPayload), { functionId: funcId }),
             timestamp: new Date(qa.answerTime).getTime(),
+            streaming: isRunningMessageStatus(messageStatus),
+            taskId,
+            taskStatus: messageStatus,
+            streamEventId: Number(answerPayload.streamEventCount || answerPayload.lastEventId || answerPayload.last_event_id || qa.lastEventId || qa.last_event_id || 0),
             vote:
               qa.likeStatus === 1 ? 'like' : qa.dislikeStatus === 1 ? 'dislike' : null,
             likeCount: qa.likeStatus || 0,
             dislikeCount: qa.dislikeStatus || 0,
             sources: sources,
             match_score: matchScore,
-            metadata: qa.answer?.metadata || undefined,
+            metadata: getAnswerMetadata(qa, answerPayload),
           });
         });
       } else if (
         result &&
-        result.code === 0 &&
-        result.data &&
-        Array.isArray(result.data)
+        isApiSuccessCode(result.code) &&
+        getApiData(result) &&
+        Array.isArray(getApiData(result).messages)
+      ) {
+        getApiData(result).messages.forEach((qa: any) => {
+          messages.push({
+            id: `user_${qa.qaId || qa.qa_id}`,
+            role: 'user',
+            content: qa.questionContent || qa.question_content || '',
+            timestamp: new Date(qa.questionTime || qa.question_time || qa.createTime || qa.create_time).getTime(),
+            vote: null,
+          });
+
+          const answerPayload = normalizeAnswerPayload(qa);
+          const sources = getAnswerSources(answerPayload);
+          const matchScore =
+            sources.length > 0
+              ? Math.max(...sources.map((source: any) => parseFloat(source.score || '0')))
+              : 0;
+          const messageStatus = qa.messageStatus || qa.message_status || answerPayload.messageStatus || answerPayload.message_status || answerPayload.taskStatus || answerPayload.task_status || '';
+          const taskId = qa.taskId || qa.task_id || answerPayload.taskId || answerPayload.task_id || '';
+
+          messages.push({
+            id: qa.qaId || qa.qa_id,
+            role: 'assistant',
+            content: stripReviewProgressText(getAnswerContent(qa, answerPayload), { functionId: funcId }),
+            timestamp: new Date(qa.answerTime || qa.answer_time || qa.updateTime || qa.update_time).getTime(),
+            streaming: isRunningMessageStatus(messageStatus),
+            taskId,
+            taskStatus: messageStatus,
+            streamEventId: Number(answerPayload.streamEventCount || answerPayload.lastEventId || answerPayload.last_event_id || qa.lastEventId || qa.last_event_id || 0),
+            vote:
+              qa.likeStatus === 1 || qa.like_status === 1
+                ? 'like'
+                : qa.dislikeStatus === 1 || qa.dislike_status === 1
+                  ? 'dislike'
+                  : null,
+            likeCount: qa.likeStatus || qa.like_status || 0,
+            dislikeCount: qa.dislikeStatus || qa.dislike_status || 0,
+            sources,
+            match_score: matchScore,
+            metadata: getAnswerMetadata(qa, answerPayload),
+          });
+        });
+      } else if (
+        result &&
+        isApiSuccessCode(result.code) &&
+        getApiData(result) &&
+        Array.isArray(getApiData(result))
       ) {
         // 兼容旧的数据结构
-        result.data.forEach((qa: any) => {
+        getApiData(result).forEach((qa: any) => {
           messages.push({
             id: `user_${qa.qaId}`,
             role: 'user',
@@ -650,24 +866,31 @@ export const useChatStore = defineStore('chat', () => {
             vote: null,
           });
 
-          const sources = qa.answer?.data_json || [];
+          const answerPayload = normalizeAnswerPayload(qa);
+          const sources = getAnswerSources(answerPayload);
           const matchScore =
             sources.length > 0
               ? Math.max(...sources.map((s: any) => parseFloat(s.score || '0')))
               : 0;
+          const messageStatus = qa.messageStatus || qa.message_status || answerPayload.messageStatus || answerPayload.message_status || answerPayload.taskStatus || answerPayload.task_status || '';
+          const taskId = qa.taskId || qa.task_id || answerPayload.taskId || answerPayload.task_id || '';
 
           messages.push({
             id: qa.qaId,
             role: 'assistant',
-            content: qa.answer?.responseContent || '',
+            content: stripReviewProgressText(getAnswerContent(qa, answerPayload), { functionId: funcId }),
             timestamp: new Date(qa.answerTime).getTime(),
+            streaming: isRunningMessageStatus(messageStatus),
+            taskId,
+            taskStatus: messageStatus,
+            streamEventId: Number(answerPayload.streamEventCount || answerPayload.lastEventId || answerPayload.last_event_id || qa.lastEventId || qa.last_event_id || 0),
             vote:
               qa.likeStatus === 1 ? 'like' : qa.dislikeStatus === 1 ? 'dislike' : null,
             likeCount: qa.likeStatus || 0,
             dislikeCount: qa.dislikeStatus || 0,
             sources: sources,
             match_score: matchScore,
-            metadata: qa.answer?.metadata || undefined,
+            metadata: getAnswerMetadata(qa, answerPayload),
           });
         });
       } else {
@@ -678,6 +901,42 @@ export const useChatStore = defineStore('chat', () => {
     } catch (error) {
       console.error('查询会话历史失败:', error);
       return [];
+    }
+  };
+
+
+  // 接口：搜索当前用户的历史问答，后端 V12 使用 OpenSearch 返回 sessionId + qaId + 高亮片段。
+  const searchHistoryMessages = async (
+    keyword: string,
+    functionId?: string,
+    page = 1,
+    pageSize = 20,
+  ): Promise<{ success: boolean; data: any[]; total?: number; message?: string }> => {
+    const query = keyword.trim();
+    if (!query) return { success: true, data: [], total: 0 };
+
+    try {
+      const targetFunctionId = functionId || getFuncIdByTab(currentActiveTab.value);
+      const response = await authRequest({
+        url: API.chat.search(query, targetFunctionId, page, pageSize),
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!isSuccessStatus(response.status)) {
+        throw new Error(`HTTP错误! 状态: ${response.status}`);
+      }
+
+      const result = response.data;
+      if (!isApiSuccessCode(result?.code)) {
+        return { success: false, data: [], message: getApiMessage(result, '搜索失败') };
+      }
+
+      const data = getApiData(result) || {};
+      const items = Array.isArray(data) ? data : data.items || [];
+      return { success: true, data: items, total: data.total || items.length };
+    } catch (error: any) {
+      return { success: false, data: [], message: error?.message || '搜索失败' };
     }
   };
 
@@ -711,5 +970,6 @@ export const useChatStore = defineStore('chat', () => {
     getFuncIdByTab,
     queryFavoriteSessions,
     queryFavoriteSessionDetail,
+    searchHistoryMessages,
   };
 });

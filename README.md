@@ -1,68 +1,70 @@
-# AI+规章制度智能体前端
+# 规章制度智能体前端工程交付版
 
-## 本版本升级重点
+本工程是湖北交投规章制度智能体前端最新版交付代码，基于 `QA-new0522-v12-2-2-refresh-switch-frontend-fix13-review-progress-filter` 整理。业务逻辑保持最后联调通过版本不变，本次仅做工程管理、注释和文档完善。
 
-- 登录页标题改为“规章制度智能体”，保留原 AI 图标。
-- 新增用户注册入口，对接后端 `POST /v1/auth/register`。
-- 顶部右上角用户信息和退出登录移到左侧历史面板底部，与“我的收藏”放在同一区域。
-- 直接访问业务页面时接入登录管理，调用 `POST /v1/auth/login`。
-- 第三方访问只保留标准 URL 参数：`/intelligent-qa?agentToken=xxxx`。
-- 继续保留第三方 `postMessage` 的 `SET_AGENTTOKEN` 方式。
-- `agentToken` 校验 `/v1/scopes` 回归原始前端方式：`POST /v1/scopes`，请求体 `{ "access_token": agentToken }`。
-- 404 页面简化，不再展示状态码、访问地址、发生时间和错误详情。
-- 问答引用文件下载直接请求 `http://101.245.75.75:11328/watermark/download`，请求体为 `{ "file_id": "", "user_name": "" }`，不要求当前 Nginx 映射。
-- 前端部署 IP 不硬编码；`/v1/*` 仍由 Nginx 按现有配置转发。
+## 核心能力
 
-## 构建
+- 四类智能体功能：智能问答、智能检索、辅助起草、合规审核。
+- V12.2 任务化流式接口：创建任务、订阅 taskId、刷新/切换后恢复输出。
+- `answerEventId` 恢复游标：避免刷新或切换后中间内容被跳过。
+- 合规审核原文上下文恢复：刷新、切换后可恢复原文标记和比对能力。
+- 合规审核过程提示过滤：仅在审核场景过滤“分段完成”“合规性处理完成1/5”等过程提示。
+- 文档预览/下载保留原始逻辑：问答引用、检索详情、范文预览优先通过 `/watermark/download` 触发独立水印服务。
+- 起草/审核导出保留原始逻辑：通过 `/convert` 调用独立转换服务。
 
-```bash
-pnpm install
-pnpm build
-```
-
-打包产物：
-
-```text
-dist/
-```
-
-## Docker + Nginx 部署
+## 快速启动
 
 ```bash
-docker run -d \
-  --name web_guizhangzhidu \
-  --restart always \
-  --add-host=host.docker.internal:host-gateway \
-  -p 11316:11316 \
-  -v /mnt/data/web_hubeijiaotou/dist:/usr/share/nginx/html:ro \
-  -v /mnt/data/web_hubeijiaotou/nginx.conf:/etc/nginx/nginx.conf:ro \
-  -v /tmp/file_download_service:/tmp/file_download_service \
-  docker.m.daocloud.io/library/nginx:stable-alpine
+npm install
+npm run dev
 ```
 
-示例配置：
+## 生产构建
+
+```bash
+npm run build
+```
+
+构建产物位于 `dist/`，部署时将 `dist` 内容挂载或复制到 Nginx 静态目录。
+
+## 重要环境变量
+
+生产环境 `.env.production` 推荐：
+
+```env
+VITE_API_BASE_URL=
+VITE_AUTH_MODE=platform
+VITE_SM2_PUBLIC_KEY=请替换为真实完整公钥
+VITE_AGENT_SESSION_EXPIRE_MINUTES=720
+VITE_WATERMARK_API_BASE_URL=
+VITE_CONVERT_API_BASE_URL=
+```
+
+`VITE_WATERMARK_API_BASE_URL` 与 `VITE_CONVERT_API_BASE_URL` 留空时，前端请求同源路径：
 
 ```text
-deploy/nginx.conf.example
+/watermark/download
+/convert
 ```
 
-## 文档
+建议由前端 Nginx 直转到独立服务：
 
-- 登录管理与 agentToken：`docs/LOGIN_AUTH_UPGRADE.md`
-- 文件下载：`docs/DOWNLOAD_UPGRADE.md`
+```text
+/watermark/download -> http://1.94.244.72:11328/watermark/download
+/convert            -> http://1.94.244.72:11327/convert
+```
 
+## 文档入口
 
-## v8 调整说明
+- `docs/PROJECT_STRUCTURE.md`：工程目录和核心文件职责。
+- `docs/DEPLOYMENT_AND_CONFIG.md`：部署、环境变量、Nginx 和验证命令。
+- `docs/CALL_FLOW.md`：四个功能和任务恢复调用流程。
+- `docs/CODE_HANDOVER.md`：代码交接说明和维护边界。
+- `docs/ENGINEERING_CLEANUP.md`：本次工程整理范围。
 
-- 登录页去掉“系统登录 / AI+规章制度智能体”旧文案，统一为“规章制度智能体”。
-- 新增注册表单，对接 `/v1/auth/register`。
-- 用户信息、登录方式、我的收藏、退出登录统一放在左侧底部。
-- 文件下载改为 `POST /watermark/download`，请求体 `{ file_id, user_name }`，不再调用 `GET /watermark/download/{fileId}`。
-- 404 页面不再展示状态码、访问地址、发生时间、错误详情。
+## 维护原则
 
-
-## v9 修复说明
-
-- 修复智能问答点击引用文件时报 `Failed to fetch / 水印生成失败` 的问题。
-- 水印服务返回 `download_url` 后，前端不再二次 `fetch(download_url)`，而是直接用返回地址预览或打开文件，避免 8001 文件服务跨域导致失败。
-- 详情见 `docs/DOWNLOAD_UPGRADE.md`。
+1. 不在页面组件里硬编码大量接口地址，优先走 `src/api/api.ts` 和 `src/services/config.ts`。
+2. 文档预览和导出是独立服务逻辑，不走 8000 后端业务代码。
+3. 可恢复流式相关逻辑集中在 `src/composables/useAppShell.ts`，修改时需要同时考虑 `taskId / lastEventId / answerEventId / qaId / sessionId`。
+4. 合规审核原文恢复依赖前端上下文传递和后端 `/v1/chat/review-context`，不要删除相关 metadata 字段。

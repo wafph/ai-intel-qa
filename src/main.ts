@@ -1,3 +1,8 @@
+/**
+ * 应用入口，负责创建 Vue 实例、注册 Pinia、Router、Element Plus 与全局样式。
+ *
+ * 本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+ */
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import ElementPlus from 'element-plus';
@@ -8,6 +13,7 @@ import router from './router';
 import './style.less';
 import { useUserStore } from './stores/user';
 
+/** 封装当前模块内的业务逻辑：bootstrap。 */
 const bootstrap = async () => {
   const app = createApp(App);
   const pinia = createPinia();

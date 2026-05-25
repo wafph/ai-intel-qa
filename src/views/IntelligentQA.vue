@@ -1,3 +1,7 @@
+<!--
+  智能问答页面，展示流式问答、引用来源和来源文档预览。
+  本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+-->
 <template>
   <div class="intelligent-qa">
     <!-- 头部区域 - 只在完全没有数据时显示 -->
@@ -361,6 +365,7 @@ import { useChatStore } from '@/stores/chat';
 import { API } from '@/api/api';
 import { authRequest, isSuccessStatus } from '@/services/http';
 import { fetchWatermarkDocument, isPdfDocument, downloadDocumentBlob, openDocumentUrl } from '@/services/documentDownload';
+import { getSourceDirectUrl, getSourceFileId, getSourceTitle } from '@/services/sourceUtils';
 const chatStore = useChatStore();
 
 const displayAnswer = ref<string>('');
@@ -434,6 +439,7 @@ const feedbackOptions = ref([
   { label: '其他', value: 'other' },
 ]);
 
+/** 封装当前模块内的业务逻辑：hasMessages。 */
 const hasMessages = computed(() => {
   return props.chatData?.messages && props.chatData.messages.length > 0;
 });
@@ -546,17 +552,30 @@ const handleSourceTitleClick = async (source: any, event: Event) => {
   event.stopPropagation();
 
   try {
-    const fileId = source.file_id || source.id;
+    const fileId = getSourceFileId(source);
+    const title = getSourceTitle(source, 'document');
+    const directUrl = getSourceDirectUrl(source);
+
+    // 按早期可用版本逻辑：优先使用来源 file_id 调用独立水印下载服务。
+    // /watermark/download 由独立文档服务负责生成水印并返回 download_url；
+    // 只有缺少 file_id 时，才兜底打开来源自带直链。
     if (!fileId) {
-      return;
+      if (directUrl) {
+        if (isPdfDocument(directUrl, 'application/pdf', title, directUrl)) {
+          pdfViewerUrl.value = directUrl;
+          currentPdfTitle.value = title || 'PDF 预览';
+          showPdfViewer.value = true;
+        } else {
+          openDocumentUrl(directUrl);
+        }
+        return;
+      }
+      throw new Error('来源缺少文件ID或预览地址，无法预览文档');
     }
 
-    // 新版问答引用下载接口：直接 POST /watermark/download，
-    // 请求体使用 { file_id, user_name }；agentToken 场景 user_name 暂时固定为“丽丽”。
-    const result = await fetchWatermarkDocument(fileId, source.title || 'document');
+    const result = await fetchWatermarkDocument(fileId, title);
 
-    if (isPdfDocument(fileId, result.contentType, source.title, result.downloadUrl)) {
-      // 水印服务返回 download_url 时直接用于 iframe 预览，避免再次 fetch 跨端口文件服务导致 Failed to fetch。
+    if (isPdfDocument(fileId, result.contentType, title, result.downloadUrl)) {
       if (result.downloadUrl) {
         pdfViewerUrl.value = result.downloadUrl;
       } else if (result.blob) {
@@ -564,12 +583,12 @@ const handleSourceTitleClick = async (source: any, event: Event) => {
       } else {
         throw new Error('水印接口未返回可预览的文档地址');
       }
-      currentPdfTitle.value = source.title || 'PDF 预览';
+      currentPdfTitle.value = title || 'PDF 预览';
       showPdfViewer.value = true;
     } else if (result.downloadUrl) {
       openDocumentUrl(result.downloadUrl);
     } else if (result.blob) {
-      downloadDocumentBlob(result.blob, source.title || 'document', fileId);
+      downloadDocumentBlob(result.blob, title || 'document', fileId);
     } else {
       throw new Error('水印接口未返回可下载的文档内容');
     }
@@ -601,6 +620,7 @@ const toggleSourcesPanel = (item: ChatMessage) => {
   emit('sources-panel-toggle', showSourcesPanel.value);
 };
 
+/** 关闭面板、菜单或弹窗：closeSourcesPanel。 */
 const closeSourcesPanel = () => {
   showSourcesPanel.value = false;
   activeSourcesItem.value = null;
@@ -668,6 +688,7 @@ const handleVote = async (messageId: string, voteType: 'like' | 'dislike') => {
     return;
   }
 
+  /** 封装当前模块内的业务逻辑：message。 */
   const message = props.chatData.messages.find((msg) => msg.id === messageId);
   if (!message) {
     return;
@@ -732,6 +753,7 @@ const handleVote = async (messageId: string, voteType: 'like' | 'dislike') => {
       likeStatus,
       dislikeStatus,
       sessionUuid,
+      dislikeStatus === 0 ? '' : undefined,
     );
 
     if (!success) {
@@ -813,6 +835,7 @@ const appendToTypingQueue = (text: string) => {
   }
 };
 
+/** 开始编辑、订阅或交互：startTypingEffect。 */
 const startTypingEffect = (targetText: string) => {
   stopTypingEffect();
 
@@ -844,6 +867,7 @@ const startTypingEffect = (targetText: string) => {
   }, typingSpeed);
 };
 
+/** 停止当前输出或任务：stopTypingEffect。 */
 const stopTypingEffect = () => {
   if (typingInterval) {
     clearInterval(typingInterval);

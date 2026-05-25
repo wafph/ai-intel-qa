@@ -1,3 +1,7 @@
+<!--
+  辅助起草页面，展示流式起草、推荐范文、预览和导出操作。
+  本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+-->
 <template>
   <div class="auxiliary-draft intelligent-qa">
     <!-- 头部区域 -->
@@ -245,14 +249,15 @@ import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import MarkdownIt from 'markdown-it';
 import { ArrowRight, ArrowUp, Close } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
+import { API } from '@/api/api';
+import { isSuccessStatus, request } from '@/services/http';
 import {
   fetchWatermarkDocument,
   isPdfDocument,
   downloadDocumentBlob,
   openDocumentUrl,
 } from '@/services/documentDownload';
-import { isSuccessStatus, request } from '@/services/http';
-import { API } from '@/api/api';
+import { getSourceDirectUrl, getSourceFileId, getSourceTitle } from '@/services/sourceUtils';
 const emit = defineEmits(['regenerate', 'sources-panel-toggle']);
 
 interface Props {
@@ -319,6 +324,7 @@ const appendToTypingQueue = (text: string) => {
   }
 };
 
+/** 开始编辑、订阅或交互：startTypingEffect。 */
 const startTypingEffect = (targetText: string) => {
   stopTypingEffect();
 
@@ -350,6 +356,7 @@ const startTypingEffect = (targetText: string) => {
   }, typingSpeed);
 };
 
+/** 停止当前输出或任务：stopTypingEffect。 */
 const stopTypingEffect = () => {
   if (typingInterval) {
     clearInterval(typingInterval);
@@ -379,16 +386,20 @@ const renderMarkdown = (content: string) => {
   return md.render(content);
 };
 
-// 导出功能
+// 导出功能：恢复早期可用逻辑。
+// 先调用独立转换服务 /convert 获取 download_url，再按 download_url 执行 GET 下载文件流。
+// /convert 和后续下载地址建议由 11316 Nginx 直转到 11327，不经过 8000 后端。
 const handleExport = async () => {
   if (!props.chatData) {
     ElMessage.error('没有可导出的内容');
     return;
   }
 
-  const draftContent = props.chatData.messages
-    .filter((msg: any) => msg.role === 'assistant')
+  /** 封装当前模块内的业务逻辑：assistantMessages。 */
+  const assistantMessages = props.chatData.messages.filter((msg: any) => msg.role === 'assistant');
+  const draftContent = assistantMessages
     .map((msg: any) => msg.content)
+    .filter((content: string) => content && content.trim())
     .join('\n\n');
 
   if (!draftContent.trim()) {
@@ -396,10 +407,7 @@ const handleExport = async () => {
     return;
   }
 
-  const lastAssistantMessage = props.chatData.messages
-    .filter((msg: any) => msg.role === 'assistant')
-    .pop();
-
+  const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
   const qaId = lastAssistantMessage?.id || 'unknown';
 
   try {
@@ -419,12 +427,13 @@ const handleExport = async () => {
     if (!isSuccessStatus(convertResponse.status)) {
       throw new Error(`转换失败: ${convertResponse.status}`);
     }
-    const convertResult = convertResponse.data;
+
+    const convertResult: any = convertResponse.data;
     if (!convertResult.download_url) {
       throw new Error('转换结果中没有下载链接');
     }
-    await downloadConvertedFile(convertResult.download_url, convertResult.file_name);
 
+    await downloadConvertedFile(convertResult.download_url, convertResult.file_name || 'draft.docx');
     ElMessage.success('导出成功！');
   } catch (error) {
     ElMessage.error(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`);
@@ -433,33 +442,30 @@ const handleExport = async () => {
   }
 };
 
-// 下载转换后的文件
+// 下载转换后的文件：恢复早期逻辑，按转换服务返回的 download_url 再 GET 文件流。
 const downloadConvertedFile = async (downloadUrl: string, fileName: string) => {
-  try {
-    const response = await request<Blob>({
-      url: downloadUrl,
-      method: 'GET',
-      headers: {
-        Accept: '*/*',
-      },
-      responseType: 'blob',
-    });
+  const response = await request<Blob>({
+    url: downloadUrl,
+    method: 'GET',
+    headers: {
+      Accept: '*/*',
+    },
+    responseType: 'blob',
+  });
 
-    if (!isSuccessStatus(response.status)) {
-      throw new Error(`下载失败: ${response.status}`);
-    }
-    const fileBlob = response.data;
-    const url = window.URL.createObjectURL(fileBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName || 'draft.docx';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-  } catch (error) {
-    throw error;
+  if (!isSuccessStatus(response.status)) {
+    throw new Error(`下载失败: ${response.status}`);
   }
+
+  const fileBlob = response.data;
+  const url = window.URL.createObjectURL(fileBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName || 'draft.docx';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
 };
 
 // 切换参考来源面板
@@ -475,6 +481,7 @@ const toggleSourcesPanel = (item: DraftMessage) => {
   emit('sources-panel-toggle', showSourcesPanel.value);
 };
 
+/** 关闭面板、菜单或弹窗：closeSourcesPanel。 */
 const closeSourcesPanel = () => {
   showSourcesPanel.value = false;
   activeSourcesItem.value = null;
@@ -544,17 +551,29 @@ const handleSourceTitleClick = async (source: any, event: Event) => {
   event.stopPropagation();
 
   try {
-    const fileId = source.file_id || source.id;
+    const fileId = getSourceFileId(source);
+    const title = getSourceTitle(source, 'document');
+    const directUrl = getSourceDirectUrl(source);
+
+    // 按早期可用版本逻辑：推荐范文预览优先使用 file_id 调用独立水印下载服务。
+    // 只有缺少 file_id 时，才兜底打开来源自带直链。
     if (!fileId) {
-      return;
+      if (directUrl) {
+        if (isPdfDocument(directUrl, 'application/pdf', title, directUrl)) {
+          pdfViewerUrl.value = directUrl;
+          currentPdfTitle.value = title || 'PDF 预览';
+          showPdfViewer.value = true;
+        } else {
+          openDocumentUrl(directUrl);
+        }
+        return;
+      }
+      throw new Error('来源缺少文件ID或预览地址，无法预览文档');
     }
 
-    // 新版问答引用下载接口：直接 POST /watermark/download，
-    // 请求体使用 { file_id, user_name }；agentToken 场景 user_name 暂时固定为“丽丽”。
-    const result = await fetchWatermarkDocument(fileId, source.title || 'document');
+    const result = await fetchWatermarkDocument(fileId, title);
 
-    if (isPdfDocument(fileId, result.contentType, source.title, result.downloadUrl)) {
-      // 水印服务返回 download_url 时直接用于 iframe 预览，避免再次 fetch 跨端口文件服务导致 Failed to fetch。
+    if (isPdfDocument(fileId, result.contentType, title, result.downloadUrl)) {
       if (result.downloadUrl) {
         pdfViewerUrl.value = result.downloadUrl;
       } else if (result.blob) {
@@ -562,12 +581,12 @@ const handleSourceTitleClick = async (source: any, event: Event) => {
       } else {
         throw new Error('水印接口未返回可预览的文档地址');
       }
-      currentPdfTitle.value = source.title || 'PDF 预览';
+      currentPdfTitle.value = title || 'PDF 预览';
       showPdfViewer.value = true;
     } else if (result.downloadUrl) {
       openDocumentUrl(result.downloadUrl);
     } else if (result.blob) {
-      downloadDocumentBlob(result.blob, source.title || 'document', fileId);
+      downloadDocumentBlob(result.blob, title || 'document', fileId);
     } else {
       throw new Error('水印接口未返回可下载的文档内容');
     }
@@ -619,6 +638,7 @@ const scrollToBottom = () => {
   });
 };
 
+/** 处理用户交互或组件事件：handleRestart。 */
 const handleRestart = (index: number) => {
   if (!props.chatData || !props.chatData.messages) return;
 

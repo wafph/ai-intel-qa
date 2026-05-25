@@ -5,6 +5,11 @@ export interface ComplianceReviewParams {
   dimensions: string[];
   fileName: string;
   originalText: string;
+  fileType?: string;
+  fileSize?: number;
+  fileUrl?: string;
+  uploadFileId?: string;
+  originalHtml?: string;
 }
 
 export interface ChatMessage {
@@ -14,6 +19,11 @@ export interface ChatMessage {
   reasoning?: string;
   timestamp: number;
   streaming?: boolean;
+  taskId?: string;
+  taskStatus?: 'pending' | 'running' | 'completed' | 'error' | 'stopped' | string;
+  streamEventId?: number;
+  /** 当前 content 已覆盖到的后端事件游标，用于恢复订阅时避免跳过中间内容。 */
+  answerEventId?: number;
   vote?: 'like' | 'dislike' | null;
   likeCount?: number;
   dislikeCount?: number;
@@ -23,6 +33,7 @@ export interface ChatMessage {
     complianceOriginalText?: string;
     complianceFileName?: string;
     complianceParams?: ComplianceReviewParams;
+    reviewContext?: Record<string, any>;
   };
   sources?: SourceInfo[]; // ✅ 新增来源信息字段
   match_score?: number; // ✅ 新增：消息级别的

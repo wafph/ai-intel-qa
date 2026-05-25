@@ -1,3 +1,7 @@
+<!--
+  通用输入框组件，支持发送、停止、换行和自适应高度。
+  本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+-->
 <template>
   <div
     class="chat-input-container"
@@ -121,8 +125,10 @@ const emit = defineEmits<{
 const inputText = ref<string>('');
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const isComposing = ref<boolean>(false);
+/** 封装当前模块内的业务逻辑：hasInputContent。 */
 const hasInputContent = computed(() => Boolean(inputText.value.trim()));
 
+/** 判断条件是否成立：isSendButtonDisabled。 */
 const isSendButtonDisabled = computed(() => {
   if (props.streaming) return false;
   if (props.disabled) return true;
@@ -130,6 +136,7 @@ const isSendButtonDisabled = computed(() => {
   return !hasInputContent.value;
 });
 
+/** 处理用户交互或组件事件：handleSend。 */
 const handleSend = () => {
   if (isComposing.value || props.disabled || props.streaming) {
     return;
@@ -145,10 +152,12 @@ const handleSend = () => {
   resetTextareaHeight();
 };
 
+/** 处理用户交互或组件事件：handleStop。 */
 const handleStop = () => {
   emit('stop');
 };
 
+/** 处理用户交互或组件事件：handleNewLine。 */
 const handleNewLine = () => {
   if (props.disabled || props.streaming || props.isComplianceMode) return;
   inputText.value += '\n';
@@ -157,6 +166,7 @@ const handleNewLine = () => {
   });
 };
 
+/** 处理用户交互或组件事件：handleInput。 */
 const handleInput = () => {
   autoResize();
 
@@ -165,6 +175,7 @@ const handleInput = () => {
   }
 };
 
+/** 自动调整输入框等 UI 状态：autoResize。 */
 const autoResize = () => {
   nextTick(() => {
     if (!textareaRef.value) return;
@@ -175,25 +186,30 @@ const autoResize = () => {
   });
 };
 
+/** 重置组件状态：resetTextareaHeight。 */
 const resetTextareaHeight = () => {
   if (textareaRef.value) {
     textareaRef.value.style.height = 'auto';
   }
 };
 
+/** 封装当前模块内的业务逻辑：focusInput。 */
 const focusInput = () => {
   textareaRef.value?.focus();
 };
 
+/** 清理输入、搜索或缓存状态：clearInput。 */
 const clearInput = () => {
   inputText.value = '';
   resetTextareaHeight();
 };
 
+/** 处理用户交互或组件事件：handleCompositionStart。 */
 const handleCompositionStart = () => {
   isComposing.value = true;
 };
 
+/** 处理用户交互或组件事件：handleCompositionEnd。 */
 const handleCompositionEnd = () => {
   isComposing.value = false;
 };

@@ -11,6 +11,10 @@ declare global {
       query: string;
       username?: string;
       nickname?: string;
+      userId?: string;
+      nickName?: string;
+      mainUserInfo?: any;
+      [key: string]: any;
     };
   }
 }

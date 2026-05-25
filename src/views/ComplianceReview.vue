@@ -1,3 +1,7 @@
+<!--
+  合规审核页面，展示文件上传、审核结果、原文标记和报告导出。
+  本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+-->
 <template>
   <div class="intelligent-qa" :class="{ 'with-original-panel': activeOriginalMessage }">
     <div
@@ -196,6 +200,7 @@ interface ChatMessage {
     complianceOriginalText?: string;
     complianceFileName?: string;
     complianceParams?: ComplianceReviewParams;
+    reviewContext?: Record<string, any>;
   };
 }
 
@@ -205,6 +210,11 @@ interface ComplianceReviewParams {
   dimensions: string[];
   fileName: string;
   originalText: string;
+  fileType?: string;
+  fileSize?: number;
+  fileUrl?: string;
+  uploadFileId?: string;
+  originalHtml?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -225,6 +235,7 @@ const md = new MarkdownIt({
   typographer: true,
 });
 
+/** 封装当前模块内的业务逻辑：appendToTypingQueue。 */
 const appendToTypingQueue = (text: string) => {
   if (!text) return;
 
@@ -237,6 +248,7 @@ const appendToTypingQueue = (text: string) => {
   }
 };
 
+/** 开始编辑、订阅或交互：startTypingEffect。 */
 const startTypingEffect = (targetText: string) => {
   stopTypingEffect();
 
@@ -268,6 +280,7 @@ const startTypingEffect = (targetText: string) => {
   }, typingSpeed);
 };
 
+/** 处理用户交互或组件事件：handleRestart。 */
 const handleRestart = (index: number) => {
   if (!props.chatData || !props.chatData.messages) return;
 
@@ -291,15 +304,18 @@ const handleRestart = (index: number) => {
   }
 };
 
+/** 处理用户交互或组件事件：handleExport。 */
 const handleExport = async () => {
   if (!props.chatData) {
     ElMessage.error('没有可导出的内容');
     return;
   }
 
-  const content = props.chatData.messages
-    .filter((msg) => msg.role === 'assistant')
+  /** 封装当前模块内的业务逻辑：assistantMessages。 */
+  const assistantMessages = props.chatData.messages.filter((msg) => msg.role === 'assistant');
+  const content = assistantMessages
     .map((msg) => msg.content)
+    .filter((item) => item && item.trim())
     .join('\n\n');
 
   if (!content.trim()) {
@@ -307,9 +323,7 @@ const handleExport = async () => {
     return;
   }
 
-  const lastAssistantMessage = props.chatData.messages
-    .filter((msg) => msg.role === 'assistant')
-    .pop();
+  const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
   const qaId = lastAssistantMessage?.id || 'unknown';
 
   try {
@@ -330,7 +344,7 @@ const handleExport = async () => {
       throw new Error(`转换失败: ${convertResponse.status}`);
     }
 
-    const convertResult = convertResponse.data;
+    const convertResult: any = convertResponse.data;
     if (!convertResult.download_url) {
       throw new Error('转换结果中没有下载链接');
     }
@@ -344,6 +358,7 @@ const handleExport = async () => {
   }
 };
 
+// 下载转换后的文件：恢复早期逻辑，按转换服务返回的 download_url 再 GET 文件流。
 const downloadConvertedFile = async (downloadUrl: string, fileName: string) => {
   const response = await request<Blob>({
     url: downloadUrl,
@@ -369,6 +384,7 @@ const downloadConvertedFile = async (downloadUrl: string, fileName: string) => {
   window.URL.revokeObjectURL(url);
 };
 
+/** 停止当前输出或任务：stopTypingEffect。 */
 const stopTypingEffect = () => {
   if (typingInterval) {
     clearInterval(typingInterval);
@@ -380,6 +396,7 @@ const stopTypingEffect = () => {
   }
 };
 
+/** 格式化展示内容：formatTime。 */
 const formatTime = (date: Date) => {
   if (!(date instanceof Date)) {
     date = new Date(date);
@@ -391,11 +408,13 @@ const formatTime = (date: Date) => {
   });
 };
 
+/** 封装当前模块内的业务逻辑：renderMarkdown。 */
 const renderMarkdown = (content: string) => {
   if (!content) return '';
   return md.render(content);
 };
 
+/** 封装当前模块内的业务逻辑：escapeHtml。 */
 const escapeHtml = (value: string) => {
   return value
     .replace(/&/g, '&amp;')
@@ -405,12 +424,14 @@ const escapeHtml = (value: string) => {
     .replace(/'/g, '&#39;');
 };
 
+/** 创建本地/远程业务对象：createOriginalLink。 */
 const createOriginalLink = (text: string) => {
   return `<span class="original-reference-link" data-original-text="${escapeHtml(
     text,
   )}">${escapeHtml(text)}</span>`;
 };
 
+/** 封装当前模块内的业务逻辑：decorateOriginalReferences。 */
 const decorateOriginalReferences = (html: string) => {
   if (typeof document === 'undefined') return html;
 
@@ -459,10 +480,12 @@ const decorateOriginalReferences = (html: string) => {
   return container.innerHTML;
 };
 
+/** 封装当前模块内的业务逻辑：renderReviewMarkdown。 */
 const renderReviewMarkdown = (content: string) => {
   return decorateOriginalReferences(renderMarkdown(content));
 };
 
+/** 封装当前模块内的业务逻辑：activeOriginalMessage。 */
 const activeOriginalMessage = computed(() => {
   if (!props.chatData || !activeOriginalMessageId.value) return null;
   return (
@@ -473,14 +496,39 @@ const activeOriginalMessage = computed(() => {
   );
 });
 
+/** 封装当前模块内的业务逻辑：activeOriginalMetadata。 */
+const activeOriginalMetadata = computed(() => {
+  const assistant = activeOriginalMessage.value as any;
+  if (!props.chatData || !activeOriginalMessageId.value) return assistant?.metadata || {};
+
+  const messages = props.chatData.messages || [];
+  /** 封装当前模块内的业务逻辑：assistantIndex。 */
+  const assistantIndex = messages.findIndex((message: any) => message.id === activeOriginalMessageId.value);
+  const pairedUser =
+    messages.find((message: any) => message.id === `user_${activeOriginalMessageId.value}`) ||
+    (assistantIndex > 0 ? messages.slice(0, assistantIndex).reverse().find((message: any) => message.role === 'user') : null);
+
+  return {
+    ...(pairedUser as any)?.metadata,
+    ...assistant?.metadata,
+  };
+});
+
+/** 封装当前模块内的业务逻辑：activeOriginalText。 */
 const activeOriginalText = computed(() => {
-  return activeOriginalMessage.value?.metadata?.complianceOriginalText || '';
+  const metadata = activeOriginalMetadata.value || {};
+  const reviewContext = metadata.reviewContext || {};
+  return metadata.complianceOriginalText || reviewContext.originalText || reviewContext.original_text || '';
 });
 
+/** 封装当前模块内的业务逻辑：activeOriginalFileName。 */
 const activeOriginalFileName = computed(() => {
-  return activeOriginalMessage.value?.metadata?.complianceFileName || '上传原文';
+  const metadata = activeOriginalMetadata.value || {};
+  const reviewContext = metadata.reviewContext || {};
+  return metadata.complianceFileName || reviewContext.fileName || reviewContext.file_name || '上传原文';
 });
 
+/** 封装当前模块内的业务逻辑：originalPanelTip。 */
 const originalPanelTip = computed(() => {
   if (!activeOriginalText.value) {
     return '当前记录没有可预览的原文缓存；请重新上传文本类文件后审核，或等待上传接口返回原文内容。';
@@ -494,6 +542,7 @@ const originalPanelTip = computed(() => {
   return `已定位：${originalSearchText.value.slice(0, 40)}`;
 });
 
+/** 封装当前模块内的业务逻辑：renderOriginalContent。 */
 const renderOriginalContent = computed(() => {
   const originalText = activeOriginalText.value;
   if (!originalText) {
@@ -515,6 +564,7 @@ const renderOriginalContent = computed(() => {
   )}</mark>${escapeHtml(after)}`;
 });
 
+/** 构造请求载荷或业务上下文：buildSearchCandidates。 */
 const buildSearchCandidates = (text: string) => {
   const cleaned = text.replace(/\s+/g, ' ').trim();
   if (!cleaned) return [];
@@ -554,6 +604,7 @@ const buildSearchCandidates = (text: string) => {
     .sort((a, b) => b.length - a.length);
 };
 
+/** 封装当前模块内的业务逻辑：findCompactMatch。 */
 const findCompactMatch = (source: string, candidate: string) => {
   const sourcePositions: number[] = [];
   let compactSource = '';
@@ -575,6 +626,7 @@ const findCompactMatch = (source: string, candidate: string) => {
   return source.slice(start, end);
 };
 
+/** 封装当前模块内的业务逻辑：findOriginalMatch。 */
 const findOriginalMatch = (source: string, text: string) => {
   const candidates = buildSearchCandidates(text);
   for (const candidate of candidates) {
@@ -590,6 +642,7 @@ const findOriginalMatch = (source: string, text: string) => {
   return '';
 };
 
+/** 封装当前模块内的业务逻辑：scrollToOriginalMatch。 */
 const scrollToOriginalMatch = () => {
   nextTick(() => {
     const mark = originalContentRef.value?.querySelector('[data-original-mark="active"]');
@@ -597,6 +650,7 @@ const scrollToOriginalMatch = () => {
   });
 };
 
+/** 封装当前模块内的业务逻辑：locateOriginalText。 */
 const locateOriginalText = (rawText: string, item: ChatMessage) => {
   const text = rawText.replace(/\s+/g, ' ').trim();
   if (!text || item.role !== 'assistant') return;
@@ -606,7 +660,7 @@ const locateOriginalText = (rawText: string, item: ChatMessage) => {
     emit('sources-panel-toggle', true);
   }
 
-  const source = item.metadata?.complianceOriginalText || '';
+  const source = (item.metadata?.complianceOriginalText || activeOriginalMetadata.value?.complianceOriginalText || '') as string;
   const matchedText = source ? findOriginalMatch(source, text) : '';
   originalSearchText.value = matchedText || text;
   originalMatchFound.value = Boolean(matchedText);
@@ -616,6 +670,7 @@ const locateOriginalText = (rawText: string, item: ChatMessage) => {
   }
 };
 
+/** 处理用户交互或组件事件：handleAnswerSelection。 */
 const handleAnswerSelection = (item: ChatMessage) => {
   const selection = window.getSelection()?.toString() || '';
   if (selection.trim().length >= 4) {
@@ -623,6 +678,7 @@ const handleAnswerSelection = (item: ChatMessage) => {
   }
 };
 
+/** 处理用户交互或组件事件：handleAnswerClick。 */
 const handleAnswerClick = (event: MouseEvent, item: ChatMessage) => {
   const originalLink = (event.target as HTMLElement | null)?.closest(
     '.original-reference-link',
@@ -647,6 +703,7 @@ const handleAnswerClick = (event: MouseEvent, item: ChatMessage) => {
   }
 };
 
+/** 切换面板、菜单或状态：toggleOriginalPanel。 */
 const toggleOriginalPanel = (item: ChatMessage) => {
   if (activeOriginalMessageId.value === item.id) {
     closeOriginalPanel();
@@ -659,6 +716,7 @@ const toggleOriginalPanel = (item: ChatMessage) => {
   emit('sources-panel-toggle', true);
 };
 
+/** 关闭面板、菜单或弹窗：closeOriginalPanel。 */
 const closeOriginalPanel = () => {
   activeOriginalMessageId.value = null;
   originalSearchText.value = '';
@@ -666,8 +724,10 @@ const closeOriginalPanel = () => {
   emit('sources-panel-toggle', false);
 };
 
+/** 封装当前模块内的业务逻辑：scrollToBottom。 */
 const scrollToBottom = () => {
   nextTick(() => {
+    /** 封装当前模块内的业务逻辑：scrollContainers。 */
     const scrollContainers = () => {
       const containers = [
         document.querySelector('.dynamic-content'),

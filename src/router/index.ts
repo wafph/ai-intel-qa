@@ -1,3 +1,8 @@
+/**
+ * 前端路由定义，包含登录、问答、检索、起草、审核和收藏页面。
+ *
+ * 本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+ */
 import { createRouter, createWebHistory } from 'vue-router';
 import IntelligentQA from '../views/IntelligentQA.vue';
 import IntelligentRetrieval from '../views/IntelligentRetrieval.vue';

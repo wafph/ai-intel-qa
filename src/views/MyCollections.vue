@@ -1,3 +1,7 @@
+<!--
+  我的收藏页面，展示和跳转收藏问答。
+  本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+-->
 <template>
   <div class="my-collections">
     <!-- 顶部标题栏 -->
@@ -117,10 +121,10 @@ const filteredCollections = computed(() => {
   if (activeFilter.value !== 'all') {
     // 将中文标签转换为functionId
     const functionIdMap: Record<string, string> = {
-      '智能问答': 'knowledge_qa',
-      '辅助起草': 'knowledge_draft',
-      '合规审核': 'knowledge_review',
-      '智能检索': 'knowledge_search',
+      '智能问答': 'qa',
+      '辅助起草': 'draft',
+      '合规审核': 'review',
+      '智能检索': 'search',
     };
     
     const functionId = functionIdMap[activeFilter.value];
@@ -149,10 +153,10 @@ const loadCollections = async () => {
     let functionId: string | undefined = undefined;
     if (activeFilter.value !== 'all') {
       const functionIdMap: Record<string, string> = {
-        '智能问答': 'knowledge_qa',
-        '辅助起草': 'knowledge_draft',
-        '合规审核': 'knowledge_review',
-        '智能检索': 'knowledge_search',
+        '智能问答': 'qa',
+        '辅助起草': 'draft',
+        '合规审核': 'review',
+        '智能检索': 'search',
       };
       functionId = functionIdMap[activeFilter.value];
     }
@@ -186,10 +190,10 @@ const loadCollections = async () => {
 // 根据functionId获取类型名称
 const getTypeByFunctionId = (functionId: string): string => {
   const typeMap: Record<string, string> = {
-    'knowledge_qa': '智能问答',
-    'knowledge_draft': '辅助起草',
-    'knowledge_review': '合规审核',
-    'knowledge_search': '智能检索',
+    'qa': '智能问答',
+    'draft': '辅助起草',
+    'review': '合规审核',
+    'search': '智能检索',
   };
   return typeMap[functionId] || '未知类型';
 };
@@ -211,11 +215,11 @@ const viewCollection = async (item: any) => {
       // 或者直接跳转到对应的功能页面
       let path = '/intelligent-qa'; // 默认跳转到智能问答
       
-      if (item.functionId === 'knowledge_search') {
+      if (item.functionId === 'search') {
         path = '/intelligent-retrieval';
-      } else if (item.functionId === 'knowledge_draft') {
+      } else if (item.functionId === 'draft') {
         path = '/auxiliary-draft';
-      } else if (item.functionId === 'knowledge_review') {
+      } else if (item.functionId === 'review') {
         path = '/compliance-review';
       }
       

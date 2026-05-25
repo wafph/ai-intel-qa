@@ -1,3 +1,7 @@
+<!--
+  根组件，承载路由页面并提供全局页面容器。
+  本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+-->
 ﻿<template>
   <template v-if="showFullLayout">
     <div class="app-container">
@@ -9,6 +13,9 @@
         :collapsed="sidebarCollapsed"
         :active-tab="activeTab"
         :auth-mode="userStore.authMode"
+        :search-keyword="historySearchKeyword"
+        :search-results="historySearchResults"
+        :search-loading="historySearchLoading"
         @select-chat="handleSelectChat"
         @new-chat="handleNewChat"
         @delete-chat="handleDeleteChat"
@@ -16,6 +23,9 @@
         @update-title="handleUpdateTitle"
         @toggle-favorite="handleToggleFavorite"
         @toggle-pin="handleTogglePin"
+        @search-history="handleSearchHistory"
+        @clear-search="handleClearHistorySearch"
+        @select-search-result="handleSelectSearchResult"
         @toggle-collapse="toggleSidebar"
         @logout="handleLogout"
       />
@@ -107,12 +117,18 @@ const {
   handleSelectAll,
   handleSelectChat,
   handleSendMessage,
+  handleSearchHistory,
+  handleClearHistorySearch,
+  handleSelectSearchResult,
   handleSourcesPanelToggle,
   handleTabChange,
   handleToggleFavorite,
   handleTogglePin,
   handleUpdateTitle,
   inputContainerStyle,
+  historySearchKeyword,
+  historySearchResults,
+  historySearchLoading,
   inputPlaceholder,
   isHistoryChatActive,
   isSendDisabled,
@@ -129,6 +145,7 @@ const {
   userStore,
 } = useAppShell();
 
+/** 判断是否应执行指定逻辑：shouldRenderContentView。 */
 const shouldRenderContentView = computed(() => {
   const hasCurrentMessages = (currentChatData.value?.messages?.length || 0) > 0;
 
@@ -139,8 +156,10 @@ const shouldRenderContentView = computed(() => {
   );
 });
 
+/** 处理用户交互或组件事件：handleHeaderTabChange。 */
 const handleHeaderTabChange = async (tabName: string) => {
-  handleTabChange(tabName);
+  const changed = await handleTabChange(tabName);
+  if (changed === false) return;
   await nextTick();
   chatInputRef.value?.clearInput();
 };

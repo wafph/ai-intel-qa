@@ -1,3 +1,7 @@
+<!--
+  合规审核额外选项组件，维护审核维度选择。
+  本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+-->
 <template>
   <div class="compliance-extras">
     <div class="review-dimensions">
@@ -29,6 +33,7 @@ const localDimensions = computed({
   set: (value) => emit('update:selectedDimensions', value),
 });
 
+/** 处理用户交互或组件事件：handleSelectAll。 */
 const handleSelectAll = (value: unknown) => {
   emit('select-all', Boolean(value));
 };

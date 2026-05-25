@@ -1,3 +1,7 @@
+<!--
+  顶部功能导航组件，负责功能页切换意图传递。
+  本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+-->
 <template>
   <header class="header-menu">
     <!-- 折叠按钮 -->
@@ -29,21 +33,10 @@ interface TabItem {
   label: string;
 }
 
-import { useRouter } from 'vue-router';
-
-const router = useRouter();
-
-// 修改handleTabClick方法
+// 只向外抛出切换意图，不在组件内直接 router.push。
+// 父组件会先弹出“当前会话正在输出”确认框；用户选择“留在当前会话”时，不能提前跳转。
 const handleTabClick = (tabName: string) => {
   if (props.activeTab !== tabName) {
-    const routeMap: Record<string, string> = {
-      智能问答: '/intelligent-qa',
-      智能检索: '/intelligent-retrieval',
-      辅助起草: '/auxiliary-draft',
-      合规审核: '/compliance-review',
-    };
-
-    router.push(routeMap[tabName] || '/intelligent-qa');
     emit('tab-change', tabName);
   }
 };
@@ -54,6 +47,7 @@ const emit = defineEmits<{
 }>();
 
 
+/** 封装当前模块内的业务逻辑：tabs。 */
 const tabs = computed<TabItem[]>(() => {
   const allTabs = [
     { value: '智能问答', label: '智能问答' },
