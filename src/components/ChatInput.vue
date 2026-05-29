@@ -410,8 +410,8 @@ defineExpose({
 
 .add-btn,
 .send-btn {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   border: none;
   border-radius: 50%;
   padding: 0;
@@ -457,8 +457,8 @@ defineExpose({
 }
 
 .send-icon {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 25px;
 }
 
 .send-btn.is-active:hover {
@@ -481,8 +481,8 @@ defineExpose({
 }
 
 .stop-icon {
-  width: 18px;
-  height: 18px;
+  width: 25px;
+  height: 25px;
 }
 
 .stop-tooltip {
