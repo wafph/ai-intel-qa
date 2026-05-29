@@ -44,7 +44,7 @@ const isHtmlErrorText = (text = '') => /<html[\s>]/i.test(text) || /<h1>\s*405\s
 const toFriendlyServiceError = (error: any, fallback: string) => {
   const raw = String(error?.message || error?.detail || error || '');
   if (isHtmlErrorText(raw) || raw.includes('405 Not Allowed')) {
-    return new Error('文件服务返回 405。请确认 VITE_WATERMARK_API_BASE_URL 指向独立水印服务 11328，最终地址为 /watermark/download。');
+    return new Error('文件服务返回 405。请确认 VITE_WATERMARK_API_BASE_URL 指向 8005 文件服务路由前缀，例如 http://1.94.244.72:8005/v1/files，最终地址为 /v1/files/watermark/download。');
   }
   return error instanceof Error ? error : new Error(raw || fallback);
 };
@@ -223,8 +223,8 @@ const requestWatermarkDocument = async (endpoint: string, fileId: string, title:
 };
 
 // 问答引用/检索详情/范文预览文件下载接口。
-// 按历史版本逻辑：优先拿 file_id 请求独立水印下载服务 POST /watermark/download。
-// 推荐生产环境通过 11316 Nginx 同源直转到 11328，不经过 8000 后端，避免 CORS。
+// 按历史版本逻辑：优先拿 file_id 请求水印下载服务 POST /v1/files/watermark/download。
+// 当前推荐直接配置 8005 文件服务，或通过前端 Nginx 同源转发到 8005，避免 CORS。
 export const fetchWatermarkDocument = async (
   fileId: string,
   title = 'document',

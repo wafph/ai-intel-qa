@@ -49,7 +49,7 @@
 文档水印预览/下载服务，按原始逻辑：
 
 ```text
-file_id + user_name -> POST /watermark/download -> 获取 download_url 或 Blob -> PDF 预览/下载
+file_id + user_name -> POST /v1/files/watermark/download -> 获取 download_url 或 Blob -> PDF 预览/下载
 ```
 
 ### `src/services/exportDocument.ts`
@@ -57,7 +57,7 @@ file_id + user_name -> POST /watermark/download -> 获取 download_url 或 Blob 
 起草和审核导出服务，按原始逻辑：
 
 ```text
-POST /convert -> 获取 download_url -> GET download_url -> Blob 下载
+POST /v1/markdown-word/convert -> 获取 download_url -> GET download_url -> Blob 下载
 ```
 
 ### `src/services/reviewProgress.ts`

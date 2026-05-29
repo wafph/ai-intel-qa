@@ -1,6 +1,6 @@
 # 规章制度智能体前端工程交付版
 
-本工程是湖北交投规章制度智能体前端最新版交付代码，基于 `QA-new0522-v12-2-2-refresh-switch-frontend-fix13-review-progress-filter` 整理。业务逻辑保持最后联调通过版本不变，本次仅做工程管理、注释和文档完善。
+本工程是湖北交投规章制度智能体前端最新版交付代码，基于 `QA-new0522-v12-2-2-refresh-switch-frontend-fix14-structured-result-recovery` 升级。业务逻辑保持最后联调通过版本不变，本次仅将文档水印下载与 Markdown 转 Word 服务地址切换到 8005 统一文件服务。
 
 ## 核心能力
 
@@ -9,8 +9,8 @@
 - `answerEventId` 恢复游标：避免刷新或切换后中间内容被跳过。
 - 合规审核原文上下文恢复：刷新、切换后可恢复原文标记和比对能力。
 - 合规审核过程提示过滤：仅在审核场景过滤“分段完成”“合规性处理完成1/5”等过程提示。
-- 文档预览/下载保留原始逻辑：问答引用、检索详情、范文预览优先通过 `/watermark/download` 触发独立水印服务。
-- 起草/审核导出保留原始逻辑：通过 `/convert` 调用独立转换服务。
+- 文档预览/下载保留原始逻辑：问答引用、检索详情、范文预览优先通过 `/v1/files/watermark/download` 触发水印服务。
+- 起草/审核导出保留原始逻辑：通过 `/v1/markdown-word/convert` 调用 Markdown 转 Word 服务。
 
 ## 快速启动
 
@@ -36,23 +36,25 @@ VITE_API_BASE_URL=
 VITE_AUTH_MODE=platform
 VITE_SM2_PUBLIC_KEY=请替换为真实完整公钥
 VITE_AGENT_SESSION_EXPIRE_MINUTES=720
-VITE_WATERMARK_API_BASE_URL=
-VITE_CONVERT_API_BASE_URL=
+VITE_WATERMARK_API_BASE_URL=http://1.94.244.72:8005/v1/files
+VITE_CONVERT_API_BASE_URL=http://1.94.244.72:8005/v1/markdown-word
 ```
 
-`VITE_WATERMARK_API_BASE_URL` 与 `VITE_CONVERT_API_BASE_URL` 留空时，前端请求同源路径：
+`VITE_WATERMARK_API_BASE_URL` 与 `VITE_CONVERT_API_BASE_URL` 配置的是接口路由前缀，代码会自动追加固定路由：
 
 ```text
-/watermark/download
-/convert
+${VITE_WATERMARK_API_BASE_URL}/watermark/download
+${VITE_CONVERT_API_BASE_URL}/convert
 ```
 
-建议由前端 Nginx 直转到独立服务：
+当前默认生产请求为：
 
 ```text
-/watermark/download -> http://1.94.244.72:11328/watermark/download
-/convert            -> http://1.94.244.72:11327/convert
+http://1.94.244.72:8005/v1/files/watermark/download
+http://1.94.244.72:8005/v1/markdown-word/convert
 ```
+
+后期更换服务器时，只需要在 `.env.production` 中替换协议、IP、端口或前缀。若希望走前端 Nginx 同源转发，可设置为 `/v1/files` 与 `/v1/markdown-word`，并在 Nginx 中转发到 8005。
 
 ## 文档入口
 

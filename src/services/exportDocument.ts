@@ -26,7 +26,7 @@ const isHtmlErrorText = (text = '') => /<html[\s>]/i.test(text) || /<h1>\s*405\s
 const normalizeExportError = (error: any) => {
   const raw = String(error?.message || error?.detail || error || '');
   if (isHtmlErrorText(raw) || raw.includes('405 Not Allowed')) {
-    return new Error('文档转换服务返回 405。请确认 /convert 已由 11316 Nginx 直转到 11327，或 VITE_CONVERT_API_BASE_URL 指向独立转换服务。');
+    return new Error('文档转换服务返回 405。请确认 VITE_CONVERT_API_BASE_URL 指向 8005 Markdown 转 Word 路由前缀，例如 http://1.94.244.72:8005/v1/markdown-word，最终地址为 /v1/markdown-word/convert。');
   }
   return error instanceof Error ? error : new Error(raw || '转换失败');
 };

@@ -7,7 +7,7 @@
 | 任务化流式 | 集中在 `useAppShell.ts`，修改时必须考虑 taskId、lastEventId、answerEventId。 |
 | 会话历史 | `stores/chat.ts` 负责历史映射，`useAppShell.ts` 负责保存和恢复。 |
 | 文档预览 | `documentDownload.ts` 与 `sourceUtils.ts`，不要改到 8000 后端代理逻辑。 |
-| 文档导出 | `exportDocument.ts`，保持 `/convert -> download_url -> Blob 下载` 原始链路。 |
+| 文档导出 | `exportDocument.ts`，保持 `/v1/markdown-word/convert -> download_url -> Blob 下载` 原始链路。 |
 | 合规审核原文 | `review-context` 接口、metadata、reviewContext 字段不能删除。 |
 | 审核过程过滤 | `reviewProgress.ts`，只作用于 review 场景。 |
 
@@ -15,11 +15,11 @@
 
 ### 1. 文档预览 Network Error
 
-优先检查 Nginx `/watermark/` 是否转发到 11328，或者 11328 是否可达。
+优先检查 `VITE_WATERMARK_API_BASE_URL` 是否指向 8005 路由前缀，例如 `http://1.94.244.72:8005/v1/files`，或同源 Nginx `/v1/files/` 是否已转发到 8005。
 
 ### 2. 导出后显示前端 404
 
-说明 `/convert` 返回的 `download_url` 是相对地址，但 Nginx 没有代理对应下载路径。补充 `/download/`、`/outputs/`、`/storage/` 等路径代理到 11327。
+说明 `/v1/markdown-word/convert` 返回的 `download_url` 是相对地址，但 Nginx 没有代理对应下载路径。按 8005 文件服务实际返回路径补充代理，或让服务返回完整绝对下载地址。
 
 ### 3. 刷新后内容缺一段
 

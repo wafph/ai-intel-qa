@@ -19,16 +19,21 @@ export const AGENT_SESSION_EXPIRE_MINUTES = Number(
 );
 
 // 水印文件下载接口基础地址。
-// 生产环境按原有逻辑直接配置到文件下载服务，例如 http://1.94.244.72:11328，
-// 最终请求为 ${VITE_WATERMARK_API_BASE_URL}/watermark/download。
+// 当前统一文件服务为 8005，推荐配置到路由前缀，例如：
+//   http://1.94.244.72:8005/v1/files
+// 最终请求为：
+//   ${VITE_WATERMARK_API_BASE_URL}/watermark/download
+// 如后期更换服务器，仅替换协议、IP、端口或前缀即可；若留空则默认走当前站点同源 /v1/files。
 export const WATERMARK_API_BASE_URL = (
-  import.meta.env.VITE_WATERMARK_API_BASE_URL || ''
+  import.meta.env.VITE_WATERMARK_API_BASE_URL || '/v1/files'
 ).replace(/\/$/, '');
 
-
-// 文档转换接口基础地址。
-// 推荐生产环境留空，最终请求 /convert，由 11316 Nginx 直转 11327；
-// 如果不配置 Nginx 直转，也可以显式设置为 http://1.94.244.72:11327。
+// Markdown 转 Word 接口基础地址。
+// 当前统一文件服务为 8005，推荐配置到路由前缀，例如：
+//   http://1.94.244.72:8005/v1/markdown-word
+// 最终请求为：
+//   ${VITE_CONVERT_API_BASE_URL}/convert
+// 如后期更换服务器，仅替换协议、IP、端口或前缀即可；若留空则默认走当前站点同源 /v1/markdown-word。
 export const CONVERT_API_BASE_URL = (
-  import.meta.env.VITE_CONVERT_API_BASE_URL || ''
+  import.meta.env.VITE_CONVERT_API_BASE_URL || '/v1/markdown-word'
 ).replace(/\/$/, '');

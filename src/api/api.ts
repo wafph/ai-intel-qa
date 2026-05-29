@@ -78,8 +78,8 @@ export const API = {
       `${API_BASE_URL}/v1/chat/favorites/detail?functionId=${encodeURIComponent(functionId)}&sessionId=${encodeURIComponent(sessionId)}`,
   },
   document: {
-    // 文档转换/水印预览沿用早期逻辑：前端调用独立文档服务接口，不走 8000 后端。
-    // 推荐通过 11316 Nginx 同源直转：/watermark/download -> 11328，/convert -> 11327，避免浏览器 CORS。
+    // 文档转换/水印预览沿用早期逻辑：前端调用独立文档服务接口，不走 8000 后端业务接口。
+    // 当前统一走 8005 文件服务：/v1/files/watermark/download、/v1/markdown-word/convert。
     convert: `${CONVERT_API_BASE_URL.replace(/\/$/, '')}/convert`,
     watermarkBase: WATERMARK_API_BASE_URL.replace(/\/$/, ''),
     watermarkDownload: `${WATERMARK_API_BASE_URL.replace(/\/$/, '')}/watermark/download`,

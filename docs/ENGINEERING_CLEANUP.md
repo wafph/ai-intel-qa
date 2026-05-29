@@ -1,6 +1,6 @@
 # 工程整理说明
 
-本次整理基于最后可用前端版本 `fix13-review-progress-filter`，不改业务逻辑，只做工程管理处理。
+本次升级基于 `fix14-structured-result-recovery` 版本，不改业务交互逻辑，仅将水印下载与 Markdown 转 Word 接口地址切换到 8005 统一文件服务，并同步配置与文档。
 
 ## 清理内容
 

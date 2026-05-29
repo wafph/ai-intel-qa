@@ -41,7 +41,7 @@ workflow_finished.outputs.user_fields.data_json
   -> assistantMessage.sources
   -> 点击来源标题
   -> fetchWatermarkDocument(file_id)
-  -> POST /watermark/download
+  -> POST /v1/files/watermark/download
   -> PDF 预览或文件下载
 ```
 
@@ -60,7 +60,7 @@ IntelligentRetrieval.vue
 ```text
 source.file_id
   -> fetchWatermarkDocument
-  -> POST /watermark/download
+  -> POST /v1/files/watermark/download
   -> PDF 预览或下载
 ```
 
@@ -78,7 +78,7 @@ AuxiliaryDraft.vue
 
 ```text
 source.file_id
-  -> POST /watermark/download
+  -> POST /v1/files/watermark/download
   -> PDF 预览或下载
 ```
 
@@ -86,7 +86,7 @@ source.file_id
 
 ```text
 exportDocument.ts
-  -> POST /convert
+  -> POST /v1/markdown-word/convert
   -> 获取 download_url
   -> GET download_url 获取 Blob
   -> 前端触发浏览器下载

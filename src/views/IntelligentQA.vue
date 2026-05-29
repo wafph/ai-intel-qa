@@ -557,7 +557,7 @@ const handleSourceTitleClick = async (source: any, event: Event) => {
     const directUrl = getSourceDirectUrl(source);
 
     // 按早期可用版本逻辑：优先使用来源 file_id 调用独立水印下载服务。
-    // /watermark/download 由独立文档服务负责生成水印并返回 download_url；
+    // /v1/files/watermark/download 由统一文件服务负责生成水印并返回 download_url；
     // 只有缺少 file_id 时，才兜底打开来源自带直链。
     if (!fileId) {
       if (directUrl) {

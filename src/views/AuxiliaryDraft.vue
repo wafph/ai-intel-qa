@@ -387,8 +387,8 @@ const renderMarkdown = (content: string) => {
 };
 
 // 导出功能：恢复早期可用逻辑。
-// 先调用独立转换服务 /convert 获取 download_url，再按 download_url 执行 GET 下载文件流。
-// /convert 和后续下载地址建议由 11316 Nginx 直转到 11327，不经过 8000 后端。
+// 先调用 Markdown 转 Word 服务 /v1/markdown-word/convert 获取 download_url，再按 download_url 执行 GET 下载文件流。
+// 转换接口由 8005 统一文件服务提供，不经过 8000 后端业务接口。
 const handleExport = async () => {
   if (!props.chatData) {
     ElMessage.error('没有可导出的内容');
