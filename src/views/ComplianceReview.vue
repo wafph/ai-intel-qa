@@ -48,19 +48,19 @@
                 </div>
               </div>
 
-              <div v-if="item.streaming && item.id === currentStreamingMessageId">
+              <div v-if="shouldRenderStreamBlock(item)">
                 <div
-                  v-if="currentAnswer && currentAnswer.trim() !== ''"
+                  v-if="getStreamAnswer(item).trim() !== ''"
                   class="answer-streaming"
                 >
                   <div class="typing-container">
-                    <div class="typing-text" v-html="renderMarkdown(displayAnswer)"></div>
-                    <span v-if="isTyping" class="typing-cursor">|</span>
+                    <div class="typing-text" v-html="renderStreamMarkdown(item)"></div>
+                    <span v-if="isActiveStreamingMessage(item) && isTyping" class="typing-cursor">|</span>
                   </div>
                 </div>
 
                 <div
-                  v-if="streaming && (!currentAnswer || currentAnswer.trim() === '')"
+                  v-if="shouldShowStreamLoading(item)"
                   class="thinking-indicator"
                 >
                   <div class="thinking-dots">
@@ -68,6 +68,41 @@
                     <span></span>
                     <span></span>
                   </div>
+                </div>
+
+                <div
+                  style="margin-left: 15px"
+                  v-if="shouldShowCompletedStreamActions(item)"
+                >
+                  <el-button
+                    link
+                    class="btnbottom"
+                    type="warning"
+                    plain
+                    @click="toggleOriginalPanel(item)"
+                  >
+                    原文标记<el-icon class="el-icon--right"><ArrowRight /></el-icon>
+                  </el-button>
+                  <el-button
+                    link
+                    class="btnbottom"
+                    type="primary"
+                    plain
+                    @click="handleExport"
+                    :loading="loading"
+                    :disabled="loading"
+                  >
+                    {{ loading ? '转换中...' : '导出报告' }}
+                  </el-button>
+                  <el-button
+                    link
+                    class="btnbottom"
+                    type="success"
+                    plain
+                    @click="handleRestart(index)"
+                  >
+                    重新审核
+                  </el-button>
                 </div>
               </div>
 
@@ -117,7 +152,7 @@
               <div class="message-time">
                 {{ formatTime(item.timestamp) }}
                 <span
-                  v-if="item.streaming && item.id === currentStreamingMessageId"
+                  v-if="isActiveStreamingMessage(item)"
                   class="streaming-badge"
                 >
                   <span class="streaming-dot"></span>
@@ -223,6 +258,30 @@ const props = withDefaults(defineProps<Props>(), {
   currentAnswer: '',
   currentStreamingMessageId: null,
 });
+
+const streamedMessageIds = ref<Set<string>>(new Set());
+
+/** 记录已流式展示过的审核消息，结束后继续显示流式内容，不再切到最终回复块。 */
+const isActiveStreamingMessage = (item: ChatMessage) =>
+  Boolean(item.streaming && item.id === props.currentStreamingMessageId);
+
+const hasStreamedMessage = (item: ChatMessage) => streamedMessageIds.value.has(item.id);
+
+const shouldRenderStreamBlock = (item: ChatMessage) =>
+  isActiveStreamingMessage(item) || hasStreamedMessage(item);
+
+const getStreamAnswer = (item: ChatMessage) =>
+  isActiveStreamingMessage(item)
+    ? displayAnswer.value || props.currentAnswer || item.content || ''
+    : item.content || '';
+
+const shouldShowStreamLoading = (item: ChatMessage) =>
+  isActiveStreamingMessage(item) &&
+  Boolean(props.streaming) &&
+  !(props.currentAnswer || '').trim();
+
+const shouldShowCompletedStreamActions = (item: ChatMessage) =>
+  hasStreamedMessage(item) && !isActiveStreamingMessage(item) && Boolean(item.content?.trim());
 
 const activeOriginalMessageId = ref<string | null>(null);
 const originalSearchText = ref('');
@@ -483,6 +542,11 @@ const decorateOriginalReferences = (html: string) => {
 /** 封装当前模块内的业务逻辑：renderReviewMarkdown。 */
 const renderReviewMarkdown = (content: string) => {
   return decorateOriginalReferences(renderMarkdown(content));
+};
+
+const renderStreamMarkdown = (item: ChatMessage) => {
+  const content = getStreamAnswer(item);
+  return isActiveStreamingMessage(item) ? renderMarkdown(content) : renderReviewMarkdown(content);
 };
 
 /** 封装当前模块内的业务逻辑：activeOriginalMessage。 */
@@ -797,19 +861,30 @@ watch(
 
 watch(
   () => props.currentStreamingMessageId,
-  (newId) => {
+  (newId, oldId) => {
+    if (newId) {
+      streamedMessageIds.value = new Set([...streamedMessageIds.value, newId]);
+      if (newId !== oldId && oldId !== undefined) {
+        // 新审核任务开始时清空上一轮打字缓存，避免新审核内容接在旧内容后面。
+        displayAnswer.value = '';
+        stopTypingEffect();
+      }
+    }
     if (!newId) {
       stopTypingEffect();
       return;
     }
-    displayAnswer.value = '';
-    stopTypingEffect();
   },
+  { immediate: true },
 );
 
 watch(
   () => props.chatData,
   () => {
+    const currentIds = new Set((props.chatData?.messages || []).map((message) => message.id));
+    streamedMessageIds.value = new Set(
+      [...streamedMessageIds.value].filter((messageId) => currentIds.has(messageId)),
+    );
     if (
       activeOriginalMessageId.value &&
       !props.chatData?.messages.some(

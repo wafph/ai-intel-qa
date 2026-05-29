@@ -60,23 +60,23 @@
                   </div>
 
                   <!-- 当前流式消息 -->
-                  <div v-if="item.streaming && item.id === currentStreamingMessageId">
+                  <div v-if="shouldRenderStreamBlock(item)">
                     <div
-                      v-if="currentAnswer && currentAnswer.trim() !== ''"
+                      v-if="getStreamAnswer(item).trim() !== ''"
                       class="answer-streaming"
                     >
                       <div class="typing-container">
                         <div
                           class="typing-text"
-                          v-html="renderMarkdown(displayAnswer)"
+                          v-html="renderMarkdown(getStreamAnswer(item))"
                         ></div>
-                        <span v-if="isTyping" class="typing-cursor">|</span>
+                        <span v-if="isActiveStreamingMessage(item) && isTyping" class="typing-cursor">|</span>
                       </div>
                     </div>
 
                     <!-- 加载指示器 -->
                     <div
-                      v-if="streaming && (!currentAnswer || currentAnswer.trim() === '')"
+                      v-if="shouldShowStreamLoading(item)"
                       class="thinking-indicator"
                     >
                       <div class="thinking-dots">
@@ -84,6 +84,55 @@
                         <span></span>
                         <span></span>
                       </div>
+                    </div>
+
+                    <div
+                      class="message-actions"
+                      v-if="shouldShowCompletedStreamActions(item)"
+                    >
+                      <el-button
+                        link
+                        type="primary"
+                        plain
+                        @click="toggleSourcesPanel(item)"
+                      >
+                        {{
+                          activeSourcesItem?.id === item.id && showSourcesPanel
+                            ? '隐藏推荐范文'
+                            : '显示推荐范文'
+                        }}
+                        <el-icon class="el-icon--right">
+                          <component
+                            :is="
+                              activeSourcesItem?.id === item.id && showSourcesPanel
+                                ? ArrowUp
+                                : ArrowRight
+                            "
+                          />
+                        </el-icon>
+                      </el-button>
+
+                      <el-button
+                        link
+                        class="export-btn"
+                        type="primary"
+                        plain
+                        @click="handleExport"
+                        :loading="loading"
+                        :disabled="loading"
+                      >
+                        {{ loading ? '转换中...' : '导出' }}
+                      </el-button>
+
+                      <el-button
+                        link
+                        class="regenerate-btn"
+                        type="success"
+                        plain
+                        @click="handleRestart(index)"
+                      >
+                        重新起草<el-icon class="el-icon--right"><ArrowRight /></el-icon>
+                      </el-button>
                     </div>
                   </div>
 
@@ -149,7 +198,7 @@
                   <div class="message-time">
                     {{ formatTime(item.timestamp) }}
                     <span
-                      v-if="item.streaming && item.id === currentStreamingMessageId"
+                      v-if="isActiveStreamingMessage(item)"
                       class="streaming-badge"
                     >
                       <span class="streaming-dot"></span>
@@ -293,6 +342,8 @@ const props = withDefaults(defineProps<Props>(), {
   currentStreamingMessageId: null,
 });
 
+const streamedMessageIds = ref<Set<string>>(new Set());
+
 // 响应式状态
 const md = new MarkdownIt();
 const displayAnswer = ref<string>('');
@@ -301,6 +352,28 @@ let typingInterval: NodeJS.Timeout | null = null;
 let currentTypingIndex = 0;
 const loading = ref(false);
 const isTyping = ref(false);
+
+/** 记录已用流式方式展示过的消息，流结束后继续复用流式块，避免再渲染最终回复块。 */
+const isActiveStreamingMessage = (item: DraftMessage) =>
+  Boolean(item.streaming && item.id === props.currentStreamingMessageId);
+
+const hasStreamedMessage = (item: DraftMessage) => streamedMessageIds.value.has(item.id);
+
+const shouldRenderStreamBlock = (item: DraftMessage) =>
+  isActiveStreamingMessage(item) || hasStreamedMessage(item);
+
+const getStreamAnswer = (item: DraftMessage) =>
+  isActiveStreamingMessage(item)
+    ? displayAnswer.value || props.currentAnswer || item.content || ''
+    : item.content || '';
+
+const shouldShowStreamLoading = (item: DraftMessage) =>
+  isActiveStreamingMessage(item) &&
+  Boolean(props.streaming) &&
+  !(props.currentAnswer || '').trim();
+
+const shouldShowCompletedStreamActions = (item: DraftMessage) =>
+  hasStreamedMessage(item) && !isActiveStreamingMessage(item) && Boolean(item.content?.trim());
 
 // 推荐范文面板状态
 const showSourcesPanel = ref(false);
@@ -660,13 +733,16 @@ const handleRestart = (index: number) => {
 watch(
   () => props.currentAnswer,
   (newAnswer, oldAnswer = '') => {
+    if (!newAnswer) {
+      displayAnswer.value = '';
+      stopTypingEffect();
+      return;
+    }
+
     if (newAnswer && newAnswer !== oldAnswer) {
       const newText = newAnswer.substring(oldAnswer.length);
       if (newText) {
         appendToTypingQueue(newText);
-      } else if (newAnswer === '') {
-        displayAnswer.value = '';
-        stopTypingEffect();
       }
     }
   },
@@ -687,17 +763,30 @@ watch(
 // 监听当前流式消息ID变化
 watch(
   () => props.currentStreamingMessageId,
-  (newId) => {
+  (newId, oldId) => {
+    if (newId) {
+      streamedMessageIds.value = new Set([...streamedMessageIds.value, newId]);
+      if (newId !== oldId && oldId !== undefined) {
+        // 新问题或重新起草开始时，清空上一轮打字缓存，避免新回答拼到旧回答后面。
+        displayAnswer.value = '';
+        stopTypingEffect();
+      }
+    }
     if (!newId) {
       stopTypingEffect();
     }
   },
+  { immediate: true },
 );
 
 // 监听聊天数据变化
 watch(
   () => props.chatData,
   () => {
+    const currentIds = new Set((props.chatData?.messages || []).map((message) => message.id));
+    streamedMessageIds.value = new Set(
+      [...streamedMessageIds.value].filter((messageId) => currentIds.has(messageId)),
+    );
     nextTick(() => {
       scrollToBottom();
     });

@@ -56,24 +56,24 @@
                   </div>
 
                   <!-- 当前流式消息 -->
-                  <div v-if="item.streaming && item.id === currentStreamingMessageId">
+                  <div v-if="shouldRenderStreamBlock(item)">
                     <!-- 回复内容（打字机效果） -->
                     <div
-                      v-if="currentAnswer && currentAnswer.trim() !== ''"
+                      v-if="getStreamAnswer(item).trim() !== ''"
                       class="answer-streaming"
                     >
                       <div class="typing-container">
                         <div
                           class="typing-text"
-                          v-html="renderMarkdown(displayAnswer)"
+                          v-html="renderMarkdown(getStreamAnswer(item))"
                         ></div>
-                        <span v-if="isTyping" class="typing-cursor">|</span>
+                        <span v-if="isActiveStreamingMessage(item) && isTyping" class="typing-cursor">|</span>
                       </div>
                     </div>
 
                     <!-- 加载指示器（当没有任何内容时） -->
                     <div
-                      v-if="streaming && (!currentAnswer || currentAnswer.trim() === '')"
+                      v-if="shouldShowStreamLoading(item)"
                       class="thinking-indicator"
                     >
                       <div class="thinking-dots">
@@ -81,6 +81,104 @@
                         <span></span>
                         <span></span>
                       </div>
+                    </div>
+
+                    <div
+                      class="message-actions"
+                      v-if="shouldShowCompletedStreamActions(item)"
+                    >
+                      <el-button
+                        link
+                        type="primary"
+                        plain
+                        @click="toggleSourcesPanel(item)"
+                      >
+                        {{
+                          activeSourcesItem?.id === item.id && showSourcesPanel
+                            ? '隐藏来源'
+                            : '查看来源'
+                        }}
+                        <el-icon class="el-icon--right">
+                          <component
+                            :is="
+                              activeSourcesItem?.id === item.id && showSourcesPanel
+                                ? ArrowUp
+                                : ArrowRight
+                            "
+                          />
+                        </el-icon>
+                      </el-button>
+
+                      <div
+                        class="copy-container"
+                        title="复制内容"
+                        @click="handleCopy(item.content, item.id)"
+                      >
+                        <img
+                          src="/images/copy.svg"
+                          style="width: 20px; height: 20px"
+                          alt=""
+                        />
+                        <span
+                          v-if="showCopied && copiedMessageId === item.id"
+                          class="copied-text"
+                          >已复制</span
+                        >
+                      </div>
+
+                      <div class="vote-container">
+                        <img
+                          :src="
+                            item.vote === 'like'
+                              ? '/images/zhan-active.svg'
+                              : '/images/zhan.svg'
+                          "
+                          alt=""
+                          class="vote-icon"
+                          @click="handleVote(item.id, 'like')"
+                        />
+                        <span
+                          class="vote-count"
+                          :style="{
+                            color: item.vote === 'like' ? '#409eff' : '#999',
+                          }"
+                        >
+                          {{ item.likeCount || 0 }}
+                        </span>
+                      </div>
+
+                      <div class="vote-container">
+                        <img
+                          src="/images/cai.svg"
+                          alt=""
+                          class="vote-icon"
+                          @click="handleVote(item.id, 'dislike')"
+                          :style="{
+                            filter:
+                              item.vote === 'dislike'
+                                ? 'invert(29%) sepia(82%) saturate(748%) hue-rotate(327deg) brightness(97%) contrast(101%)'
+                                : 'none',
+                          }"
+                        />
+                        <span
+                          class="vote-count"
+                          :style="{
+                            color: item.vote === 'dislike' ? '#f56c6c' : '#999',
+                          }"
+                        >
+                          {{ item.dislikeCount || 0 }}
+                        </span>
+                      </div>
+
+                      <el-button
+                        link
+                        class="regenerate-btn"
+                        type="success"
+                        plain
+                        @click="handleRestart(index)"
+                      >
+                        重新生成<el-icon class="el-icon--right"><ArrowRight /></el-icon>
+                      </el-button>
                     </div>
                   </div>
                   <div v-else>
@@ -206,7 +304,7 @@
                   <div class="message-time">
                     {{ formatTime(item.timestamp) }}
                     <span
-                      v-if="item.streaming && item.id === currentStreamingMessageId"
+                      v-if="isActiveStreamingMessage(item)"
                       class="streaming-badge"
                     >
                       <span class="streaming-dot"></span>
@@ -422,6 +520,30 @@ const props = withDefaults(defineProps<Props>(), {
   currentAnswer: '',
   currentStreamingMessageId: null,
 });
+
+const streamedMessageIds = ref<Set<string>>(new Set());
+
+/** 记录并判断已经走过流式渲染的消息，避免结束后切换到最终回复块重复显示。 */
+const isActiveStreamingMessage = (item: ChatMessage) =>
+  Boolean(item.streaming && item.id === props.currentStreamingMessageId);
+
+const hasStreamedMessage = (item: ChatMessage) => streamedMessageIds.value.has(item.id);
+
+const shouldRenderStreamBlock = (item: ChatMessage) =>
+  isActiveStreamingMessage(item) || hasStreamedMessage(item);
+
+const getStreamAnswer = (item: ChatMessage) =>
+  isActiveStreamingMessage(item)
+    ? displayAnswer.value || props.currentAnswer || item.content || ''
+    : item.content || '';
+
+const shouldShowStreamLoading = (item: ChatMessage) =>
+  isActiveStreamingMessage(item) &&
+  Boolean(props.streaming) &&
+  !(props.currentAnswer || '').trim();
+
+const shouldShowCompletedStreamActions = (item: ChatMessage) =>
+  hasStreamedMessage(item) && !isActiveStreamingMessage(item) && Boolean(item.content?.trim());
 
 // 反馈对话框相关
 const feedbackDialogVisible = ref(false);
@@ -950,13 +1072,17 @@ const removeDuplicateReasoning = (reasoningText: string) => {
 watch(
   () => props.currentAnswer,
   (newAnswer, oldAnswer = '') => {
+    if (!newAnswer) {
+      displayAnswer.value = '';
+      stopTypingEffect();
+      scrollToBottom();
+      return;
+    }
+
     if (newAnswer && newAnswer !== oldAnswer) {
       const newText = newAnswer.substring(oldAnswer.length);
       if (newText) {
         appendToTypingQueue(newText);
-      } else if (newAnswer === '') {
-        displayAnswer.value = '';
-        stopTypingEffect();
       }
     }
     scrollToBottom();
@@ -978,17 +1104,30 @@ watch(
 // 监听当前流式消息ID变化
 watch(
   () => props.currentStreamingMessageId,
-  (newId) => {
+  (newId, oldId) => {
+    if (newId) {
+      streamedMessageIds.value = new Set([...streamedMessageIds.value, newId]);
+      if (newId !== oldId && oldId !== undefined) {
+        // 新问题或重新生成开始时，清空上一轮打字缓存，避免新回答接在旧回答后面。
+        displayAnswer.value = '';
+        stopTypingEffect();
+      }
+    }
     if (!newId) {
       stopTypingEffect();
     }
   },
+  { immediate: true },
 );
 
 // 监听聊天数据变化
 watch(
   () => props.chatData,
   () => {
+    const currentIds = new Set((props.chatData?.messages || []).map((message) => message.id));
+    streamedMessageIds.value = new Set(
+      [...streamedMessageIds.value].filter((messageId) => currentIds.has(messageId)),
+    );
     nextTick(() => {
       scrollToBottom();
     });

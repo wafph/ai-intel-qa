@@ -1978,11 +1978,21 @@ const processStreamChunk = async (chunk: any, messageId: string, taskId?: string
         nextTask = { ...nextTask, sources: finalSources };
         updateTaskMessage(nextTask, { sources: finalSources });
       }
-      if (!sourceOnlyReplayTaskIds.has(taskId) && finalAnswerContent && finalAnswerContent.length >= (currentAnswer.value || '').length) {
-        currentAnswer.value = finalAnswerContent;
-        nextTask = { ...nextTask, answerContent: finalAnswerContent, answerEventId: finalAnswerEventId };
+
+      // 结束事件里的 answerContent 是后端最终快照，正文已在前面的流式 text 事件中逐字追加。
+      // 这里只同步事件游标和来源，不再回写最终快照，避免流式输出完成后又显示一遍最终回复。
+      if (!sourceOnlyReplayTaskIds.has(taskId) && finalAnswerContent) {
+        nextTask = {
+          ...nextTask,
+          answerContent: currentAnswer.value || nextTask.answerContent,
+          answerEventId: finalAnswerEventId,
+        };
         upsertStreamTask(nextTask, true);
-        updateTaskMessage(nextTask, { content: finalAnswerContent, eventId: nextTask.lastEventId, answerEventId: finalAnswerEventId, sources: nextTask.sources });
+        updateTaskMessage(nextTask, {
+          eventId: nextTask.lastEventId,
+          answerEventId: finalAnswerEventId,
+          sources: nextTask.sources,
+        });
       } else if (finalSources.length > 0) {
         upsertStreamTask(nextTask, true);
       }
