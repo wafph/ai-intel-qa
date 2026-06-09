@@ -36,16 +36,22 @@
                     item.content
                   }}</span></pre>
                   <div class="user-message-actions">
-                    <button
+                    <el-tooltip
                       v-if="shouldFoldUserQuestion(item.content)"
-                      class="user-message-action-btn"
-                      type="button"
-                      :title="isUserQuestionCollapsed(item) ? 'Expand' : 'Collapse'"
-                      :aria-label="isUserQuestionCollapsed(item) ? 'Expand' : 'Collapse'"
-                      @click.stop="toggleUserQuestionFold(item.id)"
+                      :content="isUserQuestionCollapsed(item) ? '展开' : '折叠'"
+                      placement="top"
                     >
-                      {{ isUserQuestionCollapsed(item) ? '▾' : '▴' }}
-                    </button>
+                      <button
+                        class="user-message-action-btn"
+                        type="button"
+                        :aria-label="isUserQuestionCollapsed(item) ? '展开' : '折叠'"
+                        @click.stop="toggleUserQuestionFold(item.id)"
+                      >
+                        <el-icon>
+                          <component :is="isUserQuestionCollapsed(item) ? CaretBottom : CaretTop" />
+                        </el-icon>
+                      </button>
+                    </el-tooltip>
                     <!-- <button
                       class="user-message-action-btn user-message-copy-btn"
                       type="button"
@@ -118,8 +124,25 @@
                         v-if="getUniqueSources(item.sources).length > 0"
                         class="answer-sources"
                       >
-                        <div class="answer-sources-title">引用来源</div>
-                        <div class="answer-sources-list">
+                        <!-- <div class="answer-sources-title">引用来源</div> -->
+                        <button
+                          type="button"
+                          class="answer-sources-toggle"
+                          :aria-expanded="isAnswerSourcesExpanded(item.id)"
+                          @click="toggleAnswerSources(item.id)"
+                        >
+                          <span>共参考 {{ getUniqueSources(item.sources).length }} 篇文献</span>
+                          <span
+                            class="answer-sources-arrow"
+                            :class="{ 'is-expanded': isAnswerSourcesExpanded(item.id) }"
+                          >
+                            ▶
+                          </span>
+                        </button>
+                        <div
+                          v-show="isAnswerSourcesExpanded(item.id)"
+                          class="answer-sources-list"
+                        >
                           <button
                             v-for="(source, sourceIndex) in getUniqueSources(item.sources)"
                             :key="`${source.title}-${sourceIndex}`"
@@ -139,110 +162,100 @@
                       v-if="item.content && item.content !== '用户停止了生成'"
                     >
                       <!-- 查看来源按钮 -->
-                      <el-button
-                        link
-                        type="primary"
-                        plain
-                        @click="toggleSourcesPanel(item)"
-                      >
-                        {{
-                          activeSourcesItem?.id === item.id && showSourcesPanel
-                            ? '隐藏来源'
-                            : '查看来源'
-                        }}
-                        <el-icon class="el-icon--right">
-                          <component
-                            :is="
-                              activeSourcesItem?.id === item.id && showSourcesPanel
-                                ? ArrowUp
-                                : ArrowRight
-                            "
-                          />
-                        </el-icon>
-                      </el-button>
+                      <el-tooltip content="查看来源" placement="top">
+                        <el-button link type="primary" plain @click="toggleSourcesPanel(item)">
+                          <el-icon><ScaleToOriginal /></el-icon>
+                        </el-button>
+                      </el-tooltip>
 
                       <!-- 复制按钮 -->
-                      <div
-                        class="copy-container"
-                        :title="
+                      <el-tooltip
+                        :content="
                           item.streaming && item.id === currentStreamingMessageId
                             ? '正在生成内容，请稍后复制'
                             : '复制内容'
                         "
-                        @click="handleCopy(item.content, item.id)"
-                        :class="{
-                          'copy-disabled':
-                            item.streaming && item.id === currentStreamingMessageId,
-                        }"
+                        placement="top"
                       >
-                        <img
-                          src="/images/copy.svg"
-                          style="width: 20px; height: 20px"
-                          alt="复制"
-                        />
-                        <span
-                          v-if="showCopied && copiedMessageId === item.id"
-                          class="copied-text"
-                          >已复制</span
+                        <div
+                          class="copy-container"
+                          @click="handleCopy(item.content, item.id)"
+                          :class="{
+                            'copy-disabled':
+                              item.streaming && item.id === currentStreamingMessageId,
+                          }"
                         >
-                      </div>
+                          <el-icon><CopyDocument /></el-icon>
+                          <span
+                            v-if="showCopied && copiedMessageId === item.id"
+                            class="copied-text"
+                            >已复制</span
+                          >
+                        </div>
+                      </el-tooltip>
 
                       <!-- 点赞按钮 -->
-                      <div class="vote-container">
-                        <img
-                          :src="
-                            item.vote === 'like'
-                              ? '/images/zhan-active.svg'
-                              : '/images/zhan.svg'
-                          "
-                          alt="点赞"
-                          class="vote-icon"
-                          @click="handleVote(item.id, 'like')"
-                        />
-                        <span
-                          class="vote-count"
-                          :style="{
-                            color: item.vote === 'like' ? '#409eff' : '#999',
-                          }"
-                        >
-                          {{ item.likeCount || 0 }}
-                        </span>
-                      </div>
+                      <el-tooltip content="点赞" placement="top">
+                        <div class="vote-container">
+                          <img
+                            :src="
+                              item.vote === 'like'
+                                ? '/images/zhan-active.svg'
+                                : '/images/zhan.svg'
+                            "
+                            alt="点赞"
+                            class="vote-icon"
+                            @click="handleVote(item.id, 'like')"
+                          />
+                          <span
+                            class="vote-count"
+                            :style="{
+                              color: item.vote === 'like' ? '#409eff' : '#999',
+                            }"
+                          >
+                            {{ item.likeCount || 0 }}
+                          </span>
+                        </div>
+                      </el-tooltip>
 
                       <!-- 点踩按钮 -->
-                      <div class="vote-container">
-                        <img
-                          src="/images/cai.svg"
-                          alt="踩"
-                          class="vote-icon"
-                          @click="handleVote(item.id, 'dislike')"
-                          :style="{
-                            filter:
-                              item.vote === 'dislike'
-                                ? 'invert(29%) sepia(82%) saturate(748%) hue-rotate(327deg) brightness(97%) contrast(101%)'
-                                : 'none',
-                          }"
-                        />
-                        <span
-                          class="vote-count"
-                          :style="{
-                            color: item.vote === 'dislike' ? '#f56c6c' : '#999',
-                          }"
-                        >
-                          {{ item.dislikeCount || 0 }}
-                        </span>
-                      </div>
+                      <el-tooltip content="点踩" placement="top">
+                        <div class="vote-container">
+                          <img
+                            src="/images/cai.svg"
+                            alt="踩"
+                            class="vote-icon"
+                            @click="handleVote(item.id, 'dislike')"
+                            :style="{
+                              filter:
+                                item.vote === 'dislike'
+                                  ? 'invert(29%) sepia(82%) saturate(748%) hue-rotate(327deg) brightness(97%) contrast(101%)'
+                                  : 'none',
+                            }"
+                          />
+                          <span
+                            class="vote-count"
+                            :style="{
+                              color: item.vote === 'dislike' ? '#f56c6c' : '#999',
+                            }"
+                          >
+                            {{ item.dislikeCount || 0 }}
+                          </span>
+                        </div>
+                      </el-tooltip>
 
                       <!-- 重新生成按钮 -->
-                      <el-button
-                        link
-                        class="regenerate-btn"
-                        type="success"
-                        plain
-                        @click="handleRestart(index)"
-                      >
-                        重新生成<el-icon class="el-icon--right"><ArrowRight /></el-icon>
-                      </el-button>
+                      <el-tooltip content="重新生成" placement="top">
+                        <el-button
+                          link
+                          class="regenerate-btn"
+                          type="success"
+                          plain
+                          @click="handleRestart(index)"
+                        >
+                          <el-icon><Refresh /></el-icon>
+                        </el-button>
+                      </el-tooltip>
                     </div>
                   </div>
                   <div class="message-time">
@@ -402,7 +415,14 @@
 import { ref, reactive, watch, computed, nextTick, onMounted, onUnmounted } from 'vue';
 import MarkdownIt from 'markdown-it';
 import { ElMessage } from 'element-plus';
-import { ArrowRight, ArrowUp, Close } from '@element-plus/icons-vue';
+import {
+  CaretBottom,
+  CaretTop,
+  Close,
+  CopyDocument,
+  Refresh,
+  ScaleToOriginal,
+} from '@element-plus/icons-vue';
 import { useChatStore } from '@/stores/chat';
 import { API } from '@/api/api';
 import { authRequest, isSuccessStatus } from '@/services/http';
@@ -425,6 +445,7 @@ const activeSourcesItem = ref<any>(null);
 const sourceCollapsed = ref<Record<string, boolean>>({});
 
 const expandedUserQuestionMap = reactive<Record<string, boolean>>({});
+const expandedAnswerSourcesMap = reactive<Record<string, boolean>>({});
 const shouldFoldUserQuestion = (content?: string) => shouldCollapseUserQuestion(content);
 const isUserQuestionCollapsed = (item: { id?: string; content?: string }) => {
   const id = String(item?.id || '');
@@ -434,6 +455,15 @@ const toggleUserQuestionFold = (id?: string) => {
   const key = String(id || '');
   if (!key) return;
   expandedUserQuestionMap[key] = !expandedUserQuestionMap[key];
+};
+const isAnswerSourcesExpanded = (id?: string) => {
+  const key = String(id || '');
+  return Boolean(key && expandedAnswerSourcesMap[key]);
+};
+const toggleAnswerSources = (id?: string) => {
+  const key = String(id || '');
+  if (!key) return;
+  expandedAnswerSourcesMap[key] = !expandedAnswerSourcesMap[key];
 };
 // PDF 预览相关状态
 const showPdfViewer = ref(false);
@@ -615,18 +645,6 @@ const copySource = async (source: any) => {
   }
 };
 
-// 左侧引用中的非 PDF 文件直接下载，避免占用当前问答页面。
-const downloadAnswerSourceUrl = (downloadUrl: string, title: string) => {
-  const a = document.createElement('a');
-  a.href = downloadUrl;
-  a.download = title || 'document';
-  a.target = '_blank';
-  a.rel = 'noopener noreferrer';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-};
-
 const openAnswerPdf = (previewWindow: Window | null, url: string) => {
   if (!previewWindow) {
     throw new Error('新页面被浏览器拦截，请允许本站打开新页面');
@@ -634,7 +652,7 @@ const openAnswerPdf = (previewWindow: Window | null, url: string) => {
   previewWindow.location.href = url;
 };
 
-// 左侧回答中的 PDF 在新页面打开，Word 等非 PDF 文件直接下载。
+// 左侧回答中的 PDF 在新页面打开，非 PDF 保持原有打开或下载逻辑。
 const handleAnswerSourceTitleClick = async (source: any, event: Event) => {
   event.stopPropagation();
 
@@ -650,11 +668,11 @@ const handleAnswerSourceTitleClick = async (source: any, event: Event) => {
       if (!directUrl) {
         throw new Error('来源缺少文件ID或预览地址，无法预览文档');
       }
-      if (isPdfDocument(directUrl, '', title, directUrl)) {
+      if (isPdfDocument(directUrl, 'application/pdf', title, directUrl)) {
         openAnswerPdf(previewWindow, directUrl);
       } else {
         previewWindow?.close();
-        downloadAnswerSourceUrl(directUrl, title);
+        openDocumentUrl(directUrl);
       }
       return;
     }
@@ -670,7 +688,7 @@ const handleAnswerSourceTitleClick = async (source: any, event: Event) => {
       window.setTimeout(() => window.URL.revokeObjectURL(blobUrl), 60_000);
     } else if (result.downloadUrl) {
       previewWindow?.close();
-      downloadAnswerSourceUrl(result.downloadUrl, title);
+      openDocumentUrl(result.downloadUrl);
     } else if (result.blob) {
       previewWindow?.close();
       downloadDocumentBlob(result.blob, title, fileId);
@@ -1294,7 +1312,7 @@ onUnmounted(() => {
             width: 100%;
 
             .pad {
-              padding: 20px 40px;
+              padding: 20px 40px 68px;
               background: #ffffff;
               border-radius: 22px;
               box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -1316,12 +1334,33 @@ onUnmounted(() => {
             .message-actions {
               display: flex;
               align-items: center;
-              gap: 15px;
-              margin-top: 12px;
-              padding-top: 12px;
-              border-top: 1px solid #f0f0f0;
+              gap: 8px;
+              width: calc(100% - 80px);
+              margin: -64px 0 26px 40px;
+              padding-top: 10px;
+              border-top: none;
               flex-wrap: wrap;
               justify-content: flex-start; /* 操作按钮左对齐 */
+              position: relative;
+              z-index: 2;
+
+              > :deep(.el-button) {
+                width: 28px;
+                height: 28px;
+                margin: 0;
+                padding: 0;
+                border-radius: 6px;
+                color: #606266;
+                font-size: 18px;
+
+                .el-icon {
+                  font-size: 18px;
+                }
+
+                &:hover {
+                  background: #f2f3f5;
+                }
+              }
             }
 
             .thinking-header {
@@ -1358,7 +1397,8 @@ onUnmounted(() => {
               line-height: 1.6;
               border: 1px solid #e9ecef;
               text-align: left;
-              width: 83%;
+              width: 100%;
+              box-sizing: border-box;
             }
 
             .typing-container {
@@ -1456,7 +1496,8 @@ onUnmounted(() => {
               font-size: 16px;
               line-height: 1.6;
               text-align: left;
-              width: 83%;
+              width: 100%;
+              box-sizing: border-box;
 
               :deep(code) {
                 background: #f5f5f5;
@@ -1496,8 +1537,31 @@ onUnmounted(() => {
             .answer-sources-title {
               margin-bottom: 8px;
               color: #303133;
-              font-size: 15px;
+              font-size: 19px;
               font-weight: 600;
+            }
+
+            .answer-sources-toggle {
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              padding: 0;
+              border: none;
+              background: transparent;
+              color: #909399;
+              font-size: 13px;
+              line-height: 1.5;
+              cursor: pointer;
+            }
+
+            .answer-sources-arrow {
+              display: inline-block;
+              font-size: 10px;
+              transition: transform 0.2s ease;
+
+              &.is-expanded {
+                transform: rotate(90deg);
+              }
             }
 
             .answer-sources-list {
@@ -1505,6 +1569,7 @@ onUnmounted(() => {
               flex-direction: column;
               align-items: flex-start;
               gap: 6px;
+              margin-top: 10px;
             }
 
             .answer-source-title {
@@ -1556,9 +1621,18 @@ onUnmounted(() => {
               position: relative;
               display: inline-flex;
               align-items: center;
+              justify-content: center;
+              width: 28px;
+              height: 28px;
+              border-radius: 6px;
+
+              .el-icon {
+                color: #606266;
+                font-size: 20px;
+              }
 
               &:hover {
-                opacity: 0.8;
+                background: #f2f3f5;
               }
 
               &.copy-disabled {
@@ -1593,9 +1667,17 @@ onUnmounted(() => {
             }
 
             .vote-container {
+              position: relative;
               display: inline-flex;
               align-items: center;
-              gap: 4px;
+              justify-content: center;
+              width: 28px;
+              height: 28px;
+              border-radius: 6px;
+
+              &:hover {
+                background: #f2f3f5;
+              }
 
               .vote-icon {
                 width: 20px;
@@ -1609,8 +1691,7 @@ onUnmounted(() => {
               }
 
               .vote-count {
-                font-size: 12px;
-                min-width: 20px;
+                display: none;
               }
             }
 

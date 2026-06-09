@@ -23,6 +23,7 @@ declare module 'vue' {
     ElInput: typeof import('element-plus/es')['ElInput']
     ElRadio: typeof import('element-plus/es')['ElRadio']
     ElRadioGroup: typeof import('element-plus/es')['ElRadioGroup']
+    ElTooltip: typeof import('element-plus/es')['ElTooltip']
     ElUpload: typeof import('element-plus/es')['ElUpload']
     HeaderMenu: typeof import('./src/components/HeaderMenu.vue')['default']
     HistoryPanel: typeof import('./src/components/HistoryPanel.vue')['default']

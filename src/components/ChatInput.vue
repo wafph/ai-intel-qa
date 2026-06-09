@@ -505,8 +505,8 @@ defineExpose({
 }
 
 .send-icon {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 26px;
 }
 
 .send-btn.is-active:hover {
@@ -529,8 +529,8 @@ defineExpose({
 }
 
 .stop-icon {
-  width: 18px;
-  height: 18px;
+  width: 26px;
+  height: 26px;
 }
 
 .stop-tooltip {

@@ -33,16 +33,22 @@
                 :class="{ 'is-collapsed': isUserQuestionCollapsed(item) }"
               ><span class="user-message-content-inner">{{ item.content }}</span></pre>
               <div class="user-message-actions">
-                <button
+                <el-tooltip
                   v-if="shouldFoldUserQuestion(item.content)"
-                  class="user-message-action-btn"
-                  type="button"
-                  :title="isUserQuestionCollapsed(item) ? 'Expand' : 'Collapse'"
-                  :aria-label="isUserQuestionCollapsed(item) ? 'Expand' : 'Collapse'"
-                  @click.stop="toggleUserQuestionFold(item.id)"
+                  :content="isUserQuestionCollapsed(item) ? '展开' : '折叠'"
+                  placement="top"
                 >
-                  {{ isUserQuestionCollapsed(item) ? '▾' : '▴' }}
-                </button>
+                  <button
+                    class="user-message-action-btn"
+                    type="button"
+                    :aria-label="isUserQuestionCollapsed(item) ? '展开' : '折叠'"
+                    @click.stop="toggleUserQuestionFold(item.id)"
+                  >
+                    <el-icon>
+                      <component :is="isUserQuestionCollapsed(item) ? CaretBottom : CaretTop" />
+                    </el-icon>
+                  </button>
+                </el-tooltip>
                 <!-- <button
                   class="user-message-action-btn user-message-copy-btn"
                   type="button"
@@ -107,35 +113,41 @@
                   style="margin-left: 15px"
                   v-if="item.content && item.content !== '用户停止了生成'"
                 >
-                  <el-button
-                    link
-                    :class="['btnbottom', { 'original-mark-disabled': isOriginalMarkDisabled(item) }]"
-                    type="warning"
-                    plain
-                    @click="handleOriginalMarkButtonClick(item)"
-                  >
-                    原文标记<el-icon class="el-icon--right"><ArrowRight /></el-icon>
-                  </el-button>
-                  <el-button
-                    link
-                    class="btnbottom"
-                    type="primary"
-                    plain
-                    @click="handleExport(item)"
-                    :loading="loading"
-                    :disabled="loading"
-                  >
-                    {{ loading ? '转换中...' : '导出报告' }}
-                  </el-button>
-                  <el-button
-                    link
-                    class="btnbottom"
-                    type="success"
-                    plain
-                    @click="handleRestart(index)"
-                  >
-                    重新审核
-                  </el-button>
+                  <el-tooltip content="原文标记" placement="top">
+                    <el-button
+                      link
+                      :class="['btnbottom', { 'original-mark-disabled': isOriginalMarkDisabled(item) }]"
+                      type="warning"
+                      plain
+                      @click="handleOriginalMarkButtonClick(item)"
+                    >
+                      <el-icon><Position /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip content="导出报告" placement="top">
+                    <el-button
+                      link
+                      class="btnbottom"
+                      type="primary"
+                      plain
+                      @click="handleExport(item)"
+                      :loading="loading"
+                      :disabled="loading"
+                    >
+                      <el-icon v-if="!loading"><Download /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip content="重新审核" placement="top">
+                    <el-button
+                      link
+                      class="btnbottom"
+                      type="success"
+                      plain
+                      @click="handleRestart(index)"
+                    >
+                      <el-icon><Refresh /></el-icon>
+                    </el-button>
+                  </el-tooltip>
                 </div>
               </div>
 
@@ -226,7 +238,15 @@
 import { computed, ref, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import * as pdfjsLib from 'pdfjs-dist';
 import MarkdownIt from 'markdown-it';
-import { ArrowRight, Close, Document } from '@element-plus/icons-vue';
+import {
+  CaretBottom,
+  CaretTop,
+  Close,
+  Document,
+  Download,
+  Position,
+  Refresh,
+} from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { API } from '@/api/api';
 import { isSuccessStatus, request } from '@/services/http';
@@ -1677,7 +1697,7 @@ onUnmounted(() => {
       }
 
       .message-assistant {
-        width: 85%;
+        width: 100%;
       }
 
       &.assistant-message {
@@ -1689,7 +1709,35 @@ onUnmounted(() => {
             width: 100%;
 
             .pad {
-              padding: 20px 40px;
+              padding: 20px 40px 68px;
+            }
+
+            > div > div[style*='margin-left: 15px'] {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              margin: -64px 0 26px 40px !important;
+              padding-top: 10px;
+              position: relative;
+              z-index: 2;
+
+              > :deep(.btnbottom) {
+                width: 28px;
+                height: 28px;
+                margin: 0;
+                padding: 0;
+                border-radius: 6px;
+                color: #606266;
+                font-size: 18px;
+
+                .el-icon {
+                  font-size: 18px;
+                }
+
+                &:hover {
+                  background: #f2f3f5;
+                }
+              }
             }
 
             .thinking-process {
@@ -1840,6 +1888,7 @@ onUnmounted(() => {
               word-break: break-word;
               overflow-wrap: anywhere;
               max-width: 100%;
+              width: 100%;
               box-sizing: border-box;
               margin-bottom: 15px;
 

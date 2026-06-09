@@ -2963,9 +2963,6 @@ const inputContainerStyle = computed<CSSProperties>(() => {
 // 新增事件处理函数
 const handleSourcesPanelToggle = (visible: boolean) => {
   isSourcesPanelVisible.value = visible;
-  if (visible && activeTab.value === '合规审核') {
-    sidebarCollapsed.value = true;
-  }
 };
 
 // 处理置顶/取消置顶

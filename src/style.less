@@ -216,12 +216,17 @@ body {
    折叠文本放到无 padding 的内层裁剪，避免气泡 padding 导致第 6 行露出半截。 */
 .history-item.user-message .message-info {
   margin-right: 0 !important;
+  position: relative;
 }
 
 .user-message-content-inner {
   display: block;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.history-item.user-message .user-message-content {
+  padding-bottom: 38px !important;
 }
 
 .user-message-content.is-collapsed {
@@ -243,11 +248,15 @@ body {
 }
 
 .user-message-actions {
+  position: absolute;
+  right: 10px;
+  bottom: 34px;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
-  margin-top: 6px;
+  margin-top: 0;
 }
 
 .user-message-action-btn {
@@ -256,21 +265,23 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(28, 115, 235, 0.2);
+  border: none;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
-  color: #1c73eb;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
   transition: all 0.16s ease;
 }
 
+.user-message-action-btn .el-icon {
+  font-size: 16px;
+}
+
 .user-message-action-btn:hover {
-  border-color: rgba(28, 115, 235, 0.45);
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(28, 115, 235, 0.16);
-  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: none;
 }
 
 .user-message-copy-btn {

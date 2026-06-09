@@ -14,16 +14,18 @@
     </div>
 
     <!-- 主体区域 -->
-    <div class="conversation-history">
-      <div
-        v-for="(item, index) in chatData?.messages || []"
-        :key="item.id"
-        :class="[
-          'history-item',
-          item.role === 'user' ? 'user-message' : 'assistant-message',
-        ]"
-        :data-message-id="item.id"
-      >
+    <div class="qa-container">
+      <div class="qa-body">
+        <div class="conversation-history">
+          <div
+            v-for="(item, index) in chatData?.messages || []"
+            :key="item.id"
+            :class="[
+              'history-item',
+              item.role === 'user' ? 'user-message' : 'assistant-message',
+            ]"
+            :data-message-id="item.id"
+          >
         <!-- 用户消息 -->
         <div v-if="item.role === 'user'" class="message-user">
           <div class="message-header">
@@ -33,16 +35,22 @@
                 :class="{ 'is-collapsed': isUserQuestionCollapsed(item) }"
               ><span class="user-message-content-inner">{{ item.content }}</span></pre>
               <div class="user-message-actions">
-                <button
+                <el-tooltip
                   v-if="shouldFoldUserQuestion(item.content)"
-                  class="user-message-action-btn"
-                  type="button"
-                  :title="isUserQuestionCollapsed(item) ? 'Expand' : 'Collapse'"
-                  :aria-label="isUserQuestionCollapsed(item) ? 'Expand' : 'Collapse'"
-                  @click.stop="toggleUserQuestionFold(item.id)"
+                  :content="isUserQuestionCollapsed(item) ? '展开' : '折叠'"
+                  placement="top"
                 >
-                  {{ isUserQuestionCollapsed(item) ? '▾' : '▴' }}
-                </button>
+                  <button
+                    class="user-message-action-btn"
+                    type="button"
+                    :aria-label="isUserQuestionCollapsed(item) ? '展开' : '折叠'"
+                    @click.stop="toggleUserQuestionFold(item.id)"
+                  >
+                    <el-icon>
+                      <component :is="isUserQuestionCollapsed(item) ? CaretBottom : CaretTop" />
+                    </el-icon>
+                  </button>
+                </el-tooltip>
                 <!-- <button
                   class="user-message-action-btn user-message-copy-btn"
                   type="button"
@@ -185,6 +193,7 @@
 
                 <!-- ✅ 修改：重新检索和导出按钮 - 显示条件更宽松 -->
                 <div
+                  class="retrieval-actions"
                   style="display: flex; align-items: center; margin-left: 15px"
                   v-if="
                     !item.streaming &&
@@ -192,9 +201,11 @@
                     item.content !== '用户停止了生成'
                   "
                 >
-                  <el-button link type="success" plain @click="handleRestart(index)">
-                    重新检索<el-icon class="el-icon--right"><ArrowRight /></el-icon>
-                  </el-button>
+                  <el-tooltip content="重新检索" placement="top">
+                    <el-button link type="success" plain @click="handleRestart(index)">
+                      <el-icon><Refresh /></el-icon>
+                    </el-button>
+                  </el-tooltip>
                 </div>
               </div>
 
@@ -209,6 +220,8 @@
                 </span>
               </div>
             </div>
+          </div>
+        </div>
           </div>
         </div>
       </div>
@@ -231,7 +244,7 @@
 import { ref, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import MarkdownIt from 'markdown-it';
 import { ElIcon, ElMessage } from 'element-plus';
-import { ArrowRight } from '@element-plus/icons-vue';
+import { CaretBottom, CaretTop, Refresh } from '@element-plus/icons-vue';
 import { fetchWatermarkDocument, isPdfDocument, downloadDocumentBlob, openDocumentUrl } from '@/services/documentDownload';
 import { getSourceDirectUrl, getSourceFileId, getSourceTitle } from '@/services/sourceUtils';
 import { copyTextToClipboard, shouldCollapseUserQuestion } from '@/utils/messageCollapse';
@@ -567,6 +580,7 @@ const renderMarkdown = (content: string) => {
 const scrollToBottom = () => {
   nextTick(() => {
     const container =
+      document.querySelector('.qa-body') ||
       document.querySelector('.dynamic-content') ||
       document.querySelector('.conversation-history');
     if (container) {
@@ -650,23 +664,36 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  height: 100%;
+  height: 98%;
   background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
   position: relative;
-  overflow: visible;
+  overflow: hidden;
+}
+
+.qa-container {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.qa-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  width: 100%;
+  margin: 0 auto;
 }
 
 .conversation-history {
   flex: 1;
-  overflow: visible;
-  margin-bottom: 20px;
-  height: 98%;
   padding-top: 20px;
-  padding-bottom: 48px;
   display: flex;
   flex-direction: column;
   gap: 20px;
   width: 80%;
+  margin: 0 auto;
   box-sizing: border-box;
 
   .history-item {
@@ -862,10 +889,11 @@ onUnmounted(() => {
             background: #fff;
             border-radius: 22px;
             font-size: 17px;
-            padding: 20px 40px;
+            padding: 20px 40px 68px;
             line-height: 1.6;
             word-break: break-word;
-            width: 85%;
+            width: 100%;
+            box-sizing: border-box;
             margin-bottom: 20px;
 
             :deep(code) {
@@ -890,6 +918,33 @@ onUnmounted(() => {
               padding-left: 12px;
               color: #666;
               font-style: italic;
+            }
+          }
+
+          .retrieval-actions {
+            width: calc(100% - 80px);
+            gap: 8px;
+            margin: -64px 0 26px 40px !important;
+            padding-top: 10px;
+            position: relative;
+            z-index: 2;
+
+            :deep(.el-button) {
+              width: 28px;
+              height: 28px;
+              margin: 0;
+              padding: 0;
+              border-radius: 6px;
+              color: #606266;
+              font-size: 18px;
+
+              .el-icon {
+                font-size: 18px;
+              }
+
+              &:hover {
+                background: #f2f3f5;
+              }
             }
           }
 
@@ -927,7 +982,8 @@ onUnmounted(() => {
 }
 
 .search-results-container {
-  width: 85%;
+  width: 100%;
+  box-sizing: border-box;
   border-radius: 22px;
   background: @white;
   margin-bottom: 20px;

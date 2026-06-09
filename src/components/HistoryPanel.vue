@@ -24,8 +24,12 @@
     </div>
 
     <div class="panel-header">
+      <button class="new-chat-btn" v-show="!collapsed" @click="handleNewChat">
+        <img src="/images/chats.png" alt="" />
+        <span class="btn-text">新聊天</span>
+      </button>
       <div class="history-search" v-show="!collapsed">
-        <span class="search-icon">🔍</span>
+        <el-icon><Search /></el-icon>
         <input
           v-model="localSearchKeyword"
           class="history-search-input"
@@ -43,10 +47,6 @@
           ×
         </button>
       </div>
-      <button class="new-chat-btn" v-show="!collapsed" @click="handleNewChat">
-        <img src="/images/chats.png" alt="" />
-        <span class="btn-text">新聊天</span>
-      </button>
     </div>
 
     <!-- 历史列表 -->
@@ -64,12 +64,12 @@
 
       <template v-if="isSearchMode">
         <div v-if="searchLoading" class="empty-state search-state">
-          <div class="empty-icon">🔎</div>
+          <div class="empty-icon"><el-icon><Search /></el-icon></div>
           <p>正在搜索历史对话...</p>
         </div>
 
         <div v-else-if="searchResults.length === 0" class="empty-state search-state">
-          <div class="empty-icon">🔍</div>
+          <div class="empty-icon"><el-icon><Search /></el-icon></div>
           <p>未找到相关历史对话</p>
           <p class="empty-tip">可尝试输入问题关键词或答案中的句子</p>
         </div>
@@ -82,10 +82,16 @@
             @click="handleSelectSearchResult(result)"
           >
             <div class="item-content">
-              <div class="item-title">{{ result.sessionTitle || result.title || '历史会话' }}</div>
+              <div class="item-title">
+                {{ result.sessionTitle || result.title || '历史会话' }}
+              </div>
               <div class="search-snippet" v-html="result.highlightText"></div>
               <div class="item-meta">
-                <span class="item-time">{{ formatRelativeTime(result.createTime || result.answerTime || result.time || Date.now()) }}</span>
+                <span class="item-time">{{
+                  formatRelativeTime(
+                    result.createTime || result.answerTime || result.time || Date.now(),
+                  )
+                }}</span>
               </div>
             </div>
           </div>
@@ -93,126 +99,129 @@
       </template>
 
       <template v-else>
-      <div v-if="filteredHistory.length === 0" class="empty-state">
-        <div class="empty-icon">📁</div>
-        <p>暂无历史对话</p>
-        <p class="empty-tip">点击新聊天创建对话</p>
-      </div>
+        <div v-if="filteredHistory.length === 0" class="empty-state">
+          <div class="empty-icon">📁</div>
+          <p>暂无历史对话</p>
+          <p class="empty-tip">点击新聊天创建对话</p>
+        </div>
 
-      <div v-else class="history-items">
-        <!-- ✅ 修改：将置顶的会话放在最前面 -->
-        <div v-for="item in sortedHistory" :key="item.date" class="history-group">
-          <div class="group-date" v-if="item.isTopGroup">{{ item.date }}</div>
-          <div
-            v-for="history in item.items"
-            :key="history.id"
-            :class="[
-              'history-item',
-              {
-                active: activeChatId === history.id,
-                collected: history.isCollected,
-                pinned: history.topStatus === 1,
-              },
-            ]"
-            @mouseenter="handleMouseEnter(history.id)"
-            @mouseleave="handleMouseLeave(history.id)"
-            @click="handleSelectChat(history.id)"
-          >
-            <div class="item-content">
-              <div class="item-title">
-                <span
-                  v-if="history.isCollected && hoveredItemId === history.id"
-                  class="favorite-icon"
-                >
-                  ★
-                </span>
-
-                <!-- ✅ 编辑模式：显示输入框 -->
-                <el-input
-                  v-if="editingId === history.id"
-                  v-model="editingTitle"
-                  size="small"
-                  class="title-input"
-                  @blur="saveTitle(history.id)"
-                  @keyup="handleTitleInputKeyup($event, history.id)"
-                  ref="titleInputRef"
-                />
-
-                <!-- ✅ 查看模式：显示文本 -->
-                <span v-else @dblclick="startEdit(history.id, history.title)">
-                  <span v-if="history.topStatus === 1" class="pin-icon"
-                    ><img style="width: 16px; height: 16px" src="/images/top.svg" alt=""
-                  /></span>
-                  {{ history.title }}
-                </span>
-              </div>
-
-              <div class="item-meta">
-                <span class="item-time">{{ history.formattedTime }}</span>
-              </div>
-            </div>
-
+        <div v-else class="history-items">
+          <!-- ✅ 修改：将置顶的会话放在最前面 -->
+          <div v-for="item in sortedHistory" :key="item.date" class="history-group">
+            <div class="group-date" v-if="item.isTopGroup">{{ item.date }}</div>
             <div
-              v-if="hoveredItemId === history.id"
-              class="item-menu-container"
-              @click.stop
+              v-for="history in item.items"
+              :key="history.id"
+              :class="[
+                'history-item',
+                {
+                  active: activeChatId === history.id,
+                  collected: history.isCollected,
+                  pinned: history.topStatus === 1,
+                },
+              ]"
+              @mouseenter="handleMouseEnter(history.id)"
+              @mouseleave="handleMouseLeave(history.id)"
+              @click="handleSelectChat(history.id)"
             >
-              <button class="menu-toggle-btn" @click="toggleMenu(history.id)">⋮</button>
-
-              <div v-if="visibleMenuId === history.id" class="dropdown-menu">
-                <button
-                  class="menu-item"
-                  :class="{ favorited: history.isCollected }"
-                  @click="handleToggleFavorite(history.id)"
-                >
-                  <span class="menu-icon">★</span>
-                  <span class="menu-text">
-                    {{ history.isCollected ? '取消收藏' : '收藏' }}
+              <div class="item-content">
+                <div class="item-title">
+                  <span
+                    v-if="history.isCollected && hoveredItemId === history.id"
+                    class="favorite-icon"
+                  >
+                    ★
                   </span>
-                </button>
 
-                <button
-                  class="menu-item pin"
-                  @click="handleTogglePin(history.id, history.topStatus === 1)"
-                >
-                  <div class="menu-icon">
-                    <template v-if="history.topStatus === 1">
-                      <img
-                        src="/images/bottom.svg"
-                        style="width: 13px; height: 13px"
-                        alt=""
-                      />
-                    </template>
-                    <template v-else>
-                      <img
-                        src="/images/top.svg"
+                  <!-- ✅ 编辑模式：显示输入框 -->
+                  <el-input
+                    v-if="editingId === history.id"
+                    v-model="editingTitle"
+                    size="small"
+                    class="title-input"
+                    @blur="saveTitle(history.id)"
+                    @keyup="handleTitleInputKeyup($event, history.id)"
+                    ref="titleInputRef"
+                  />
+
+                  <!-- ✅ 查看模式：显示文本 -->
+                  <span v-else @dblclick="startEdit(history.id, history.title)">
+                    <span v-if="history.topStatus === 1" class="pin-icon"
+                      ><img
                         style="width: 16px; height: 16px"
+                        src="/images/top.svg"
                         alt=""
-                      />
-                    </template>
-                  </div>
-                  <span class="menu-text">
-                    {{ history.topStatus === 1 ? '取消置顶' : '置顶' }}
+                    /></span>
+                    {{ history.title }}
                   </span>
-                </button>
+                </div>
 
-                <button
-                  class="menu-item edit"
-                  @click="startEdit(history.id, history.title)"
-                >
-                  <span class="menu-icon">✏️</span>
-                  <span class="menu-text">修改</span>
-                </button>
+                <div class="item-meta">
+                  <span class="item-time">{{ history.formattedTime }}</span>
+                </div>
+              </div>
 
-                <button class="menu-item delete" @click="handleDeleteChat(history.id)">
-                  <span class="menu-icon">🗑️</span>
-                  <span class="menu-text">删除</span>
-                </button>
+              <div
+                v-if="hoveredItemId === history.id"
+                class="item-menu-container"
+                @click.stop
+              >
+                <button class="menu-toggle-btn" @click="toggleMenu(history.id)">⋮</button>
+
+                <div v-if="visibleMenuId === history.id" class="dropdown-menu">
+                  <button
+                    class="menu-item"
+                    :class="{ favorited: history.isCollected }"
+                    @click="handleToggleFavorite(history.id)"
+                  >
+                    <span class="menu-icon">★</span>
+                    <span class="menu-text">
+                      {{ history.isCollected ? '取消收藏' : '收藏' }}
+                    </span>
+                  </button>
+
+                  <button
+                    class="menu-item pin"
+                    @click="handleTogglePin(history.id, history.topStatus === 1)"
+                  >
+                    <div class="menu-icon">
+                      <template v-if="history.topStatus === 1">
+                        <img
+                          src="/images/bottom.svg"
+                          style="width: 13px; height: 13px"
+                          alt=""
+                        />
+                      </template>
+                      <template v-else>
+                        <img
+                          src="/images/top.svg"
+                          style="width: 16px; height: 16px"
+                          alt=""
+                        />
+                      </template>
+                    </div>
+                    <span class="menu-text">
+                      {{ history.topStatus === 1 ? '取消置顶' : '置顶' }}
+                    </span>
+                  </button>
+
+                  <button
+                    class="menu-item edit"
+                    @click="startEdit(history.id, history.title)"
+                  >
+                    <el-icon class="menu-icon"><Edit /></el-icon>
+                    <span class="menu-text">修改</span>
+                  </button>
+
+                  <button class="menu-item delete" @click="handleDeleteChat(history.id)">
+                    <el-icon class="menu-icon"><Delete /></el-icon>
+                    <span class="menu-text">删除</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
       </template>
     </div>
 
@@ -263,7 +272,7 @@ interface Props {
   activeChatId: string | null;
   user: any;
   collapsed?: boolean;
-  activeTab: string; // 
+  activeTab: string; //
   authMode?: string; // 新增：local/agent，用于在左下角用户区域展示登录方式
   searchKeyword?: string;
   searchResults?: any[];
@@ -280,7 +289,7 @@ const emit = defineEmits<{
   'switch-tab': [tabName: string];
   'toggle-collapse': [];
   'update-title': [chatId: string, newTitle: string];
-  'toggle-pin': [chatId: string, topStatus: number]; // 
+  'toggle-pin': [chatId: string, topStatus: number]; //
   'search-history': [keyword: string];
   'clear-search': [];
   'select-search-result': [result: any];
@@ -299,7 +308,9 @@ const localSearchKeyword = ref(props.searchKeyword || '');
 let searchTimer: number | null = null;
 
 /** 封装当前模块内的业务逻辑：displayUserName。 */
-const displayUserName = computed(() => props.user?.nickname || props.user?.name || props.user?.username || '用户');
+const displayUserName = computed(
+  () => props.user?.nickname || props.user?.name || props.user?.username || '用户',
+);
 
 // 计算属性
 const filteredHistory = computed(() => {
@@ -650,7 +661,8 @@ const handleClickOutsideUserMenu = (event: MouseEvent) => {
 watch(
   () => props.searchKeyword,
   (value) => {
-    if ((value || '') !== localSearchKeyword.value) localSearchKeyword.value = value || '';
+    if ((value || '') !== localSearchKeyword.value)
+      localSearchKeyword.value = value || '';
   },
 );
 
@@ -758,7 +770,7 @@ onUnmounted(() => {
 
 .history-search {
   height: 40px;
-  margin-bottom: 10px;
+  margin-top: 10px;
   border: 1px solid #dbe6f5;
   border-radius: 20px;
   background: #f8fbff;

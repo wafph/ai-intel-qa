@@ -42,16 +42,22 @@
                     item.content
                   }}</span></pre>
                   <div class="user-message-actions">
-                    <button
+                    <el-tooltip
                       v-if="shouldFoldUserQuestion(item.content)"
-                      class="user-message-action-btn"
-                      type="button"
-                      :title="isUserQuestionCollapsed(item) ? 'Expand' : 'Collapse'"
-                      :aria-label="isUserQuestionCollapsed(item) ? 'Expand' : 'Collapse'"
-                      @click.stop="toggleUserQuestionFold(item.id)"
+                      :content="isUserQuestionCollapsed(item) ? '展开' : '折叠'"
+                      placement="top"
                     >
-                      {{ isUserQuestionCollapsed(item) ? '▾' : '▴' }}
-                    </button>
+                      <button
+                        class="user-message-action-btn"
+                        type="button"
+                        :aria-label="isUserQuestionCollapsed(item) ? '展开' : '折叠'"
+                        @click.stop="toggleUserQuestionFold(item.id)"
+                      >
+                        <el-icon>
+                          <component :is="isUserQuestionCollapsed(item) ? CaretBottom : CaretTop" />
+                        </el-icon>
+                      </button>
+                    </el-tooltip>
                     <!-- <button
                       class="user-message-action-btn user-message-copy-btn"
                       type="button"
@@ -123,51 +129,39 @@
                       v-if="item.content && item.content !== '用户停止了生成'"
                     >
                       <!-- 查看推荐范文按钮 -->
-                      <el-button
-                        link
-                        type="primary"
-                        plain
-                        @click="toggleSourcesPanel(item)"
-                      >
-                        {{
-                          activeSourcesItem?.id === item.id && showSourcesPanel
-                            ? '隐藏推荐范文'
-                            : '显示推荐范文'
-                        }}
-                        <el-icon class="el-icon--right">
-                          <component
-                            :is="
-                              activeSourcesItem?.id === item.id && showSourcesPanel
-                                ? ArrowUp
-                                : ArrowRight
-                            "
-                          />
-                        </el-icon>
-                      </el-button>
+                      <el-tooltip content="推荐范文" placement="top">
+                        <el-button link type="primary" plain @click="toggleSourcesPanel(item)">
+                          <el-icon><Position /></el-icon>
+                        </el-button>
+                      </el-tooltip>
 
                       <!-- 导出按钮 -->
-                      <el-button
-                        link
-                        class="export-btn"
-                        type="primary"
-                        plain
-                        @click="handleExport(item)"
-                        :loading="loading"
-                        :disabled="loading"
-                      >
-                        {{ loading ? '转换中...' : '导出' }}
-                      </el-button>
+                      <el-tooltip content="导出" placement="top">
+                        <el-button
+                          link
+                          class="export-btn"
+                          type="primary"
+                          plain
+                          @click="handleExport(item)"
+                          :loading="loading"
+                          :disabled="loading"
+                        >
+                          <el-icon v-if="!loading"><Download /></el-icon>
+                        </el-button>
+                      </el-tooltip>
 
                       <!-- 重新起草按钮 -->
-                      <el-button
-                        link
-                        class="regenerate-btn"
-                        type="success"
-                        plain
-                        @click="handleRestart(index)"
-                      >
-                        重新起草<el-icon class="el-icon--right"><ArrowRight /></el-icon>
-                      </el-button>
+                      <el-tooltip content="重新起草" placement="top">
+                        <el-button
+                          link
+                          class="regenerate-btn"
+                          type="success"
+                          plain
+                          @click="handleRestart(index)"
+                        >
+                          <el-icon><Refresh /></el-icon>
+                        </el-button>
+                      </el-tooltip>
                     </div>
                   </div>
 
@@ -272,7 +266,14 @@
 <script setup lang="ts">
 import { ref, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import MarkdownIt from 'markdown-it';
-import { ArrowRight, ArrowUp, Close } from '@element-plus/icons-vue';
+import {
+  CaretBottom,
+  CaretTop,
+  Close,
+  Download,
+  Position,
+  Refresh,
+} from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { API } from '@/api/api';
 import { isSuccessStatus, request } from '@/services/http';
@@ -900,7 +901,7 @@ onUnmounted(() => {
             width: 100%;
 
             .pad {
-              padding: 20px 40px;
+              padding: 20px 40px 68px;
               background: #ffffff;
               border-radius: 22px;
               box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -922,12 +923,33 @@ onUnmounted(() => {
             .message-actions {
               display: flex;
               align-items: center;
-              gap: 15px;
-              margin-top: 12px;
-              padding-top: 12px;
-              border-top: 1px solid #f0f0f0;
+              gap: 8px;
+              width: calc(100% - 80px);
+              margin: -64px 0 26px 40px;
+              padding-top: 10px;
+              border-top: none;
               flex-wrap: wrap;
               justify-content: flex-start; /* 操作按钮左对齐 */
+              position: relative;
+              z-index: 2;
+
+              > :deep(.el-button) {
+                width: 28px;
+                height: 28px;
+                margin: 0;
+                padding: 0;
+                border-radius: 6px;
+                color: #606266;
+                font-size: 18px;
+
+                .el-icon {
+                  font-size: 18px;
+                }
+
+                &:hover {
+                  background: #f2f3f5;
+                }
+              }
             }
 
             .thinking-header {
@@ -964,7 +986,8 @@ onUnmounted(() => {
               line-height: 1.6;
               border: 1px solid #e9ecef;
               text-align: left;
-              width: 83%;
+              width: 100%;
+              box-sizing: border-box;
             }
 
             .typing-container {
@@ -1062,7 +1085,8 @@ onUnmounted(() => {
               font-size: 16px;
               line-height: 1.6;
               text-align: left;
-              width: 83%;
+              width: 100%;
+              box-sizing: border-box;
 
               :deep(code) {
                 background: #f5f5f5;
