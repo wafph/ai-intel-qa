@@ -28,7 +28,31 @@
         <div v-if="item.role === 'user'" class="message-user">
           <div class="message-header">
             <div class="message-info">
-              <pre class="message-content user-message-content">{{ item.content }}</pre>
+              <pre
+                class="message-content user-message-content"
+                :class="{ 'is-collapsed': isUserQuestionCollapsed(item) }"
+              ><span class="user-message-content-inner">{{ item.content }}</span></pre>
+              <div class="user-message-actions">
+                <button
+                  v-if="shouldFoldUserQuestion(item.content)"
+                  class="user-message-action-btn"
+                  type="button"
+                  :title="isUserQuestionCollapsed(item) ? 'Expand' : 'Collapse'"
+                  :aria-label="isUserQuestionCollapsed(item) ? 'Expand' : 'Collapse'"
+                  @click.stop="toggleUserQuestionFold(item.id)"
+                >
+                  {{ isUserQuestionCollapsed(item) ? '▾' : '▴' }}
+                </button>
+                <button
+                  class="user-message-action-btn user-message-copy-btn"
+                  type="button"
+                  title="复制内容"
+                  aria-label="复制内容"
+                  @click.stop="copyUserQuestion(item.content)"
+                >
+                  <img src="/images/copy.svg" alt="复制" class="user-message-copy-icon" />
+                </button>
+              </div>
               <div class="message-time">{{ formatTime(item.timestamp) }}</div>
             </div>
           </div>
@@ -184,22 +208,20 @@
                   生成中...
                 </span>
               </div>
-              <div
-                v-if="showPdfViewer"
-                class="pdf-viewer-modal"
-                @click.self="closePdfViewer"
-              >
-                <div class="pdf-viewer-container">
-                  <div class="pdf-viewer-header">
-                    <span>PDF 预览</span>
-                    <button class="close-btn" @click="closePdfViewer">×</button>
-                  </div>
-                  <iframe :src="pdfViewerUrl" class="pdf-iframe" frameborder="0"></iframe>
-                </div>
-              </div>
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- 文档预览分栏 -->
+    <div v-if="showPdfViewer" class="pdf-viewer-modal" @click.self="closePdfViewer">
+      <div class="pdf-viewer-container">
+        <div class="pdf-viewer-header">
+          <span>{{ currentPdfTitle }}</span>
+          <button class="close-btn" @click="closePdfViewer">×</button>
+        </div>
+        <iframe :src="pdfViewerUrl" class="pdf-iframe" frameborder="0"></iframe>
       </div>
     </div>
   </div>
@@ -212,6 +234,7 @@ import { ElIcon, ElMessage } from 'element-plus';
 import { ArrowRight } from '@element-plus/icons-vue';
 import { fetchWatermarkDocument, isPdfDocument, downloadDocumentBlob, openDocumentUrl } from '@/services/documentDownload';
 import { getSourceDirectUrl, getSourceFileId, getSourceTitle } from '@/services/sourceUtils';
+import { copyTextToClipboard, shouldCollapseUserQuestion } from '@/utils/messageCollapse';
 
 // 状态变量
 const displayAnswer = ref<string>('');
@@ -223,12 +246,34 @@ const isTyping = ref(false);
 const emit = defineEmits(['regenerate']);
 const showPdfViewer = ref(false);
 const pdfViewerUrl = ref('');
+const currentPdfTitle = ref('文档预览');
 // 分页状态管理
 const paginationStates = reactive<
   Record<string, { currentPage: number; pageSize: number }>
 >({});
 const isDownloading = reactive<Record<string, boolean>>({});
 const expandedStates = reactive<Record<string, boolean>>({});
+
+const expandedUserQuestionMap = reactive<Record<string, boolean>>({});
+const shouldFoldUserQuestion = (content?: string) => shouldCollapseUserQuestion(content);
+const isUserQuestionCollapsed = (item: { id?: string; content?: string }) => {
+  const id = String(item?.id || '');
+  return shouldFoldUserQuestion(item?.content) && !expandedUserQuestionMap[id];
+};
+const toggleUserQuestionFold = (id?: string) => {
+  const key = String(id || '');
+  if (!key) return;
+  expandedUserQuestionMap[key] = !expandedUserQuestionMap[key];
+};
+const copyUserQuestion = async (content?: string) => {
+  const copied = await copyTextToClipboard(content);
+  if (copied) {
+    ElMessage.success({ message: 'Copied', offset: 72 });
+  } else {
+    ElMessage.error({ message: 'Copy failed', offset: 72 });
+  }
+};
+
 
 // Props
 interface Props {
@@ -333,6 +378,7 @@ const handleViewDocument = async (source: SourceInfo | any) => {
       if (directUrl) {
         if (isPdfDocument(directUrl, 'application/pdf', title, directUrl)) {
           pdfViewerUrl.value = directUrl;
+          currentPdfTitle.value = title || '文档预览';
           showPdfViewer.value = true;
         } else {
           openDocumentUrl(directUrl);
@@ -352,6 +398,7 @@ const handleViewDocument = async (source: SourceInfo | any) => {
       } else {
         throw new Error('水印接口未返回可预览的文档地址');
       }
+      currentPdfTitle.value = title || '文档预览';
       showPdfViewer.value = true;
     } else if (result.downloadUrl) {
       openDocumentUrl(result.downloadUrl);
@@ -374,6 +421,7 @@ const closePdfViewer = () => {
   }
   pdfViewerUrl.value = '';
   showPdfViewer.value = false;
+  currentPdfTitle.value = '文档预览';
 };
 
 // 切换展开状态

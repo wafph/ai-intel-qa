@@ -10,6 +10,16 @@ export interface ComplianceReviewParams {
   fileUrl?: string;
   uploadFileId?: string;
   originalHtml?: string;
+  pdfContextId?: string;
+  pdfType?: string;
+  sourceFileUrl?: string;
+  parsedTxtUrl?: string;
+  parsedMarkdownUrl?: string;
+  locatorMode?: string;
+  locatorAvailable?: boolean;
+  locatorUnavailableReason?: string;
+  reviewFileUrl?: string;
+  textSource?: string;
 }
 
 export interface ChatMessage {
@@ -20,7 +30,9 @@ export interface ChatMessage {
   timestamp: number;
   streaming?: boolean;
   taskId?: string;
-  taskStatus?: 'pending' | 'running' | 'completed' | 'error' | 'stopped' | string;
+  taskStatus?: 'pending' | 'running' | 'completed' | 'error' | 'stopped' | 'cancelled' | 'superseded' | string;
+  taskRecoverable?: boolean;
+  recoverable?: boolean;
   streamEventId?: number;
   /** 当前 content 已覆盖到的后端事件游标，用于恢复订阅时避免跳过中间内容。 */
   answerEventId?: number;
@@ -34,6 +46,18 @@ export interface ChatMessage {
     complianceFileName?: string;
     complianceParams?: ComplianceReviewParams;
     reviewContext?: Record<string, any>;
+    pdfContextId?: string;
+    pdfType?: string;
+    sourceFileUrl?: string;
+    locatorMode?: string;
+    locatorAvailable?: boolean;
+    locatorUnavailableReason?: string;
+    parsedTxtUrl?: string;
+    parsedMarkdownUrl?: string;
+    reviewFileUrl?: string;
+    textSource?: string;
+    complianceFileNameWithoutExt?: string;
+    complianceDimensionText?: string;
   };
   sources?: SourceInfo[]; // ✅ 新增来源信息字段
   match_score?: number; // ✅ 新增：消息级别的

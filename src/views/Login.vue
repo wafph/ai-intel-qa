@@ -198,7 +198,7 @@ const afterLoginRedirect = () => {
 /** 处理用户交互或组件事件：handleLogin。 */
 const handleLogin = async () => {
   await userStore.loginByPassword({ username: form.username, password: form.password });
-  ElMessage.success('登录成功');
+  ElMessage.success({ message: '登录成功', offset: 72 });
   afterLoginRedirect();
 };
 
@@ -211,7 +211,7 @@ const handleRegister = async () => {
     phone: form.phone || undefined,
     email: form.email || undefined,
   });
-  ElMessage.success('注册成功，请使用新账号登录');
+  ElMessage.success({ message: '注册成功，请使用新账号登录', offset: 72 });
   mode.value = 'login';
   form.password = '';
   form.confirmPassword = '';

@@ -44,19 +44,31 @@ export default defineConfig({
         secure: false,
       },
       '/api': {
-        target: 'http://1.94.244.72:8000', //token获取服务器地址
+        target: 'http://10.210.101.209:8000', //token获取服务器地址
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/api/, ''), // 移除前缀
       },
+      '/review-upload-api': {
+        target: 'https://10.210.101.211:31113', // 智能审核上传接口，通过代理绕开浏览器 HTTPS 自签名证书校验
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/review-upload-api/, ''), // /review-upload-api/v1/... -> /v1/...
+      },
+      '/review-pdf-api': {
+        target: 'http://127.0.0.1:8006', // 智能审核 PDF 预处理服务
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/review-pdf-api/, ''), // /review-pdf-api/v1/review/pdf -> /v1/review/pdf
+      },
       '/watermark-api': {
-        target: 'http://1.94.244.72:8005', // 统一文件服务：水印下载
+        target: 'http://10.210.101.209:8005', // 统一文件服务：水印下载
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/watermark-api/, '/v1/files'), // /watermark-api/watermark/download -> /v1/files/watermark/download
       },
       '/markdown-word-api': {
-        target: 'http://1.94.244.72:8005', // 统一文件服务：Markdown 转 Word
+        target: 'http://10.210.101.209:8005', // 统一文件服务：Markdown 转 Word
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/markdown-word-api/, '/v1/markdown-word'), // /markdown-word-api/convert -> /v1/markdown-word/convert

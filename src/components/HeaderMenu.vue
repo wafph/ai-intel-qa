@@ -62,10 +62,10 @@ const tabs = computed<TabItem[]>(() => {
 
 <style scoped>
 .header-menu {
-  height: 70px;
+  height: 56px;
   display: flex;
   align-items: center;
-  padding: 0 54px;
+  padding: 0 42px;
   box-shadow: 0 2px 8px rgba(24, 144, 255, 0.2);
   z-index: 100;
   position: relative;
@@ -75,12 +75,12 @@ const tabs = computed<TabItem[]>(() => {
 .header-left {
   display: flex;
   align-items: center;
-  margin-right: 40px;
+  margin-right: 28px;
 }
 
 .collapse-btn {
   width: 40px;
-  height: 40px;
+  height: 34px;
   background: transparent;
   border: none;
   cursor: pointer;
@@ -106,8 +106,8 @@ const tabs = computed<TabItem[]>(() => {
 
 .tab-btn {
   width: 75px;
-  margin-right: 40px;
-  height: 40px;
+  margin-right: 28px;
+  height: 34px;
   background: rgba(255, 255, 255, 0.1);
   border: none;
   font-size: 14px;
@@ -146,7 +146,7 @@ const tabs = computed<TabItem[]>(() => {
 }
 
 .tab-label {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: black;
 }
@@ -196,7 +196,7 @@ const tabs = computed<TabItem[]>(() => {
 
 .user-btn {
   width: 40px;
-  height: 40px;
+  height: 34px;
   background: rgba(255, 255, 255, 0.1);
   border: none;
   border-radius: 50%;

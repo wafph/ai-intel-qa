@@ -108,9 +108,9 @@ const activeFilter = ref('all');
 const filterTabs = [
   { id: 'all', name: '全部' },
   { id: '智能问答', name: '智能问答' },
+  { id: '智能检索', name: '智能检索' },
   { id: '辅助起草', name: '辅助起草' },
   { id: '合规审核', name: '合规审核' },
-  { id: '智能检索', name: '智能检索' },
 ];
 
 // 过滤后的收藏列表
@@ -141,7 +141,20 @@ const filteredCollections = computed(() => {
     );
   }
 
-  return collections;
+  const orderMap: Record<string, number> = {
+    qa: 1,
+    search: 2,
+    draft: 3,
+    review: 4,
+  };
+
+  return [...collections].sort((a, b) => {
+    if (activeFilter.value === 'all') {
+      const orderDiff = (orderMap[a.functionId] || 99) - (orderMap[b.functionId] || 99);
+      if (orderDiff !== 0) return orderDiff;
+    }
+    return Number(b.time || 0) - Number(a.time || 0);
+  });
 });
 
 // 加载收藏数据
@@ -214,7 +227,7 @@ const viewCollection = async (item: any) => {
       // 这里可以将详情数据传递给对应的页面
       // 或者直接跳转到对应的功能页面
       let path = '/intelligent-qa'; // 默认跳转到智能问答
-      
+
       if (item.functionId === 'search') {
         path = '/intelligent-retrieval';
       } else if (item.functionId === 'draft') {

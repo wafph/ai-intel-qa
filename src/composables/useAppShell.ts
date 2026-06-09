@@ -4,18 +4,32 @@
  * 本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
  */
 import { ref, computed, onMounted, nextTick, onUnmounted, watch } from 'vue';
+import type { CSSProperties } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAppStore } from '@/stores/app';
 import { useChatStore } from '@/stores/chat';
 import { useUserStore } from '@/stores/user';
 import type { ChatMessage, ChatSession, HistoryItem } from '@/types/chat';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { ElLoading, ElMessage, ElMessageBox } from 'element-plus';
 import { authRequest, getEventStream, isSuccessStatus, request } from '@/services/http';
 import { API, getWorkflowCodeByTab } from '@/api/api';
 import { getAgentToken } from '@/services/authStorage';
 import { getApiData, getApiMessage, isApiSuccessCode } from '@/services/response';
 import { extractSourcesFromAny } from '@/services/sourceUtils';
 import { stripReviewProgressText } from '@/services/reviewProgress';
+import {
+  bindReviewPdfFile,
+  buildTxtFileFromPdfParsedText,
+  isPdfFile,
+  prepareReviewPdf,
+  detectReviewPdf,
+} from '@/services/reviewPdfPrepare';
+import {
+  containsUpstreamErrorText,
+  getFrontendFallbackErrorMessage,
+  sanitizeAgentText,
+  toUserSafeAgentErrorMessage,
+} from '@/services/errorSanitizer';
 
 /** 封装当前模块内的业务逻辑：useAppShell。 */
 export const useAppShell = () => {
@@ -50,6 +64,38 @@ type ComplianceReviewParams = {
   fileUrl?: string;
   uploadFileId?: string;
   originalHtml?: string;
+  pdfContextId?: string;
+  pdfType?: string;
+  sourceFileUrl?: string;
+  parsedTxtUrl?: string;
+  parsedMarkdownUrl?: string;
+  locatorMode?: string;
+  locatorAvailable?: boolean;
+  locatorUnavailableReason?: string;
+  reviewFileUrl?: string;
+  textSource?: string;
+};
+
+
+
+type ComplianceUploadResult = {
+  rawResult?: any;
+  fileName: string;
+  fileUrl: string;
+  originalText: string;
+  fileType: string;
+  fileSize: number;
+  uploadFileId?: string;
+  pdfContextId?: string;
+  pdfType?: string;
+  sourceFileUrl?: string;
+  parsedTxtUrl?: string;
+  parsedMarkdownUrl?: string;
+  locatorMode?: string;
+  locatorAvailable?: boolean;
+  locatorUnavailableReason?: string;
+  reviewFileUrl?: string;
+  textSource?: string;
 };
 
 type RegeneratePayload =
@@ -64,9 +110,15 @@ const uploadedFileName = ref('');
 const uploadedFileUrl = ref('');
 const uploadedOriginalText = ref('');
 const uploadedFileRef = ref<File | null>(null);
+const uploadedFileExtraMeta = ref<Partial<ComplianceReviewParams>>({});
 const selectedDimensions = ref<string[]>([]);
+const isComplianceFileProcessing = ref(false);
+const complianceFileProcessingText = ref('');
+const isComplianceRegenerating = ref(false);
+const isComplianceSubmitting = ref(false);
 const REVIEW_DIMENSIONS = ['合规性', '冲突性', '文本规范性'];
 const SELECT_ALL_DIMENSION = '全选';
+const COMPLIANCE_PROCESSING_DISPLAY_TEXT = '文件正在解析中，请稍候...';
 
 /** 格式化展示内容：formatFileSize。 */
 const formatFileSize = (size: number) => {
@@ -99,28 +151,98 @@ const getReviewQuery = (dimensions: string[] = selectedDimensions.value) => {
   return getActualReviewDimensions(dimensions).join(',');
 };
 
+/** 去掉常见文件后缀，保证刷新前后的审核历史标题格式一致。 */
+const stripFileExtension = (fileName = '') => {
+  const normalized = String(fileName || '').trim().split('/').pop()?.split('\\').pop() || '';
+  return normalized.replace(/\.[A-Za-z0-9]{1,8}$/, '').trim() || '合规审核文件';
+};
+
+const buildDimensionText = (dimensions: string[] = selectedDimensions.value) => {
+  const displayDimensions = getActualReviewDimensions(dimensions);
+  return displayDimensions.length ? displayDimensions.join('、') : '未选择审核维度';
+};
+
+/** 构造用于会话标题、历史 preview 和后台 questionContent 的审核展示文本。 */
+const buildComplianceQuestionContent = (fileName: string, dimensions: string[] = selectedDimensions.value) => {
+  return `${stripFileExtension(fileName)}
+审核维度：${buildDimensionText(dimensions)}`;
+};
+
+/** 左侧历史标题统一采用“文件名（不含后缀）+ 审核维度”，避免刷新前后显示不一致。 */
+const buildComplianceSessionTitle = (fileName: string, dimensions: string[] = selectedDimensions.value) => {
+  return `${stripFileExtension(fileName)}｜${buildDimensionText(dimensions)}`;
+};
+
+const applySessionTitle = (sessionId: string, title?: string, preview?: string) => {
+  const normalizedTitle = String(title || '').trim();
+  if (!sessionId || !normalizedTitle) return;
+  const session = chatStore.getChatSession(sessionId);
+  if (session) session.title = normalizedTitle;
+  chatStore.updateHistoryItem(sessionId, {
+    title: normalizedTitle,
+    sessionTitle: normalizedTitle,
+    ...(preview !== undefined ? { preview } : {}),
+  } as any);
+};
+
+const getSafeAgentErrorMessage = () => getFrontendFallbackErrorMessage();
+
+const toUserSafeErrorMessage = (errorOrMessage: any, fallback = getSafeAgentErrorMessage()) =>
+  toUserSafeAgentErrorMessage(errorOrMessage, fallback);
+
 /** 标准化后端/历史数据结构：normalizeComplianceParams。 */
 const normalizeComplianceParams = (params: any): ComplianceReviewParams | null => {
-  if (!params || !params.file_url || !params.query) return null;
+  if (!params) return null;
 
-  const dimensions = Array.isArray(params.dimensions)
-    ? getActualReviewDimensions(params.dimensions)
-    : String(params.query)
-        .split(',')
+  const reviewContext = params.reviewContext || params.review_context || {};
+  const reviewParams = params.reviewParams || params.review_params || reviewContext.reviewParams || reviewContext.review_params || {};
+  const source = { ...reviewContext, ...reviewParams, ...params };
+  const fileUrl =
+    source.file_url ||
+    source.fileUrl ||
+    source.reviewFileUrl ||
+    source.review_file_url ||
+    source.url ||
+    '';
+  const rawQuery =
+    source.query ||
+    source.reviewDimension ||
+    source.review_dimension ||
+    source.auditDimension ||
+    source.audit_dimension ||
+    '';
+
+  const dimensions = Array.isArray(source.dimensions)
+    ? getActualReviewDimensions(source.dimensions)
+    : String(rawQuery)
+        .split(/[,，、]/)
         .map((item) => item.trim())
         .filter(Boolean);
+  const query = dimensions.length ? dimensions.join(',') : String(rawQuery || '').trim();
+
+  if (!fileUrl || !query) return null;
 
   return {
-    file_url: params.file_url,
-    query: params.query,
+    file_url: fileUrl,
+    query,
     dimensions,
-    fileName: params.fileName || params.file_name || params.name || '合规审核文件',
-    originalText: params.originalText || params.original_text || '',
-    fileType: params.fileType || params.file_type,
-    fileSize: params.fileSize || params.file_size,
-    fileUrl: params.fileUrl || params.file_url || params.url,
-    uploadFileId: params.uploadFileId || params.upload_file_id || params.fileId || params.file_id,
-    originalHtml: params.originalHtml || params.original_html || '',
+    fileName: source.fileName || source.file_name || source.name || '合规审核文件',
+    originalText: source.originalText || source.original_text || source.parsedText || source.parsed_text || '',
+    fileType: source.fileType || source.file_type,
+    fileSize: source.fileSize || source.file_size,
+    fileUrl: source.fileUrl || source.file_url || source.url || fileUrl,
+    uploadFileId: source.uploadFileId || source.upload_file_id || source.fileId || source.file_id,
+    originalHtml: source.originalHtml || source.original_html || '',
+    pdfContextId: source.pdfContextId || source.pdf_context_id || source.contextId || source.context_id,
+    pdfType: source.pdfType || source.pdf_type,
+    sourceFileUrl: source.sourceFileUrl || source.source_file_url || source.originalPdfUrl || source.original_pdf_url,
+    parsedTxtUrl: source.parsedTxtUrl || source.parsed_txt_url,
+    parsedMarkdownUrl: source.parsedMarkdownUrl || source.parsed_markdown_url,
+    locatorMode: source.locatorMode || source.locator_mode,
+    locatorAvailable: typeof source.locatorAvailable === 'boolean' ? source.locatorAvailable : source.locator_available,
+    locatorUnavailableReason: source.locatorUnavailableReason || source.locator_unavailable_reason,
+    reviewFileUrl: source.reviewFileUrl || source.review_file_url || fileUrl,
+    textSource: source.textSource || source.text_source,
   };
 };
 
@@ -133,6 +255,16 @@ const buildReviewContext = (params: ComplianceReviewParams) => ({
   uploadFileId: params.uploadFileId,
   originalText: params.originalText,
   originalHtml: params.originalHtml,
+  pdfContextId: params.pdfContextId,
+  pdfType: params.pdfType,
+  sourceFileUrl: params.sourceFileUrl,
+  parsedTxtUrl: params.parsedTxtUrl,
+  parsedMarkdownUrl: params.parsedMarkdownUrl,
+  locatorMode: params.locatorMode,
+  locatorAvailable: params.locatorAvailable,
+  locatorUnavailableReason: params.locatorUnavailableReason,
+  reviewFileUrl: params.reviewFileUrl,
+  textSource: params.textSource,
   reviewParams: { ...params },
 });
 
@@ -140,8 +272,20 @@ const buildReviewContext = (params: ComplianceReviewParams) => ({
 const buildComplianceMetadata = (params: ComplianceReviewParams) => ({
   complianceOriginalText: params.originalText,
   complianceFileName: params.fileName,
+  complianceFileNameWithoutExt: stripFileExtension(params.fileName),
+  complianceDimensionText: buildDimensionText(params.dimensions),
   complianceParams: { ...params },
   reviewContext: buildReviewContext(params),
+  pdfContextId: params.pdfContextId,
+  pdfType: params.pdfType,
+  sourceFileUrl: params.sourceFileUrl,
+  parsedTxtUrl: params.parsedTxtUrl,
+  parsedMarkdownUrl: params.parsedMarkdownUrl,
+  locatorMode: params.locatorMode,
+  locatorAvailable: params.locatorAvailable,
+  locatorUnavailableReason: params.locatorUnavailableReason,
+  reviewFileUrl: params.reviewFileUrl,
+  textSource: params.textSource,
 });
 
 const saveReviewContextSnapshot = async (
@@ -186,16 +330,66 @@ const isTemporaryFileUrlExpired = (fileUrl: string) => {
 
 /** 封装当前模块内的业务逻辑：refreshComplianceParamsFileUrl。 */
 const refreshComplianceParamsFileUrl = async (params: ComplianceReviewParams) => {
-  const file = uploadedFileRef.value;
-  if (!file || file.name !== params.fileName) {
-    if (isTemporaryFileUrlExpired(params.file_url)) {
-      throw new Error('上传文件链接已过期，请重新上传文件后再审核');
-    }
+  // 重新审核优先复用上次审核已经得到的 file_url，避免 PDF 重新走 mineru 解析。
+  if (params.file_url && !isTemporaryFileUrlExpired(params.file_url)) {
+    lastComplianceParams.value = params;
     return params;
   }
 
+  const isPdfPreparedText =
+    params.fileType === 'pdf' ||
+    Boolean(params.pdfContextId) ||
+    params.textSource === 'mineru25-pro' ||
+    params.locatorMode === 'pdf_text_layer' ||
+    params.locatorMode === 'parsed_text_only';
+
+  if (isPdfPreparedText) {
+    if (!params.originalText?.trim()) {
+      throw new Error('PDF 解析文本不存在，无法重新上传审核文件，请重新上传 PDF');
+    }
+
+    complianceFileProcessingText.value = '审核文件链接已过期，正在重新上传 PDF 解析文本...';
+    const parsedTxtFile = buildTxtFileFromPdfParsedText(params.originalText, params.fileName || '审核文件.pdf');
+    const agentUploadResult = await uploadFileToAgentArts(parsedTxtFile, {
+      originalText: params.originalText,
+      statusText: '正在重新上传 PDF 解析文本...'
+    });
+
+    const refreshedParams: ComplianceReviewParams = {
+      ...params,
+      file_url: agentUploadResult.fileUrl,
+      fileUrl: agentUploadResult.fileUrl,
+      uploadFileId: agentUploadResult.uploadFileId || params.uploadFileId,
+      reviewFileUrl: agentUploadResult.fileUrl,
+    };
+
+    if (params.pdfContextId && agentUploadResult.fileUrl) {
+      try {
+        await bindReviewPdfFile(params.pdfContextId, {
+          review_file_url: agentUploadResult.fileUrl,
+          review_file_id: agentUploadResult.uploadFileId,
+          review_file_type: 'txt',
+          session_id: currentConversationUuid.value || activeChatId.value || undefined,
+          user_id: String((userStore.user as any)?.user_id || (userStore.user as any)?.id || '').trim() || undefined,
+          agent_upload_response: agentUploadResult.rawResult,
+        });
+      } catch (error) {
+        console.warn('重新审核时绑定 PDF 审核文件 URL 失败:', error);
+      }
+    }
+
+    lastComplianceParams.value = refreshedParams;
+    return refreshedParams;
+  }
+
+  const file = uploadedFileRef.value;
+  if (!file || file.name !== params.fileName) {
+    throw new Error('上传文件链接已过期，请重新上传文件后再审核');
+  }
+
+  complianceFileProcessingText.value = '审核文件链接已过期，正在重新上传文件...';
   const uploadResult = await uploadComplianceFile(file);
-  const refreshedParams = {
+  const refreshedParams: ComplianceReviewParams = {
     ...params,
     file_url: uploadResult.fileUrl,
     fileName: uploadResult.fileName,
@@ -204,6 +398,16 @@ const refreshComplianceParamsFileUrl = async (params: ComplianceReviewParams) =>
     fileSize: uploadResult.fileSize || params.fileSize,
     fileUrl: uploadResult.fileUrl || params.fileUrl,
     uploadFileId: uploadResult.uploadFileId || params.uploadFileId,
+    pdfContextId: uploadResult.pdfContextId || params.pdfContextId,
+    pdfType: uploadResult.pdfType || params.pdfType,
+    sourceFileUrl: uploadResult.sourceFileUrl || params.sourceFileUrl,
+    parsedTxtUrl: uploadResult.parsedTxtUrl || params.parsedTxtUrl,
+    parsedMarkdownUrl: uploadResult.parsedMarkdownUrl || params.parsedMarkdownUrl,
+    locatorMode: uploadResult.locatorMode || params.locatorMode,
+    locatorAvailable: typeof uploadResult.locatorAvailable === 'boolean' ? uploadResult.locatorAvailable : params.locatorAvailable,
+    locatorUnavailableReason: uploadResult.locatorUnavailableReason || params.locatorUnavailableReason,
+    reviewFileUrl: uploadResult.reviewFileUrl || params.reviewFileUrl,
+    textSource: uploadResult.textSource || params.textSource,
   };
   lastComplianceParams.value = refreshedParams;
   return refreshedParams;
@@ -215,7 +419,12 @@ const getComplianceParamsFromSession = (session?: ChatSession | null) => {
 
   for (let index = session.messages.length - 1; index >= 0; index--) {
     const message = session.messages[index] as any;
-    const params = normalizeComplianceParams(message.metadata?.complianceParams);
+    const metadata = message.metadata || {};
+    const params =
+      normalizeComplianceParams(metadata.complianceParams) ||
+      normalizeComplianceParams(metadata.reviewContext?.reviewParams || metadata.reviewContext?.review_params) ||
+      normalizeComplianceParams(metadata.reviewContext) ||
+      normalizeComplianceParams(metadata);
     if (params) return params;
   }
 
@@ -240,7 +449,8 @@ const currentStreamingMessageId = ref<string | null>(null);
 
 const STREAM_TASK_STORAGE_KEY = 'ai_intel_v12_2_resumable_stream_tasks';
 const LAST_ACTIVE_SESSION_STORAGE_KEY = 'ai_intel_v12_2_last_active_session_by_func';
-const TERMINAL_TASK_STATUSES = ['completed', 'error', 'stopped'];
+const ACTIVE_TASK_STATUSES = ['pending', 'running'];
+const TERMINAL_TASK_STATUSES = ['completed', 'error', 'stopped', 'cancelled', 'canceled', 'superseded'];
 
 type ResumableStreamTask = {
   taskId: string;
@@ -250,6 +460,7 @@ type ResumableStreamTask = {
   functionId: string;
   tabName: string;
   status: string;
+  recoverable?: boolean;
   lastEventId: number;
   /** 当前 answerContent 已覆盖到的后端事件游标；用于刷新/切换恢复时避免旧快照配新游标导致中间内容被跳过。 */
   answerEventId?: number;
@@ -267,7 +478,7 @@ const activeStreamTasks = ref<Record<string, ResumableStreamTask>>({});
 const historySearchKeyword = ref('');
 const historySearchResults = ref<any[]>([]);
 const historySearchLoading = ref(false);
-// 大模型答案展示控制：首次检测到双换行后才开始把 text 展示到页面，且保留双换行本身
+// 大模型答案展示控制：若首段存在 <think>...</think>，只展示 </think> 之后的正式内容；没有 think 标签时正常展示。
 let answerOutputStarted = false;
 let answerPendingText = '';
 
@@ -462,8 +673,12 @@ const extractReadableFileText = async (file: File): Promise<string> => {
   return '';
 };
 
-/** 上传文件并返回远端地址：uploadComplianceFile。 */
-const uploadComplianceFile = async (file: File) => {
+/** 从 AgentArts 上传接口返回结果中归一化文件 URL。 */
+const getFileUrlFromAgentUploadResult = (result: any, fallbackName: string) =>
+  result?.url || result?.file_url || result?.fileUrl || result?.data?.url || result?.data?.file_url || fallbackName;
+
+/** 原始 AgentArts 上传逻辑：非 PDF 和 PDF 解析后的 txt 均复用该方法。 */
+const uploadFileToAgentArts = async (file: File, options: { originalText?: string; statusText?: string } = {}): Promise<ComplianceUploadResult> => {
   const token = appStore.sharedDataToken;
   if (!token) {
     throw new Error('未找到认证 token');
@@ -473,17 +688,19 @@ const uploadComplianceFile = async (file: File) => {
   formData.append('file', file);
   formData.append('is_image', 'false');
 
-  const [localOriginalText, response] = await Promise.all([
-    extractReadableFileText(file),
-    request({
-      url: API.agent.uploadFile,
-      method: 'POST',
-      headers: {
-        'X-Auth-Token': token,
-      },
-      data: formData,
-    }),
-  ]);
+  complianceFileProcessingText.value = COMPLIANCE_PROCESSING_DISPLAY_TEXT;
+  const localOriginalText =
+    options.originalText !== undefined ? options.originalText : await extractReadableFileText(file);
+
+  complianceFileProcessingText.value = COMPLIANCE_PROCESSING_DISPLAY_TEXT;
+  const response = await request({
+    url: API.agent.uploadFile,
+    method: 'POST',
+    headers: {
+      'X-Auth-Token': token,
+    },
+    data: formData,
+  });
 
   if (!isSuccessStatus(response.status)) {
     throw new Error(`上传失败: ${response.status}`);
@@ -491,8 +708,9 @@ const uploadComplianceFile = async (file: File) => {
 
   const result = response.data;
   return {
+    rawResult: result,
     fileName: file.name,
-    fileUrl: result?.url || file.name,
+    fileUrl: getFileUrlFromAgentUploadResult(result, file.name),
     originalText: getTextFromUploadResult(result) || localOriginalText,
     fileType: file.name.split('.').pop()?.toLowerCase() || file.type || '',
     fileSize: file.size,
@@ -500,9 +718,130 @@ const uploadComplianceFile = async (file: File) => {
   };
 };
 
+/** PDF 文件预处理：先快速 detect，用户确认后再 mineru 解析文本 -> 前端转 txt -> 复用原 AgentArts 上传获取 file_url。 */
+const uploadPdfForComplianceReview = async (file: File): Promise<ComplianceUploadResult> => {
+  const sessionId = currentConversationUuid.value || activeChatId.value || undefined;
+  const userId = String((userStore.user as any)?.user_id || (userStore.user as any)?.id || '').trim() || undefined;
+
+  complianceFileProcessingText.value = '正在检测 PDF 是否支持原文定位...';
+  const detectResult = await detectReviewPdf(file, { sessionId, userId });
+  const detectInfo = detectResult?.detect || {};
+  const detectPdfInfo = detectResult?.pdf_detect || {};
+  const detectLocatorAvailable = Boolean(
+    detectInfo.locator_available ?? detectPdfInfo.can_use_pdf_locator,
+  );
+  const detectReason =
+    detectInfo.reason ||
+    detectPdfInfo.locator_unavailable_reason ||
+    '当前 PDF 为扫描件或非标准 PDF，可能影响原文标记功能。';
+  const nonStandardPdfConfirmMessage =
+    '当前 PDF 未检测到有效文本层，可能为扫描件或图片型 PDF，无法进行原 PDF 坐标定位，仅支持解析文本展示。';
+
+  if (!detectLocatorAvailable) {
+    // 前置检测已结束，弹窗期间不要继续显示“正在检测 PDF 是否支持原文定位”。
+    isComplianceFileProcessing.value = false;
+    complianceFileProcessingText.value = '';
+    await ElMessageBox.confirm(
+      nonStandardPdfConfirmMessage,
+      'PDF 文件提示',
+      {
+        confirmButtonText: '继续上传',
+        cancelButtonText: '取消重传',
+        type: 'warning',
+      },
+    );
+    isComplianceFileProcessing.value = true;
+  }
+
+  complianceFileProcessingText.value = COMPLIANCE_PROCESSING_DISPLAY_TEXT;
+  const prepareResult = await prepareReviewPdf(file, {
+    sessionId,
+    userId,
+    includeContent: true,
+  });
+
+  const parsedText =
+    prepareResult?.review_input?.parsed_text ||
+    prepareResult?.review_input?.parsed_markdown ||
+    '';
+
+  if (!parsedText.trim()) {
+    throw new Error('PDF 解析结果为空，无法继续审核');
+  }
+
+  const locatorAvailable = Boolean(prepareResult?.original_dispatch?.locator_available);
+  const locatorReason = prepareResult?.original_dispatch?.locator_unavailable_reason ||
+    detectReason ||
+    '当前 PDF 为扫描件或非标准 PDF，无法进行原 PDF 精准定位，仅支持查看原文页面。';
+
+  complianceFileProcessingText.value = COMPLIANCE_PROCESSING_DISPLAY_TEXT;
+  const parsedTxtFile = buildTxtFileFromPdfParsedText(parsedText, file.name);
+  const agentUploadResult = await uploadFileToAgentArts(parsedTxtFile, {
+    originalText: parsedText,
+    statusText: COMPLIANCE_PROCESSING_DISPLAY_TEXT
+  });
+  const contextId = prepareResult?.context_id || '';
+
+  if (contextId && agentUploadResult.fileUrl) {
+    try {
+      await bindReviewPdfFile(contextId, {
+        review_file_url: agentUploadResult.fileUrl,
+        review_file_id: agentUploadResult.uploadFileId,
+        review_file_type: 'txt',
+        session_id: sessionId,
+        user_id: userId,
+        agent_upload_response: agentUploadResult.rawResult,
+      });
+    } catch (error) {
+      // 绑定失败不阻断审核主流程，但刷新后的审计信息可能缺少 review_file_url。
+      console.warn('绑定 PDF 审核文件 URL 失败:', error);
+    }
+  }
+
+  return {
+    fileName: file.name,
+    fileUrl: agentUploadResult.fileUrl,
+    originalText: parsedText,
+    fileType: 'pdf',
+    fileSize: file.size,
+    uploadFileId: agentUploadResult.uploadFileId,
+    pdfContextId: contextId,
+    pdfType: prepareResult?.pdf_detect?.pdf_type || '',
+    sourceFileUrl:
+      prepareResult?.file_info?.source_file_url ||
+      prepareResult?.original_dispatch?.source_file_url ||
+      '',
+    parsedTxtUrl: prepareResult?.review_input?.parsed_txt_url || '',
+    parsedMarkdownUrl: prepareResult?.review_input?.parsed_markdown_url || '',
+    locatorMode: prepareResult?.original_dispatch?.locator_mode || 'parsed_text_only',
+    locatorAvailable,
+    locatorUnavailableReason: locatorAvailable ? '' : locatorReason,
+    reviewFileUrl: agentUploadResult.fileUrl,
+    textSource: prepareResult?.review_input?.text_source || 'mineru25-pro',
+  };
+};
+
+/** 上传文件并返回远端地址：uploadComplianceFile。 */
+const uploadComplianceFile = async (file: File): Promise<ComplianceUploadResult> => {
+  if (isPdfFile(file)) {
+    return uploadPdfForComplianceReview(file);
+  }
+  return uploadFileToAgentArts(file);
+};
+
 /** 封装当前模块内的业务逻辑：customUpload。 */
 const customUpload = async (options: any) => {
   const { file, onSuccess, onError } = options;
+  if (isComplianceFileProcessing.value) {
+    onError(new Error('当前已有文件正在处理，请稍候'));
+    return;
+  }
+
+  isComplianceFileProcessing.value = true;
+  complianceFileProcessingText.value = isPdfFile(file)
+    ? '正在检测 PDF 是否支持原文定位...'
+    : COMPLIANCE_PROCESSING_DISPLAY_TEXT;
+
   try {
     const uploadResult = await uploadComplianceFile(file);
     onSuccess(uploadResult, file);
@@ -510,9 +849,31 @@ const customUpload = async (options: any) => {
     uploadedFileName.value = uploadResult.fileName;
     uploadedFileUrl.value = uploadResult.fileUrl;
     uploadedOriginalText.value = uploadResult.originalText;
+    uploadedFileExtraMeta.value = { ...uploadResult };
+    ElMessage.success({ message: isPdfFile(file) ? 'PDF 解析并上传完成' : '文件上传完成', offset: 72 });
   } catch (error) {
     onError(error);
+  } finally {
+    isComplianceFileProcessing.value = false;
+    complianceFileProcessingText.value = '';
   }
+};
+
+
+/** 清理合规审核已上传文件，允许重新选择文件。 */
+const handleRemoveUploadedFile = () => {
+  if (isStreaming.value || isComplianceFileProcessing.value || isComplianceSubmitting.value) {
+    ElMessage.warning('当前任务处理中，暂不能删除文件');
+    return;
+  }
+  uploadedFileRef.value = null;
+  uploadedFileName.value = '';
+  uploadedFileUrl.value = '';
+  uploadedOriginalText.value = '';
+  uploadedFileExtraMeta.value = {};
+  lastComplianceParams.value = null;
+  complianceFileProcessingText.value = '';
+  ElMessage.success({ message: '已删除上传文件，可重新上传', offset: 72 });
 };
 
 /** 处理用户交互或组件事件：handleSelectAll。 */
@@ -574,8 +935,34 @@ const buildUnifiedAgentPayload = (workflowCode: string, bizParams: Record<string
 };
 
 /** 判断条件是否成立：isTerminalTaskStatus。 */
+const normalizeTaskStatus = (status?: any) => String(status || '').toLowerCase();
+
+/** 判断任务是否为后端终态。 */
 const isTerminalTaskStatus = (status?: string) =>
-  TERMINAL_TASK_STATUSES.includes(String(status || '').toLowerCase());
+  TERMINAL_TASK_STATUSES.includes(normalizeTaskStatus(status));
+
+/** 判断任务是否允许恢复订阅。后端 v12.2.22 会返回 recoverable=false，前端必须尊重。 */
+const isRecoverableTaskStatus = (status?: string) =>
+  ACTIVE_TASK_STATUSES.includes(normalizeTaskStatus(status));
+
+const getRecoverableFlag = (value: any): boolean | undefined => {
+  const raw = value?.recoverable ?? value?.taskRecoverable ?? value?.task_recoverable;
+  if (raw === undefined || raw === null || raw === '') return undefined;
+  if (typeof raw === 'boolean') return raw;
+  if (typeof raw === 'number') return raw !== 0;
+  if (typeof raw === 'string') {
+    const normalized = raw.trim().toLowerCase();
+    if (['false', '0', 'no', 'n'].includes(normalized)) return false;
+    if (['true', '1', 'yes', 'y'].includes(normalized)) return true;
+  }
+  return undefined;
+};
+
+const isTaskRecoverable = (value: any, fallbackStatus?: string) => {
+  const status = normalizeTaskStatus(value?.status ?? value?.taskStatus ?? value?.task_status ?? fallbackStatus);
+  if (!isRecoverableTaskStatus(status)) return false;
+  return getRecoverableFlag(value) !== false;
+};
 
 let persistStreamTasksTimer: number | null = null;
 
@@ -583,7 +970,7 @@ let persistStreamTasksTimer: number | null = null;
 const persistStreamTasksNow = () => {
   const runningTasks = Object.fromEntries(
     Object.entries(activeStreamTasks.value).filter(
-      ([, task]) => !isTerminalTaskStatus(task.status),
+      ([, task]) => isTaskRecoverable(task),
     ),
   );
   localStorage.setItem(STREAM_TASK_STORAGE_KEY, JSON.stringify(runningTasks));
@@ -640,7 +1027,7 @@ const loadPersistedStreamTasks = () => {
 
     activeStreamTasks.value = Object.fromEntries(
       Object.entries(parsed as Record<string, ResumableStreamTask>).filter(
-        ([, task]) => task?.taskId && task?.sessionId && !isTerminalTaskStatus(task.status),
+        ([, task]) => task?.taskId && task?.sessionId && isTaskRecoverable(task),
       ),
     );
   } catch {
@@ -674,7 +1061,7 @@ const getTaskBySessionId = (sessionId?: string) => {
   if (!sessionId) return null;
   return (
     Object.values(activeStreamTasks.value).find(
-      (task) => task.sessionId === sessionId && !isTerminalTaskStatus(task.status),
+      (task) => task.sessionId === sessionId && isTaskRecoverable(task),
     ) || null
   );
 };
@@ -749,11 +1136,15 @@ const registerRecoverableTaskFromSession = (sessionId: string) => {
   const functionId = chatStore.getFuncIdByTab((session as any).menuType || activeTab.value);
   /** 封装当前模块内的业务逻辑：assistantMessages。 */
   const assistantMessages = session.messages.filter((message: any) => message.role === 'assistant' && message.taskId);
+  const isSearchFunction = functionId === 'search';
   /** 封装当前模块内的业务逻辑：candidate。 */
   const candidate = [...assistantMessages].reverse().find((message: any) => {
-    const status = String(message.taskStatus || '').toLowerCase();
-    const hasSources = Array.isArray(message.sources) && message.sources.length > 0;
-    return ['pending', 'running'].includes(status) || (!hasSources && ['completed', 'stopped', 'error', ''].includes(status));
+    const status = normalizeTaskStatus(message.taskStatus);
+    const messageRecoverable = getRecoverableFlag(message) !== false;
+    if (isRecoverableTaskStatus(status) && messageRecoverable) return true;
+    // 智能检索刷新后，如果历史 sources 曾被旧版本压缩，允许对 completed/未知状态只查询 task detail 补全 sources。
+    // error/stopped/cancelled/superseded 均为明确终态，不再恢复或重放，避免旧异常污染新请求。
+    return isSearchFunction && (status === 'completed' || status === '');
   }) as any;
   if (!candidate || activeStreamTasks.value[candidate.taskId]) return;
   /** 封装当前模块内的业务逻辑：messageIndex。 */
@@ -768,6 +1159,7 @@ const registerRecoverableTaskFromSession = (sessionId: string) => {
       functionId,
       tabName: (session as any).menuType || activeTab.value,
       status: candidate.taskStatus || 'completed',
+      recoverable: getRecoverableFlag(candidate),
       // 已完成但缺少引用时，从 0 补读事件，只解析 workflow_finished 中的引用；不重复追加正文。
       lastEventId: Array.isArray(candidate.sources) && candidate.sources.length > 0 ? Number(candidate.streamEventId || 0) : 0,
       answerEventId: getMessageAnswerEventId(candidate),
@@ -775,7 +1167,7 @@ const registerRecoverableTaskFromSession = (sessionId: string) => {
       createdAt: Number(userMessage?.timestamp || candidate.timestamp || Date.now()),
       title: session.title,
       userContent: userMessage?.content || '',
-      answerContent: stripReviewProgressText(candidate.content || '', { functionId, tabName: (session as any).menuType || activeTab.value }),
+      answerContent: sanitizeAgentText(stripReviewProgressText(candidate.content || '', { functionId, tabName: (session as any).menuType || activeTab.value })),
       reasoningContent: candidate.reasoning || '',
       sources: candidate.sources || [],
       metadata: candidate.metadata || userMessage?.metadata || undefined,
@@ -844,12 +1236,13 @@ const ensureLocalSessionForTask = (task: ResumableStreamTask) => {
       {
         id: task.messageId,
         role: 'assistant',
-        content: stripReviewProgressText(task.answerContent || '', { functionId: task.functionId, tabName }),
+        content: sanitizeAgentText(stripReviewProgressText(task.answerContent || '', { functionId: task.functionId, tabName })),
         reasoning: task.reasoningContent || '',
         timestamp: createdAt as any,
-        streaming: !isTerminalTaskStatus(task.status),
+        streaming: isTaskRecoverable(task),
         taskId: task.taskId,
         taskStatus: task.status,
+        taskRecoverable: isTaskRecoverable(task),
         streamEventId: task.lastEventId || 0,
         answerEventId: task.answerEventId || 0,
         sources: task.sources || [],
@@ -867,7 +1260,7 @@ const registerRunningTasksFromSession = (sessionId: string) => {
   if (!session) return;
 
   session.messages
-    .filter((message: any) => message.role === 'assistant' && message.taskId && !isTerminalTaskStatus(message.taskStatus))
+    .filter((message: any) => message.role === 'assistant' && message.taskId && isTaskRecoverable(message, message.taskStatus))
     .forEach((message: any) => {
       /** 封装当前模块内的业务逻辑：messageIndex。 */
       const messageIndex = session.messages.findIndex((item: any) => item.id === message.id);
@@ -882,13 +1275,14 @@ const registerRunningTasksFromSession = (sessionId: string) => {
           functionId,
           tabName: (session as any).menuType || activeTab.value,
           status: message.taskStatus || 'running',
+          recoverable: getRecoverableFlag(message),
           lastEventId: Number(message.streamEventId || 0),
           answerEventId: getMessageAnswerEventId(message),
           updatedAt: Date.now(),
           createdAt: Number(userMessage?.timestamp || message.timestamp || Date.now()),
           title: session.title,
           userContent: userMessage?.content || '',
-          answerContent: stripReviewProgressText(message.content || '', { functionId, tabName: (session as any).menuType || activeTab.value }),
+          answerContent: sanitizeAgentText(stripReviewProgressText(message.content || '', { functionId, tabName: (session as any).menuType || activeTab.value })),
           reasoningContent: message.reasoning || '',
           sources: message.sources || [],
           metadata: message.metadata || userMessage?.metadata || undefined,
@@ -900,7 +1294,7 @@ const registerRunningTasksFromSession = (sessionId: string) => {
 
 const updateTaskMessage = (
   task: ResumableStreamTask,
-  updates: Partial<ChatMessage> & { status?: string; eventId?: number; answerEventId?: number } = {},
+  updates: Partial<ChatMessage> & { status?: string; eventId?: number; answerEventId?: number; recoverable?: boolean } = {},
 ) => {
   const session = chatStore.getChatSession(task.sessionId) || ensureLocalSessionForTask(task);
   if (!session) return;
@@ -914,9 +1308,10 @@ const updateTaskMessage = (
   message.id = task.messageId;
   message.taskId = task.taskId;
   message.taskStatus = updates.status || task.status;
+  (message as any).taskRecoverable = updates.recoverable ?? task.recoverable ?? isTaskRecoverable(task);
   message.streamEventId = updates.eventId ?? task.lastEventId;
   (message as any).answerEventId = updates.answerEventId ?? task.answerEventId ?? (message as any).answerEventId ?? 0;
-  message.streaming = !isTerminalTaskStatus(message.taskStatus);
+  message.streaming = isTaskRecoverable({ ...task, status: message.taskStatus, recoverable: (message as any).taskRecoverable });
 
   if (typeof updates.content === 'string') {
     message.content = stripReviewProgressText(updates.content, { functionId: task.functionId, tabName: task.tabName });
@@ -965,6 +1360,31 @@ const detachStreamSubscription = (resetUi = true) => {
     currentStreamingMessageId.value = null;
     resetStreamState();
   }
+};
+
+
+/** 清理当前会话内旧的本地 active task，避免异常任务继续把错误写入新问题。 */
+const clearLocalActiveTasksForSession = (sessionId?: string, functionId?: string) => {
+  if (!sessionId) return;
+  const taskIds = Object.values(activeStreamTasks.value)
+    .filter((task) => task.sessionId === sessionId && (!functionId || task.functionId === functionId) && isTaskRecoverable(task))
+    .map((task) => task.taskId);
+  if (taskIds.length === 0) return;
+
+  if (abortController) {
+    abortController.abort();
+    abortController = null;
+  }
+
+  const next = { ...activeStreamTasks.value };
+  taskIds.forEach((taskId) => {
+    delete next[taskId];
+  });
+  activeStreamTasks.value = next;
+  persistStreamTasks(true);
+  isStreaming.value = false;
+  currentStreamingMessageId.value = null;
+  resetStreamState();
 };
 
 /** 查询远端数据并更新页面：queryStreamTaskDetail。 */
@@ -1058,7 +1478,7 @@ const consumeEventStream = async (
 const subscribeStreamTask = async (taskId: string, options: { allowTerminalReplay?: boolean; silent?: boolean } = {}) => {
   const task = activeStreamTasks.value[taskId];
   if (!task || activeChatId.value !== task.sessionId) return;
-  if (isTerminalTaskStatus(task.status) && !options.allowTerminalReplay) return;
+  if (!isTaskRecoverable(task) && !options.allowTerminalReplay) return;
 
   detachStreamSubscription(false);
   ensureLocalSessionForTask(task);
@@ -1117,15 +1537,16 @@ const resumeTaskForSession = async (sessionId: string) => {
     const localAnswerEventId = getTaskAnswerEventId(task);
     const detail = await queryStreamTaskDetail(task.taskId);
     const status = detail.status || task.status;
-    const terminal = isTerminalTaskStatus(status);
-    const detailAnswerContent = stripReviewProgressText(
+    const recoverable = isTaskRecoverable(detail, status);
+    const terminal = isTerminalTaskStatus(status) || !recoverable;
+    const detailAnswerContent = sanitizeAgentText(stripReviewProgressText(
       typeof detail.answerContent === 'string' ? detail.answerContent : '',
       { functionId: task.functionId, tabName: task.tabName },
-    );
-    const localAnswerContent = stripReviewProgressText(task.answerContent || '', {
+    ));
+    const localAnswerContent = sanitizeAgentText(stripReviewProgressText(task.answerContent || '', {
       functionId: task.functionId,
       tabName: task.tabName,
-    });
+    }));
     const detailAnswerEventId = getDetailAnswerEventId(detail);
     const detailLastEventId = getDetailLastEventId(detail);
     const useServerSnapshot = shouldUseServerAnswerSnapshot(detailAnswerContent, localAnswerContent);
@@ -1137,11 +1558,17 @@ const resumeTaskForSession = async (sessionId: string) => {
       ? (detailAnswerEventId || detailLastEventId || getTaskAnswerEventId(task))
       : (localAnswerEventId || localLastEventId);
 
+    const taskSources = Array.isArray(task.sources) ? task.sources : [];
+    const detailSources = extractSourcesFromTaskDetail(detail);
+    const mergedSources = mergeTaskDetailSources(taskSources, detailSources, task.functionId);
+    const sourcesWereEnriched = mergedSources.length > taskSources.length;
+
     const mergedTask: ResumableStreamTask = {
       ...task,
       qaId: detail.qaId || task.qaId,
       messageId: detail.qaId || task.messageId,
       status,
+      recoverable,
       // 保持“内容快照”和“续订游标”一致：
       // 采用后端 answerContent 时，从 answerEventId 继续；
       // 保留本地更完整内容时，继续使用本地 lastEventId。
@@ -1153,7 +1580,7 @@ const resumeTaskForSession = async (sessionId: string) => {
         typeof detail.reasoningContent === 'string' ? detail.reasoningContent : task.reasoningContent,
       userContent: detail.questionContent || detail.query || task.userContent,
       title: detail.sessionTitle || detail.title || task.title,
-      sources: task.sources && task.sources.length > 0 ? task.sources : extractSourcesFromTaskDetail(detail),
+      sources: mergedSources,
       metadata: task.metadata || undefined,
     };
 
@@ -1164,18 +1591,18 @@ const resumeTaskForSession = async (sessionId: string) => {
       reasoning: mergedTask.reasoningContent,
       sources: mergedTask.sources || undefined,
       status: mergedTask.status,
+      recoverable: mergedTask.recoverable,
       eventId: resumeEventId,
       answerEventId: mergedAnswerEventId,
     });
 
+    if (terminal && sourcesWereEnriched) {
+      void persistCompletedConversationForTask(mergedTask);
+    }
+
     if (terminal) {
-      // 任务已完成时也要补读漏掉的事件，尤其是 workflow_finished 中的引用文献。
-      sourceOnlyReplayTaskIds.add(mergedTask.taskId);
-      try {
-        await subscribeStreamTask(mergedTask.taskId, { allowTerminalReplay: true, silent: true });
-      } finally {
-        sourceOnlyReplayTaskIds.delete(mergedTask.taskId);
-      }
+      // 后端 v12.2.22 会对 completed/error/stopped/superseded 返回 recoverable=false。
+      // 终态任务只使用 task detail 补齐快照和 sources，不再重放 SSE，避免旧异常任务污染后续输入。
       removeStreamTask(mergedTask.taskId);
       syncCurrentStreamUi();
       return;
@@ -1246,6 +1673,71 @@ const extractSourcesFromWorkflowPayload = (payload: any, payloadData: any, chunk
 /** 抽取文件、来源或响应字段：extractSourcesFromTaskDetail。 */
 const extractSourcesFromTaskDetail = (detail: any): any[] => {
   return extractSourcesFromWorkflowPayload(detail, detail?.payload || detail?.data || detail, detail);
+};
+
+const stableSourceHash = (value: any) => {
+  const text = typeof value === 'string' ? value : JSON.stringify(value ?? '');
+  let hash = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  }
+  return hash.toString(36);
+};
+
+/**
+ * 来源块前端合并键。
+ * chunk/段落优先，file_id 只做兜底，避免同一文件多个检索块刷新后被压成一个。
+ */
+const buildSourceMergeKey = (item: any, index = 0) => {
+  if (!item || typeof item !== 'object') return `raw:${stableSourceHash(item)}:${index}`;
+  const directKey =
+    item.chunk_id ||
+    item.chunkId ||
+    item.segment_id ||
+    item.segmentId ||
+    item.paragraph_id ||
+    item.paragraphId ||
+    item.passage_id ||
+    item.passageId ||
+    item.slice_id ||
+    item.sliceId ||
+    item.node_id ||
+    item.nodeId;
+  if (directKey) return `chunk:${directKey}`;
+
+  const fileKey = item.file_id || item.fileId || item.doc_id || item.docId || item.document_id || item.documentId || item.file_name || item.fileName || item.title || '';
+  const pageKey = item.page || item.page_no || item.pageNo || item.page_num || item.pageNum || '';
+  const positionKey = item.position || item.offset || item.start || item.start_index || item.startIndex || '';
+  const textKey = item.content || item.text || item.snippet || item.summary || item.paragraph || item.answer || '';
+  if (fileKey && textKey) return `file-text:${fileKey}:${pageKey}:${positionKey}:${stableSourceHash(String(textKey).slice(0, 800))}`;
+  if (item.id || item.source_id || item.sourceId) return `id:${item.id || item.source_id || item.sourceId}`;
+  if (fileKey && (pageKey || positionKey)) return `file-pos:${fileKey}:${pageKey}:${positionKey}`;
+  if (fileKey) return `file:${fileKey}`;
+  return `json:${stableSourceHash(item)}:${index}`;
+};
+
+const mergeSourceItems = (...lists: any[][]) => {
+  const seen = new Set<string>();
+  const result: any[] = [];
+  lists.forEach((list) => {
+    if (!Array.isArray(list)) return;
+    list.forEach((item, index) => {
+      const key = buildSourceMergeKey(item, index);
+      if (seen.has(key)) return;
+      seen.add(key);
+      result.push(item);
+    });
+  });
+  return result;
+};
+
+const mergeTaskDetailSources = (localSources: any[] = [], detailSources: any[] = [], functionId?: string) => {
+  if (!Array.isArray(detailSources) || detailSources.length === 0) return Array.isArray(localSources) ? localSources : [];
+  if (!Array.isArray(localSources) || localSources.length === 0) return detailSources;
+  // 检索场景优先保留后端 task detail 的完整块顺序；其它功能保持本地展示顺序，只补缺失项。
+  return functionId === 'search' && detailSources.length >= localSources.length
+    ? mergeSourceItems(detailSources, localSources)
+    : mergeSourceItems(localSources, detailSources);
 };
 
 /** 判断条件是否成立：isWorkflowFinishedEvent。 */
@@ -1497,7 +1989,7 @@ const handleToggleFavorite = (chatId: string) => {
 /** 判断条件是否成立：isSendDisabled。 */
 const isSendDisabled = computed(() => {
   if (activeTab.value === '合规审核') {
-    return !uploadedFileUrl.value || selectedDimensions.value.length === 0;
+    return isComplianceFileProcessing.value || isComplianceSubmitting.value || isStreaming.value || !uploadedFileUrl.value || selectedDimensions.value.length === 0;
   }
   return isStreaming.value;
 });
@@ -1505,9 +1997,14 @@ const isSendDisabled = computed(() => {
 /** 处理用户交互或组件事件：handleSendMessage。 */
 const handleSendMessage = async (content: string) => {
   if (activeTab.value === '合规审核') {
+    if (isComplianceSubmitting.value || isStreaming.value) {
+      ElMessage.warning('审核任务正在处理中，请勿重复点击');
+      return;
+    }
     if (!uploadedFileUrl.value || selectedDimensions.value.length === 0) {
       return;
     }
+    isComplianceSubmitting.value = true;
   } else {
     if (!content.trim() || isStreaming.value) return;
   }
@@ -1519,6 +2016,7 @@ const handleSendMessage = async (content: string) => {
 
     if (!reviewQuery) {
       ElMessage.warning('请选择有效的审核维度');
+      isComplianceSubmitting.value = false;
       return;
     }
 
@@ -1532,9 +2030,20 @@ const handleSendMessage = async (content: string) => {
       dimensions: displayDimensions,
       fileName: uploadedFileName.value, // 新增：保存文件名
       originalText: uploadedOriginalText.value,
-      fileType: uploadedFileRef.value?.name.split('.').pop()?.toLowerCase() || uploadedFileRef.value?.type || '',
-      fileSize: uploadedFileRef.value?.size,
+      fileType: uploadedFileExtraMeta.value.fileType || uploadedFileRef.value?.name.split('.').pop()?.toLowerCase() || uploadedFileRef.value?.type || '',
+      fileSize: uploadedFileExtraMeta.value.fileSize || uploadedFileRef.value?.size,
       fileUrl: uploadedFileUrl.value,
+      uploadFileId: uploadedFileExtraMeta.value.uploadFileId,
+      pdfContextId: uploadedFileExtraMeta.value.pdfContextId,
+      pdfType: uploadedFileExtraMeta.value.pdfType,
+      sourceFileUrl: uploadedFileExtraMeta.value.sourceFileUrl,
+      parsedTxtUrl: uploadedFileExtraMeta.value.parsedTxtUrl,
+      parsedMarkdownUrl: uploadedFileExtraMeta.value.parsedMarkdownUrl,
+      locatorMode: uploadedFileExtraMeta.value.locatorMode,
+      locatorAvailable: uploadedFileExtraMeta.value.locatorAvailable,
+      locatorUnavailableReason: uploadedFileExtraMeta.value.locatorUnavailableReason,
+      reviewFileUrl: uploadedFileExtraMeta.value.reviewFileUrl,
+      textSource: uploadedFileExtraMeta.value.textSource,
     };
   } else {
     userMessageContent = content.trim();
@@ -1544,11 +2053,16 @@ const handleSendMessage = async (content: string) => {
     await createChatForMessage();
   }
   const chat = chatStore.getChatSession(activeChatId.value!);
-  if (!chat) return;
+  if (!chat) {
+    if (activeTab.value === '合规审核') isComplianceSubmitting.value = false;
+    return;
+  }
   if (!currentConversationUuid.value) {
     currentConversationUuid.value = generateUUID();
     (chat as any).conversationUuid = currentConversationUuid.value;
   }
+
+  clearLocalActiveTasksForSession(currentConversationUuid.value || activeChatId.value, getWorkflowCodeByTab(activeTab.value));
 
   const qaId = generateUUID();
 
@@ -1569,20 +2083,13 @@ const handleSendMessage = async (content: string) => {
   // 如果是第一条消息，更新标题
   if (chat.messages.length === 1) {
     const newTitle =
-      activeTab.value === '合规审核'
-        ? `审核: ${uploadedFileName.value}`
+      activeTab.value === '合规审核' && lastComplianceParams.value
+        ? buildComplianceSessionTitle(lastComplianceParams.value.fileName, lastComplianceParams.value.dimensions)
         : content.length > 20
           ? content.substring(0, 20) + '...'
           : content;
     chat.title = newTitle;
-
-    /** 封装当前模块内的业务逻辑：historyItem。 */
-    const historyItem = chatStore.historyList.find((h: any) => h.id === chat.id);
-    if (historyItem) {
-      historyItem.title = newTitle;
-      historyItem.preview =
-        activeTab.value === '合规审核' ? `${uploadedFileName.value}的审核` : content;
-    }
+    applySessionTitle(chat.id, newTitle, activeTab.value === '合规审核' ? userMessageContent : content);
   }
 
   if (activeTab.value === '合规审核') {
@@ -1596,6 +2103,7 @@ const handleSendMessage = async (content: string) => {
     uploadedFileName.value = '';
     uploadedFileUrl.value = '';
     uploadedOriginalText.value = '';
+    uploadedFileExtraMeta.value = {};
     // 清空多选框状态
     selectedDimensions.value = [];
     // 重置"全选"状态
@@ -1633,7 +2141,8 @@ const handleSendMessage = async (content: string) => {
   currentStreamingMessageId.value = aiMessageId;
 
   // 开始流式输出
-  await startStream(content, aiMessageId);
+  await startStream(userMessageContent, aiMessageId);
+  if (activeTab.value === '合规审核') isComplianceSubmitting.value = false;
 
   scrollToBottom();
 };
@@ -1649,11 +2158,22 @@ const startStream = async (queryText: string, messageId: string) => {
 
     if (activeTab.value === '合规审核') {
       const params = lastComplianceParams.value;
+      const questionContent = params
+        ? buildComplianceQuestionContent(params.fileName, params.dimensions)
+        : queryText;
       bizParams = {
         file_url: params?.file_url || uploadedFileUrl.value,
         query: params?.query || getReviewQuery(),
+        questionContent,
+        sessionTitle: params ? buildComplianceSessionTitle(params.fileName, params.dimensions) : undefined,
+        fileName: params?.fileName,
+        fileNameWithoutExt: params?.fileName ? stripFileExtension(params.fileName) : undefined,
+        reviewDimensions: params?.dimensions || getActualReviewDimensions(),
+        dimensionText: params ? buildDimensionText(params.dimensions) : buildDimensionText(),
         ancestorScope: scopesData.value.ancestorScope || [],
         descendantScope: scopesData.value.descendantScope || [],
+        complianceParams: params ? { ...params } : undefined,
+        metadata: params ? buildComplianceMetadata(params) : undefined,
         reviewContext: params ? buildReviewContext(params) : undefined,
       };
     } else if (activeTab.value === '辅助起草') {
@@ -1674,6 +2194,11 @@ const startStream = async (queryText: string, messageId: string) => {
     const workflowCode = getWorkflowCodeByTab(activeTab.value);
     const taskData = await createWorkflowTask(workflowCode, bizParams, messageId);
     if (activeTab.value === '合规审核') {
+      const serverTitle = taskData.sessionTitle || taskData.session_title || taskData.title;
+      const localTitle = lastComplianceParams.value
+        ? buildComplianceSessionTitle(lastComplianceParams.value.fileName, lastComplianceParams.value.dimensions)
+        : '';
+      applySessionTitle(currentConversationUuid.value || activeChatId.value, serverTitle || localTitle, queryText);
       void saveReviewContextSnapshot(messageId, lastComplianceParams.value, { taskId: taskData.taskId });
     }
     const chat = chatStore.getChatSession(activeChatId.value!);
@@ -1687,11 +2212,14 @@ const startStream = async (queryText: string, messageId: string) => {
       functionId: taskData.functionId || workflowCode,
       tabName: activeTab.value,
       status: taskData.status || 'pending',
+      recoverable: getRecoverableFlag(taskData) ?? isRecoverableTaskStatus(taskData.status || 'pending'),
       lastEventId: Number(taskData.lastEventId || 0),
       answerEventId: Number(taskData.answerEventId || taskData.answer_event_id || 0),
       updatedAt: Date.now(),
       createdAt: Date.now(),
-      title: chat?.title,
+      title: activeTab.value === '合规审核' && lastComplianceParams.value
+        ? buildComplianceSessionTitle(lastComplianceParams.value.fileName, lastComplianceParams.value.dimensions)
+        : chat?.title,
       userContent: userMessageForTask?.content || queryText,
       answerContent: '',
       reasoningContent: '',
@@ -1701,15 +2229,21 @@ const startStream = async (queryText: string, messageId: string) => {
     };
 
     upsertStreamTask(task, true);
-    updateTaskMessage(task, { status: task.status, eventId: task.lastEventId, answerEventId: task.answerEventId });
+    updateTaskMessage(task, { status: task.status, recoverable: task.recoverable, eventId: task.lastEventId, answerEventId: task.answerEventId });
     await subscribeStreamTask(task.taskId);
   } catch (error: any) {
-    handleStreamError(messageId, error?.message || '创建流式任务失败');
+    console.error('创建或订阅智能体任务失败:', error);
+    handleStreamError(messageId, toUserSafeErrorMessage(error, getSafeAgentErrorMessage()));
   }
 };
 
 /** 处理用户交互或组件事件：handleRegenerate。 */
 const handleRegenerate = (payload: RegeneratePayload) => {
+  if (activeTab.value === '合规审核' && isComplianceRegenerating.value) {
+    ElMessage.warning('正在准备重新审核，请稍候');
+    return;
+  }
+
   if (isStreaming.value) {
     stopStream();
   }
@@ -1745,82 +2279,99 @@ const handleComplianceReview = async () => {
     return;
   }
 
-  try {
-    lastComplianceParams.value = await refreshComplianceParamsFileUrl(
-      lastComplianceParams.value,
-    );
-  } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '重新上传文件失败');
+  if (isComplianceRegenerating.value) {
+    ElMessage.warning('正在准备重新审核，请稍候');
     return;
   }
 
-  // 修改：为重新审核生成详细的用户消息内容
-  const displayDimensions = getActualReviewDimensions(
-    lastComplianceParams.value.dimensions,
-  );
-
-  const userMessageContent = `${lastComplianceParams.value.fileName}\n审核维度：${displayDimensions.join('、')}`;
-
-  if (!activeChatId.value) {
-    await createChatForMessage();
-  }
-
-  const chat = chatStore.getChatSession(activeChatId.value!);
-  if (!chat) return;
-
-  if (!currentConversationUuid.value) {
-    currentConversationUuid.value = generateUUID();
-    (chat as any).conversationUuid = currentConversationUuid.value;
-  }
-
-  const qaId = generateUUID();
-
-  // 添加用户消息
-  const userMessage: ChatMessage = {
-    id: `user_${qaId}`,
-    role: 'user',
-    content: userMessageContent, // 使用新的消息内容
-    timestamp: new Date() as any,
-    metadata: buildComplianceMetadata(lastComplianceParams.value),
-  };
-
-  chat.messages.push(userMessage);
-
-  // 如果是第一条消息，更新标题
-  if (chat.messages.length === 1) {
-    const newTitle = `重新审核: ${lastComplianceParams.value.fileName}`;
-    chat.title = newTitle;
-
-    /** 封装当前模块内的业务逻辑：historyItem。 */
-    const historyItem = chatStore.historyList.find((h: any) => h.id === chat.id);
-    if (historyItem) {
-      historyItem.title = newTitle;
-      historyItem.preview = `${lastComplianceParams.value.fileName}的重新审核`;
-    }
-  }
-
-  // 添加AI消息占位符
-  const aiMessageId = qaId;
-  const aiMessage: ChatMessage = {
-    id: aiMessageId,
-    role: 'assistant',
-    content: '',
-    reasoning: '',
-    timestamp: new Date() as any,
-    streaming: true,
-    metadata: buildComplianceMetadata(lastComplianceParams.value),
-  };
-  chat.messages.push(aiMessage);
-  chatStore.updateHistoryItem(activeChatId.value!, {
-    preview: userMessageContent, // 使用新的消息内容作为预览
-    time: Date.now(),
+  isComplianceRegenerating.value = true;
+  isComplianceFileProcessing.value = true;
+  complianceFileProcessingText.value = COMPLIANCE_PROCESSING_DISPLAY_TEXT;
+  const loadingInstance = ElLoading.service({
+    lock: false,
+    text: COMPLIANCE_PROCESSING_DISPLAY_TEXT,
+    background: 'rgba(255, 255, 255, 0.45)',
   });
-  resetStreamState();
-  currentStreamingMessageId.value = aiMessageId;
-  await saveReviewContextSnapshot(qaId, lastComplianceParams.value);
-  // 使用保存的参数开始流式输出
-  await startComplianceStream(aiMessageId);
-  scrollToBottom();
+
+  try {
+    lastComplianceParams.value = await refreshComplianceParamsFileUrl(lastComplianceParams.value);
+
+    const displayDimensions = getActualReviewDimensions(lastComplianceParams.value.dimensions);
+    const userMessageContent = buildComplianceQuestionContent(
+      lastComplianceParams.value.fileName,
+      displayDimensions,
+    );
+
+    if (!activeChatId.value) {
+      await createChatForMessage();
+    }
+
+    const chat = chatStore.getChatSession(activeChatId.value!);
+    if (!chat) return;
+
+    if (!currentConversationUuid.value) {
+      currentConversationUuid.value = generateUUID();
+      (chat as any).conversationUuid = currentConversationUuid.value;
+    }
+
+    clearLocalActiveTasksForSession(currentConversationUuid.value || activeChatId.value, getWorkflowCodeByTab(activeTab.value));
+
+    const qaId = generateUUID();
+
+    const userMessage: ChatMessage = {
+      id: `user_${qaId}`,
+      role: 'user',
+      content: userMessageContent,
+      timestamp: new Date() as any,
+      metadata: buildComplianceMetadata(lastComplianceParams.value),
+    };
+
+    chat.messages.push(userMessage);
+
+    if (chat.messages.length === 1) {
+      const newTitle = buildComplianceSessionTitle(
+        lastComplianceParams.value.fileName,
+        lastComplianceParams.value.dimensions,
+      );
+      chat.title = newTitle;
+      applySessionTitle(chat.id, newTitle, userMessageContent);
+    }
+
+    const aiMessageId = qaId;
+    const aiMessage: ChatMessage = {
+      id: aiMessageId,
+      role: 'assistant',
+      content: '',
+      reasoning: '',
+      timestamp: new Date() as any,
+      streaming: true,
+      metadata: buildComplianceMetadata(lastComplianceParams.value),
+    };
+    chat.messages.push(aiMessage);
+    chatStore.updateHistoryItem(activeChatId.value!, {
+      preview: userMessageContent,
+      time: Date.now(),
+    });
+
+    resetStreamState();
+    currentStreamingMessageId.value = aiMessageId;
+    await saveReviewContextSnapshot(qaId, lastComplianceParams.value);
+
+    complianceFileProcessingText.value = '';
+    isComplianceFileProcessing.value = false;
+    loadingInstance.close();
+
+    await startComplianceStream(aiMessageId);
+    scrollToBottom();
+  } catch (error) {
+    console.error('重新审核失败:', error);
+    ElMessage.error(toUserSafeErrorMessage(error, '重新审核失败，请稍后重试'));
+  } finally {
+    loadingInstance.close();
+    isComplianceRegenerating.value = false;
+    isComplianceFileProcessing.value = false;
+    complianceFileProcessingText.value = '';
+  }
 };
 
 // 审核的流式请求函数
@@ -1834,29 +2385,58 @@ const startComplianceStream = async (messageId: string) => {
   await startStream(lastComplianceParams.value.query, messageId);
 };
 
+const POSSIBLE_THINK_PREFIX = '<think';
+
+const isPossibleThinkTagPrefix = (value: string) => {
+  const normalized = value.trimStart().toLowerCase();
+  if (!normalized) return true;
+  return POSSIBLE_THINK_PREFIX.startsWith(normalized) || normalized.startsWith(POSSIBLE_THINK_PREFIX);
+};
+
+const resolveInitialStreamDisplayText = (buffer: string) => {
+  const openMatch = /<think\b[^>]*>/i.exec(buffer);
+  if (openMatch) {
+    const closeMatch = /<\/think>/i.exec(buffer.slice(openMatch.index + openMatch[0].length));
+    if (!closeMatch) {
+      return { ready: false, displayText: '' };
+    }
+    const closeEnd = openMatch.index + openMatch[0].length + closeMatch.index + closeMatch[0].length;
+    return { ready: true, displayText: buffer.slice(closeEnd) };
+  }
+
+  if (isPossibleThinkTagPrefix(buffer)) {
+    return { ready: false, displayText: '' };
+  }
+
+  return { ready: true, displayText: buffer };
+};
+
 const appendModelOutputText = async (
   text: string,
   messageId: string,
   context?: { functionId?: string; tabName?: string },
 ) => {
   if (!text) return;
+  if (containsUpstreamErrorText(text)) {
+    throw new Error(getSafeAgentErrorMessage());
+  }
 
-  let displayText = text;
+  let displayText = sanitizeAgentText(text);
 
-  // 首次展示前先缓存模型 text，直到累计内容中出现 "\n\n"
+  // 首次展示前先判断是否存在 <think>...</think>，仅展示 </think> 之后的正式内容；
+  // 如果没有 think 标签，则不再用首个双换行粗暴截断，避免误删正文标题。
   if (!answerOutputStarted) {
     answerPendingText += text;
-    const firstDoubleNewlineIndex = answerPendingText.indexOf('\n\n');
-    if (firstDoubleNewlineIndex === -1) {
+    const resolved = resolveInitialStreamDisplayText(answerPendingText);
+    if (!resolved.ready) {
       return;
     }
     answerOutputStarted = true;
-    // 从首次 "\n\n" 位置开始展示，保留 "\n\n" 本身，丢弃其前面的模型前置内容
-    displayText = answerPendingText.slice(firstDoubleNewlineIndex);
+    displayText = sanitizeAgentText(resolved.displayText);
     answerPendingText = '';
   }
   currentAnswer.value += displayText;
-  currentAnswer.value = stripReviewProgressText(currentAnswer.value, context);
+  currentAnswer.value = sanitizeAgentText(stripReviewProgressText(currentAnswer.value, context));
   const chat = chatStore.getChatSession(activeChatId.value!);
   if (chat) {
     /** 封装当前模块内的业务逻辑：msg。 */
@@ -1874,9 +2454,10 @@ const flushPendingModelOutput = (
 ) => {
   if (answerOutputStarted || !answerPendingText) return;
 
+  const resolved = resolveInitialStreamDisplayText(answerPendingText);
   answerOutputStarted = true;
-  currentAnswer.value += answerPendingText;
-  currentAnswer.value = stripReviewProgressText(currentAnswer.value, context);
+  currentAnswer.value += resolved.ready ? resolved.displayText : '';
+  currentAnswer.value = sanitizeAgentText(stripReviewProgressText(currentAnswer.value, context));
   answerPendingText = '';
 
   const chat = chatStore.getChatSession(activeChatId.value!);
@@ -1893,7 +2474,9 @@ const processStreamChunk = async (chunk: any, messageId: string, taskId?: string
   // 这里先解包，兼容旧 AgentArts 原始 event 格式。
   if (chunk && Object.prototype.hasOwnProperty.call(chunk, 'code')) {
     if (!isApiSuccessCode(chunk.code)) {
-      throw new Error(getApiMessage(chunk, '智能体响应异常'));
+      console.error('智能体 SSE 包装响应异常，已使用统一兜底文案展示:', getApiMessage(chunk, '智能体响应异常'), chunk);
+      handleStreamError(messageId, getSafeAgentErrorMessage(), taskId);
+      return;
     }
     chunk = chunk.data || {};
   }
@@ -1916,9 +2499,12 @@ const processStreamChunk = async (chunk: any, messageId: string, taskId?: string
     const payloadEvent = payload.event || payload.event_type || '';
     const eventType = chunk.eventType || payloadEvent || '';
     const normalizedStatus = chunk.status || payload.status || task.status;
+    const chunkRecoverableFlag = getRecoverableFlag(chunk) ?? getRecoverableFlag(payload) ?? getRecoverableFlag(payloadData);
+    const nextTaskRecoverable = chunkRecoverableFlag ?? task.recoverable ?? isRecoverableTaskStatus(normalizedStatus);
     let nextTask: ResumableStreamTask = {
       ...task,
       status: eventType === 'done' ? normalizedStatus : normalizedStatus || task.status,
+      recoverable: nextTaskRecoverable,
       lastEventId: eventId || task.lastEventId,
       answerEventId: incomingAnswerEventId || task.answerEventId || 0,
       updatedAt: Date.now(),
@@ -1937,6 +2523,12 @@ const processStreamChunk = async (chunk: any, messageId: string, taskId?: string
       typeof chunk.content === 'string'
         ? chunk.content
         : payloadData.text || payloadData.content || payload.text || payload.content || '';
+    if (text && containsUpstreamErrorText(text)) {
+      console.error('智能体任务输出命中上游原始错误，已使用统一兜底文案展示:', text, payload);
+      handleStreamError(messageId, getSafeAgentErrorMessage(), taskId);
+      return;
+    }
+
     if (text && !sourceOnlyReplayTaskIds.has(taskId)) {
       await appendModelOutputText(text, messageId, { functionId: task.functionId, tabName: task.tabName });
       nextTask = { ...nextTask, answerContent: currentAnswer.value, answerEventId: eventId || nextTask.answerEventId || task.answerEventId || 0 };
@@ -1945,6 +2537,7 @@ const processStreamChunk = async (chunk: any, messageId: string, taskId?: string
     upsertStreamTask(nextTask);
     updateTaskMessage(nextTask, {
       status: nextTask.status,
+      recoverable: nextTask.recoverable,
       eventId: nextTask.lastEventId,
       answerEventId: nextTask.answerEventId,
       content: nextTask.answerContent,
@@ -1962,37 +2555,34 @@ const processStreamChunk = async (chunk: any, messageId: string, taskId?: string
     }
 
     if (eventType === 'error') {
-      const message = payload.message || payload.error_msg || payload.error_reason || '工作流执行失败';
-      handleStreamError(messageId, message, taskId);
+      const rawMessage = payload.message || payload.error_msg || payload.error_reason || '工作流执行失败';
+      console.error('智能体任务事件返回错误:', rawMessage, payload);
+      handleStreamError(messageId, getSafeAgentErrorMessage(), taskId);
       return;
     }
 
     if (eventType === 'done' || isTerminalTaskStatus(chunk.status || eventType)) {
-      const finalAnswerContent = stripReviewProgressText(
-        typeof chunk.answerContent === 'string' ? chunk.answerContent : '',
+      const rawFinalAnswerContent = typeof chunk.answerContent === 'string' ? chunk.answerContent : '';
+      if (rawFinalAnswerContent && containsUpstreamErrorText(rawFinalAnswerContent)) {
+        console.error('智能体最终快照命中上游原始错误，已使用统一兜底文案展示:', rawFinalAnswerContent, chunk);
+        handleStreamError(messageId, getSafeAgentErrorMessage(), taskId);
+        return;
+      }
+      const finalAnswerContent = sanitizeAgentText(stripReviewProgressText(
+        rawFinalAnswerContent,
         { functionId: task.functionId, tabName: task.tabName },
-      );
+      ));
       const finalAnswerEventId = incomingAnswerEventId || nextTask.answerEventId || eventId || task.lastEventId || 0;
       const finalSources = extractSourcesFromWorkflowPayload(payload, payloadData, chunk);
       if (finalSources.length > 0) {
         nextTask = { ...nextTask, sources: finalSources };
         updateTaskMessage(nextTask, { sources: finalSources });
       }
-
-      // 结束事件里的 answerContent 是后端最终快照，正文已在前面的流式 text 事件中逐字追加。
-      // 这里只同步事件游标和来源，不再回写最终快照，避免流式输出完成后又显示一遍最终回复。
-      if (!sourceOnlyReplayTaskIds.has(taskId) && finalAnswerContent) {
-        nextTask = {
-          ...nextTask,
-          answerContent: currentAnswer.value || nextTask.answerContent,
-          answerEventId: finalAnswerEventId,
-        };
+      if (!sourceOnlyReplayTaskIds.has(taskId) && finalAnswerContent && finalAnswerContent.length >= (currentAnswer.value || '').length) {
+        currentAnswer.value = finalAnswerContent;
+        nextTask = { ...nextTask, answerContent: finalAnswerContent, answerEventId: finalAnswerEventId };
         upsertStreamTask(nextTask, true);
-        updateTaskMessage(nextTask, {
-          eventId: nextTask.lastEventId,
-          answerEventId: finalAnswerEventId,
-          sources: nextTask.sources,
-        });
+        updateTaskMessage(nextTask, { content: finalAnswerContent, eventId: nextTask.lastEventId, answerEventId: finalAnswerEventId, sources: nextTask.sources });
       } else if (finalSources.length > 0) {
         upsertStreamTask(nextTask, true);
       }
@@ -2002,12 +2592,13 @@ const processStreamChunk = async (chunk: any, messageId: string, taskId?: string
   }
 
   if (chunk.event === 'error') {
-    const message =
+    const rawMessage =
       chunk.data?.message ||
       chunk.data?.error_msg ||
       chunk.data?.error_reason ||
       '工作流执行失败';
-    throw new Error(message);
+    console.error('智能体原始流返回错误:', rawMessage, chunk);
+    throw new Error(getSafeAgentErrorMessage());
   }
 
   if (chunk.event === 'message' && chunk.data?.reasoning_content) {
@@ -2023,6 +2614,11 @@ const processStreamChunk = async (chunk: any, messageId: string, taskId?: string
   }
 
   if (chunk.event === 'message' && chunk.data?.text) {
+    if (containsUpstreamErrorText(chunk.data.text)) {
+      console.error('智能体原始流输出命中上游错误，已使用统一兜底文案展示:', chunk.data.text, chunk);
+      handleStreamError(messageId, getSafeAgentErrorMessage(), taskId);
+      return;
+    }
     await appendModelOutputText(chunk.data.text, messageId, { tabName: activeTab.value });
   }
 
@@ -2124,6 +2720,8 @@ const finishStream = (messageId: string, taskId?: string, status = 'completed') 
 
 /** 处理用户交互或组件事件：handleStreamError。 */
 const handleStreamError = (messageId: string, errorMessage: string, taskId?: string) => {
+  console.error('智能体请求失败，前端已使用统一兜底文案展示:', errorMessage);
+  const safeMessage = toUserSafeErrorMessage(errorMessage, getSafeAgentErrorMessage());
   const task = taskId ? activeStreamTasks.value[taskId] : getTaskByMessageId(messageId);
   const sessionId = task?.sessionId || activeChatId.value;
   const chat = chatStore.getChatSession(sessionId);
@@ -2131,7 +2729,7 @@ const handleStreamError = (messageId: string, errorMessage: string, taskId?: str
     /** 封装当前模块内的业务逻辑：message。 */
     const message = chat.messages.find((m: any) => m.id === messageId || m.taskId === taskId);
     if (message) {
-      message.content = `抱歉，回答过程中出现错误：${errorMessage}`;
+      message.content = safeMessage;
       message.streaming = false;
       message.taskStatus = 'error';
       if (taskId) message.taskId = taskId;
@@ -2331,25 +2929,43 @@ const handleUpdateTitle = async (chatId: string, newTitle: string) => {
   } catch {}
 };
 
-// 计算输入框容器样式
-const inputContainerStyle = computed(() => {
+// 计算输入框容器样式：与当前会话内容区左右边界保持一致。
+// 说明：仅根据右侧来源/原文面板状态调整宽度与 margin，不改变业务逻辑。
+const inputContainerStyle = computed<CSSProperties>(() => {
   if (isSourcesPanelVisible.value) {
-    return {
-      width: '62%',
-      marginRight: '30%',
-      // 不设置 margin: auto，通过移除 auto 类来实现
-    };
-  } else {
-    return {
-      width: '80%',
-      margin: '0 auto 30px',
-    };
+    if (activeTab.value === '合规审核') {
+      // 合规审核打开原文定位后，页面为左右分栏：左侧对话列宽约为 50% - 26px。
+      return {
+        width: 'calc(50% - 26px)',
+        margin: '0 auto 26px 18px',
+        boxSizing: 'border-box',
+      };
+    }
+
+    if (activeTab.value === '智能问答' || activeTab.value === '辅助起草') {
+      // 问答/起草右侧来源面板打开后，对话区通过 padding-right: 250px 预留空间，
+      // conversation-history 仍是该对话区的 80%，这里同步计算左右边界。
+      return {
+        width: 'calc(80% - 200px)',
+        margin: '0 auto 26px calc(10% - 25px)',
+        boxSizing: 'border-box',
+      };
+    }
   }
+
+  return {
+    width: '80%',
+    margin: '0 auto 26px',
+    boxSizing: 'border-box',
+  };
 });
 
 // 新增事件处理函数
 const handleSourcesPanelToggle = (visible: boolean) => {
   isSourcesPanelVisible.value = visible;
+  if (visible && activeTab.value === '合规审核') {
+    sidebarCollapsed.value = true;
+  }
 };
 
 // 处理置顶/取消置顶
@@ -2506,6 +3122,7 @@ onUnmounted(() => {
     handleSelectAll,
     handleSelectChat,
     handleSendMessage,
+    handleRemoveUploadedFile,
     handleSearchHistory,
     handleClearHistorySearch,
     handleSelectSearchResult,
@@ -2531,6 +3148,8 @@ onUnmounted(() => {
     toggleSidebar,
     uploadedFileMeta,
     uploadedFileName,
+    isComplianceFileProcessing,
+    complianceFileProcessingText,
     userStore,
   };
 }

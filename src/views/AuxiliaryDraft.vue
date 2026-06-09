@@ -29,14 +29,39 @@
               'history-item',
               item.role === 'user' ? 'user-message' : 'assistant-message',
             ]"
+            :data-message-id="item.id"
           >
             <!-- 用户消息（右对齐） -->
             <div v-if="item.role === 'user'" class="message-user">
               <div class="message-header">
                 <div class="message-info">
-                  <pre class="message-content user-message-content">{{
+                  <pre
+                    class="message-content user-message-content"
+                    :class="{ 'is-collapsed': isUserQuestionCollapsed(item) }"
+                  ><span class="user-message-content-inner">{{
                     item.content
-                  }}</pre>
+                  }}</span></pre>
+                  <div class="user-message-actions">
+                    <button
+                      v-if="shouldFoldUserQuestion(item.content)"
+                      class="user-message-action-btn"
+                      type="button"
+                      :title="isUserQuestionCollapsed(item) ? 'Expand' : 'Collapse'"
+                      :aria-label="isUserQuestionCollapsed(item) ? 'Expand' : 'Collapse'"
+                      @click.stop="toggleUserQuestionFold(item.id)"
+                    >
+                      {{ isUserQuestionCollapsed(item) ? '▾' : '▴' }}
+                    </button>
+                    <button
+                      class="user-message-action-btn user-message-copy-btn"
+                      type="button"
+                      title="复制内容"
+                      aria-label="复制内容"
+                      @click.stop="copyUserQuestion(item.content)"
+                    >
+                      <img src="/images/copy.svg" alt="复制" class="user-message-copy-icon" />
+                    </button>
+                  </div>
                   <div class="message-time">{{ formatTime(item.timestamp) }}</div>
                 </div>
               </div>
@@ -60,23 +85,23 @@
                   </div>
 
                   <!-- 当前流式消息 -->
-                  <div v-if="shouldRenderStreamBlock(item)">
+                  <div v-if="item.streaming && item.id === currentStreamingMessageId">
                     <div
-                      v-if="getStreamAnswer(item).trim() !== ''"
+                      v-if="currentAnswer && currentAnswer.trim() !== ''"
                       class="answer-streaming"
                     >
                       <div class="typing-container">
                         <div
                           class="typing-text"
-                          v-html="renderMarkdown(getStreamAnswer(item))"
+                          v-html="renderMarkdown(displayAnswer)"
                         ></div>
-                        <span v-if="isActiveStreamingMessage(item) && isTyping" class="typing-cursor">|</span>
+                        <span v-if="isTyping" class="typing-cursor">|</span>
                       </div>
                     </div>
 
                     <!-- 加载指示器 -->
                     <div
-                      v-if="shouldShowStreamLoading(item)"
+                      v-if="streaming && (!currentAnswer || currentAnswer.trim() === '')"
                       class="thinking-indicator"
                     >
                       <div class="thinking-dots">
@@ -84,55 +109,6 @@
                         <span></span>
                         <span></span>
                       </div>
-                    </div>
-
-                    <div
-                      class="message-actions"
-                      v-if="shouldShowCompletedStreamActions(item)"
-                    >
-                      <el-button
-                        link
-                        type="primary"
-                        plain
-                        @click="toggleSourcesPanel(item)"
-                      >
-                        {{
-                          activeSourcesItem?.id === item.id && showSourcesPanel
-                            ? '隐藏推荐范文'
-                            : '显示推荐范文'
-                        }}
-                        <el-icon class="el-icon--right">
-                          <component
-                            :is="
-                              activeSourcesItem?.id === item.id && showSourcesPanel
-                                ? ArrowUp
-                                : ArrowRight
-                            "
-                          />
-                        </el-icon>
-                      </el-button>
-
-                      <el-button
-                        link
-                        class="export-btn"
-                        type="primary"
-                        plain
-                        @click="handleExport"
-                        :loading="loading"
-                        :disabled="loading"
-                      >
-                        {{ loading ? '转换中...' : '导出' }}
-                      </el-button>
-
-                      <el-button
-                        link
-                        class="regenerate-btn"
-                        type="success"
-                        plain
-                        @click="handleRestart(index)"
-                      >
-                        重新起草<el-icon class="el-icon--right"><ArrowRight /></el-icon>
-                      </el-button>
                     </div>
                   </div>
 
@@ -175,7 +151,7 @@
                         class="export-btn"
                         type="primary"
                         plain
-                        @click="handleExport"
+                        @click="handleExport(item)"
                         :loading="loading"
                         :disabled="loading"
                       >
@@ -198,7 +174,7 @@
                   <div class="message-time">
                     {{ formatTime(item.timestamp) }}
                     <span
-                      v-if="isActiveStreamingMessage(item)"
+                      v-if="item.streaming && item.id === currentStreamingMessageId"
                       class="streaming-badge"
                     >
                       <span class="streaming-dot"></span>
@@ -220,7 +196,7 @@
       >
         <div class="sources-header">
           <h3>📄 推荐范文</h3>
-          <el-icon class="close-btn" @click="closeSourcesPanel"><Close /></el-icon>
+          <el-icon class="close-btn side-panel-close-btn" @click="closeSourcesPanel"><Close /></el-icon>
         </div>
         <div
           class="sources-content"
@@ -271,7 +247,7 @@
       </div>
     </div>
 
-    <!-- PDF 预览弹框 -->
+    <!-- 文档预览分栏 -->
     <div v-if="showPdfViewer" class="pdf-viewer-modal" @click.self="closePdfViewer">
       <div class="pdf-viewer-container">
         <div class="pdf-viewer-header">
@@ -294,7 +270,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import MarkdownIt from 'markdown-it';
 import { ArrowRight, ArrowUp, Close } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
@@ -307,6 +283,7 @@ import {
   openDocumentUrl,
 } from '@/services/documentDownload';
 import { getSourceDirectUrl, getSourceFileId, getSourceTitle } from '@/services/sourceUtils';
+import { copyTextToClipboard, shouldCollapseUserQuestion } from '@/utils/messageCollapse';
 const emit = defineEmits(['regenerate', 'sources-panel-toggle']);
 
 interface Props {
@@ -342,8 +319,6 @@ const props = withDefaults(defineProps<Props>(), {
   currentStreamingMessageId: null,
 });
 
-const streamedMessageIds = ref<Set<string>>(new Set());
-
 // 响应式状态
 const md = new MarkdownIt();
 const displayAnswer = ref<string>('');
@@ -353,32 +328,31 @@ let currentTypingIndex = 0;
 const loading = ref(false);
 const isTyping = ref(false);
 
-/** 记录已用流式方式展示过的消息，流结束后继续复用流式块，避免再渲染最终回复块。 */
-const isActiveStreamingMessage = (item: DraftMessage) =>
-  Boolean(item.streaming && item.id === props.currentStreamingMessageId);
-
-const hasStreamedMessage = (item: DraftMessage) => streamedMessageIds.value.has(item.id);
-
-const shouldRenderStreamBlock = (item: DraftMessage) =>
-  isActiveStreamingMessage(item) || hasStreamedMessage(item);
-
-const getStreamAnswer = (item: DraftMessage) =>
-  isActiveStreamingMessage(item)
-    ? displayAnswer.value || props.currentAnswer || item.content || ''
-    : item.content || '';
-
-const shouldShowStreamLoading = (item: DraftMessage) =>
-  isActiveStreamingMessage(item) &&
-  Boolean(props.streaming) &&
-  !(props.currentAnswer || '').trim();
-
-const shouldShowCompletedStreamActions = (item: DraftMessage) =>
-  hasStreamedMessage(item) && !isActiveStreamingMessage(item) && Boolean(item.content?.trim());
-
 // 推荐范文面板状态
 const showSourcesPanel = ref(false);
 const activeSourcesItem = ref<any>(null);
 const sourceCollapsed = ref<Record<string, boolean>>({});
+
+const expandedUserQuestionMap = reactive<Record<string, boolean>>({});
+const shouldFoldUserQuestion = (content?: string) => shouldCollapseUserQuestion(content);
+const isUserQuestionCollapsed = (item: { id?: string; content?: string }) => {
+  const id = String(item?.id || '');
+  return shouldFoldUserQuestion(item?.content) && !expandedUserQuestionMap[id];
+};
+const toggleUserQuestionFold = (id?: string) => {
+  const key = String(id || '');
+  if (!key) return;
+  expandedUserQuestionMap[key] = !expandedUserQuestionMap[key];
+};
+const copyUserQuestion = async (content?: string) => {
+  const copied = await copyTextToClipboard(content);
+  if (copied) {
+    ElMessage.success({ message: 'Copied', offset: 72 });
+  } else {
+    ElMessage.error({ message: 'Copy failed', offset: 72 });
+  }
+};
+
 // PDF 预览相关状态
 const showPdfViewer = ref(false);
 const pdfViewerUrl = ref('');
@@ -462,26 +436,15 @@ const renderMarkdown = (content: string) => {
 // 导出功能：恢复早期可用逻辑。
 // 先调用 Markdown 转 Word 服务 /v1/markdown-word/convert 获取 download_url，再按 download_url 执行 GET 下载文件流。
 // 转换接口由 8005 统一文件服务提供，不经过 8000 后端业务接口。
-const handleExport = async () => {
-  if (!props.chatData) {
-    ElMessage.error('没有可导出的内容');
-    return;
-  }
-
-  /** 封装当前模块内的业务逻辑：assistantMessages。 */
-  const assistantMessages = props.chatData.messages.filter((msg: any) => msg.role === 'assistant');
-  const draftContent = assistantMessages
-    .map((msg: any) => msg.content)
-    .filter((content: string) => content && content.trim())
-    .join('\n\n');
+const handleExport = async (item: any) => {
+  const draftContent = String(item?.content || '');
 
   if (!draftContent.trim()) {
     ElMessage.warning('没有可导出的草稿内容');
     return;
   }
 
-  const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
-  const qaId = lastAssistantMessage?.id || 'unknown';
+  const qaId = item?.id || item?.qaId || 'unknown';
 
   try {
     loading.value = true;
@@ -541,6 +504,26 @@ const downloadConvertedFile = async (downloadUrl: string, fileName: string) => {
   window.URL.revokeObjectURL(url);
 };
 
+
+const keepActionAreaVisible = (messageId: string) => {
+  nextTick(() => {
+    const node = document.querySelector(`[data-message-id="${messageId}"] .message-actions`) ||
+      document.querySelector(`[data-message-id="${messageId}"]`);
+    node?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  });
+};
+
+const restoreMessageAnchor = (messageId?: string) => {
+  if (!messageId) return;
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      const node = document.querySelector(`[data-message-id="${messageId}"] .message-actions`) ||
+        document.querySelector(`[data-message-id="${messageId}"]`);
+      node?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  });
+};
+
 // 切换参考来源面板
 const toggleSourcesPanel = (item: DraftMessage) => {
   if (activeSourcesItem.value?.id === item.id && showSourcesPanel.value) {
@@ -550,16 +533,19 @@ const toggleSourcesPanel = (item: DraftMessage) => {
     // 否则打开新面板
     activeSourcesItem.value = item;
     showSourcesPanel.value = true;
+    keepActionAreaVisible(item.id);
   }
   emit('sources-panel-toggle', showSourcesPanel.value);
 };
 
 /** 关闭面板、菜单或弹窗：closeSourcesPanel。 */
 const closeSourcesPanel = () => {
+  const messageId = activeSourcesItem.value?.id;
   showSourcesPanel.value = false;
   activeSourcesItem.value = null;
   sourceCollapsed.value = {};
   emit('sources-panel-toggle', false);
+  restoreMessageAnchor(messageId);
 };
 
 // 检查源是否折叠
@@ -733,16 +719,13 @@ const handleRestart = (index: number) => {
 watch(
   () => props.currentAnswer,
   (newAnswer, oldAnswer = '') => {
-    if (!newAnswer) {
-      displayAnswer.value = '';
-      stopTypingEffect();
-      return;
-    }
-
     if (newAnswer && newAnswer !== oldAnswer) {
       const newText = newAnswer.substring(oldAnswer.length);
       if (newText) {
         appendToTypingQueue(newText);
+      } else if (newAnswer === '') {
+        displayAnswer.value = '';
+        stopTypingEffect();
       }
     }
   },
@@ -763,30 +746,17 @@ watch(
 // 监听当前流式消息ID变化
 watch(
   () => props.currentStreamingMessageId,
-  (newId, oldId) => {
-    if (newId) {
-      streamedMessageIds.value = new Set([...streamedMessageIds.value, newId]);
-      if (newId !== oldId && oldId !== undefined) {
-        // 新问题或重新起草开始时，清空上一轮打字缓存，避免新回答拼到旧回答后面。
-        displayAnswer.value = '';
-        stopTypingEffect();
-      }
-    }
+  (newId) => {
     if (!newId) {
       stopTypingEffect();
     }
   },
-  { immediate: true },
 );
 
 // 监听聊天数据变化
 watch(
   () => props.chatData,
   () => {
-    const currentIds = new Set((props.chatData?.messages || []).map((message) => message.id));
-    streamedMessageIds.value = new Set(
-      [...streamedMessageIds.value].filter((messageId) => currentIds.has(messageId)),
-    );
     nextTick(() => {
       scrollToBottom();
     });
@@ -1214,13 +1184,23 @@ onUnmounted(() => {
         color: #303133;
       }
 
-      .close-btn {
+      .side-panel-close-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         cursor: pointer;
         color: #909399;
         font-size: 20px;
+        background: transparent;
+        border: none;
+        transition: color 0.18s ease, background 0.18s ease;
 
         &:hover {
           color: #409eff;
+          background: rgba(64, 158, 255, 0.08);
         }
       }
     }

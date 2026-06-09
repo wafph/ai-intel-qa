@@ -104,6 +104,33 @@ export const getCurrentDownloadUserName = () => {
   );
 };
 
+// 文件下载接口新增 user_id 字段时使用。
+// 统一优先使用后台通过 agentToken / platform-login 返回的 mainUserInfo.userId，
+// 再兼容 user_id/id 以及原始 scopesData 中可能保存的 mainUserInfo。
+export const getCurrentDownloadUserId = () => {
+  const session = getAuthSession();
+  const currentUser = session?.user || {};
+  const scopesData = getStoredAgentScopes() || {};
+  const mainUserInfo =
+    currentUser.mainUserInfo ||
+    currentUser.userInfo ||
+    scopesData.mainUserInfo ||
+    scopesData.userInfo ||
+    currentUser;
+
+  return String(
+    mainUserInfo.userId ||
+      mainUserInfo.user_id ||
+      currentUser.userId ||
+      currentUser.user_id ||
+      currentUser.id ||
+      scopesData.userId ||
+      scopesData.user_id ||
+      scopesData.id ||
+      '',
+  );
+};
+
 /** 构造请求载荷或业务上下文：buildAuthHeaders。 */
 export const buildAuthHeaders = (base: Record<string, string> = {}) => {
   const token = getBearerToken();

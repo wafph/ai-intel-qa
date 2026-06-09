@@ -3,14 +3,21 @@
  *
  * 本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
  */
-import { API_BASE_URL, WATERMARK_API_BASE_URL, CONVERT_API_BASE_URL } from '@/services/config';
+import {
+  API_BASE_URL,
+  WATERMARK_API_BASE_URL,
+  CONVERT_API_BASE_URL,
+  AGENT_UPLOAD_API_BASE_URL,
+  AGENT_UPLOAD_WORKSPACE_ID,
+  REVIEW_PDF_PREPARE_API_BASE_URL,
+} from '@/services/config';
 
-const AGENT_APP_BASE = '/v1/1725c43e3fa54828a078fce60f5a3773';
 
 export const API = {
   agent: {
     // 审核文件上传保持原有 AgentArts 上传逻辑：上传成功后将返回 url 作为 file_url 传给 review 工作流。
-    uploadFile: `${AGENT_APP_BASE}/agent-runtime/upload-file?workspace_id=791044b6d56145abb6f66226b5c78784`,
+    // 上传接口地址和 workspace_id 已改为配置化，后期切换环境只需修改 .env 配置。
+    uploadFile: `${AGENT_UPLOAD_API_BASE_URL}?workspace_id=${encodeURIComponent(AGENT_UPLOAD_WORKSPACE_ID)}`,
     // V12 后端统一智能体流式代理接口。
     workflowStream: (workflowCode: string) =>
       `${API_BASE_URL}/v1/agentarts/workflows/${workflowCode}/stream`,
@@ -76,6 +83,16 @@ export const API = {
       `${API_BASE_URL}/v1/chat/favorites?limit=${limit}${functionId ? `&functionId=${encodeURIComponent(functionId)}` : ''}`,
     favoriteDetail: (functionId: string, sessionId: string) =>
       `${API_BASE_URL}/v1/chat/favorites/detail?functionId=${encodeURIComponent(functionId)}&sessionId=${encodeURIComponent(sessionId)}`,
+  },
+  reviewPdf: {
+    detect: `${REVIEW_PDF_PREPARE_API_BASE_URL}/detect`,
+    prepare: `${REVIEW_PDF_PREPARE_API_BASE_URL}/prepare`,
+    context: (contextId: string, includeContent = true) =>
+      `${REVIEW_PDF_PREPARE_API_BASE_URL}/context/${encodeURIComponent(contextId)}?include_content=${includeContent ? 'true' : 'false'}`,
+    bindReviewFile: (contextId: string) =>
+      `${REVIEW_PDF_PREPARE_API_BASE_URL}/context/${encodeURIComponent(contextId)}/bind-review-file`,
+    bySession: (sessionId: string, includeContent = false, limit = 20) =>
+      `${REVIEW_PDF_PREPARE_API_BASE_URL}/context/by-session/${encodeURIComponent(sessionId)}?include_content=${includeContent ? 'true' : 'false'}&limit=${limit}`,
   },
   document: {
     // 文档转换/水印预览沿用早期逻辑：前端调用独立文档服务接口，不走 8000 后端业务接口。

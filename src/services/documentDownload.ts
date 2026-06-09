@@ -5,7 +5,7 @@
  */
 import { API } from '@/api/api';
 import { parseAxiosResponseError } from './error';
-import { getCurrentDownloadUserName } from './authStorage';
+import { getCurrentDownloadUserName, getCurrentDownloadUserId } from './authStorage';
 import { isSuccessStatus, request } from './http';
 
 export interface DownloadDocumentResult {
@@ -201,6 +201,7 @@ const requestWatermarkDocument = async (endpoint: string, fileId: string, title:
     data: {
       file_id: fileId,
       user_name: getCurrentDownloadUserName(),
+      user_id: getCurrentDownloadUserId(),
     },
     responseType: 'blob',
   });

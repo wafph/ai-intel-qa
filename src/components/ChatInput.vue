@@ -21,11 +21,19 @@
           class="uploaded-file-card"
           :title="uploadedFileName"
         >
-          <div class="file-icon">W</div>
+          <div class="file-icon">{{ fileIconText }}</div>
           <div class="file-info">
             <div class="file-name">{{ uploadedFileName }}</div>
             <div v-if="uploadedFileMeta" class="file-meta">{{ uploadedFileMeta }}</div>
           </div>
+          <button
+            v-if="!streaming && !isComplianceFileProcessing"
+            class="remove-upload-btn"
+            type="button"
+            title="删除已上传文件"
+            aria-label="删除已上传文件"
+            @click.stop="handleRemoveUpload"
+          >×</button>
         </div>
         <textarea
           ref="textareaRef"
@@ -33,6 +41,7 @@
           :placeholder="placeholder"
           :disabled="isComplianceMode ? false : disabled"
           :readonly="isComplianceMode"
+          :maxlength="MAX_CHAT_INPUT_LENGTH"
           class="chat-textarea"
           rows="1"
           @keydown.enter.exact.prevent="handleSend"
@@ -48,7 +57,7 @@
             class="upload-action"
             :http-request="customUpload"
             :show-file-list="false"
-            :disabled="streaming"
+            :disabled="streaming || isComplianceFileProcessing"
           >
             <button class="add-btn" type="button" aria-label="上传文件" title="上传文件">
               <svg class="add-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -105,6 +114,8 @@ interface Props {
   customUpload?: (options: any) => Promise<void> | void;
   uploadedFileName?: string;
   uploadedFileMeta?: string;
+  isComplianceFileProcessing?: boolean;
+  complianceFileProcessingText?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -115,16 +126,24 @@ const props = withDefaults(defineProps<Props>(), {
   customUpload: undefined,
   uploadedFileName: '',
   uploadedFileMeta: '',
+  isComplianceFileProcessing: false,
+  complianceFileProcessingText: '',
 });
 
 const emit = defineEmits<{
   send: [content: string];
   stop: [];
+  'remove-upload': [];
 }>();
 
 const inputText = ref<string>('');
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const isComposing = ref<boolean>(false);
+const MAX_CHAT_INPUT_LENGTH = 50000;
+const fileIconText = computed(() => {
+  const ext = (props.uploadedFileName || '').split('.').pop()?.toUpperCase();
+  return ext ? ext.slice(0, 3) : 'W';
+});
 /** 封装当前模块内的业务逻辑：hasInputContent。 */
 const hasInputContent = computed(() => Boolean(inputText.value.trim()));
 
@@ -132,7 +151,7 @@ const hasInputContent = computed(() => Boolean(inputText.value.trim()));
 const isSendButtonDisabled = computed(() => {
   if (props.streaming) return false;
   if (props.disabled) return true;
-  if (props.isComplianceMode) return false;
+  if (props.isComplianceMode) return Boolean(props.isComplianceFileProcessing);
   return !hasInputContent.value;
 });
 
@@ -157,6 +176,11 @@ const handleStop = () => {
   emit('stop');
 };
 
+/** 删除合规审核已上传文件。 */
+const handleRemoveUpload = () => {
+  emit('remove-upload');
+};
+
 /** 处理用户交互或组件事件：handleNewLine。 */
 const handleNewLine = () => {
   if (props.disabled || props.streaming || props.isComplianceMode) return;
@@ -170,8 +194,8 @@ const handleNewLine = () => {
 const handleInput = () => {
   autoResize();
 
-  if (inputText.value.length > 2000) {
-    inputText.value = inputText.value.substring(0, 2000);
+  if (inputText.value.length > MAX_CHAT_INPUT_LENGTH) {
+    inputText.value = inputText.value.substring(0, MAX_CHAT_INPUT_LENGTH);
   }
 };
 
@@ -249,7 +273,7 @@ defineExpose({
 <style lang="less" scoped>
 .chat-input-container {
   width: 100%;
-  min-height: 100px;
+  min-height: 88px;
   border: 1px solid #e6e6e6;
   border-radius: 18px;
   background: #fff;
@@ -271,13 +295,13 @@ defineExpose({
 }
 
 .input-wrapper {
-  min-height: 105px;
+  min-height: 92px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: space-between;
-  gap: 12px;
-  padding: 16px 20px 18px;
+  gap: 8px;
+  padding: 12px 18px 14px;
   position: relative;
 }
 
@@ -295,13 +319,37 @@ defineExpose({
 
 .uploaded-file-card {
   max-width: 190px;
-  height: 52px;
+  height: 50px;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
+  padding: 8px 30px 8px 12px;
   border-radius: 7px;
   background: #f4f2f2;
+  position: relative;
+}
+
+.remove-upload-btn {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: #f56c6c;
+  color: #fff;
+  font-size: 14px;
+  line-height: 18px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(245, 108, 108, 0.28);
+}
+
+.remove-upload-btn:hover {
+  background: #d9363e;
 }
 
 .file-icon {
@@ -342,7 +390,7 @@ defineExpose({
 .chat-textarea {
   width: 100%;
   min-height: 24px;
-  max-height: 150px;
+  max-height: 120px;
   border: none;
   outline: none;
   resize: none;
@@ -410,8 +458,8 @@ defineExpose({
 
 .add-btn,
 .send-btn {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   border: none;
   border-radius: 50%;
   padding: 0;
@@ -457,8 +505,8 @@ defineExpose({
 }
 
 .send-icon {
-  width: 22px;
-  height: 25px;
+  width: 18px;
+  height: 18px;
 }
 
 .send-btn.is-active:hover {
@@ -481,8 +529,8 @@ defineExpose({
 }
 
 .stop-icon {
-  width: 25px;
-  height: 25px;
+  width: 18px;
+  height: 18px;
 }
 
 .stop-tooltip {
@@ -516,5 +564,17 @@ defineExpose({
 .stop-btn:hover .stop-tooltip {
   opacity: 1;
   transform: translateY(0);
+}
+</style>
+
+
+<style scoped>
+.uploaded-file-card.processing .file-icon {
+  animation: fileProcessingPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes fileProcessingPulse {
+  0%, 100% { opacity: 0.45; transform: scale(0.96); }
+  50% { opacity: 1; transform: scale(1.04); }
 }
 </style>

@@ -11,6 +11,7 @@ import { authRequest, isSuccessStatus } from '@/services/http';
 import { getApiData, getApiMessage, isApiSuccessCode } from '@/services/response';
 import { extractSourcesFromAny, safeJsonParse } from '@/services/sourceUtils';
 import { stripReviewProgressText } from '@/services/reviewProgress';
+import { sanitizeAgentText } from '@/services/errorSanitizer';
 
 // API基础配置 - 使用新接口地址
 
@@ -64,6 +65,19 @@ export const useChatStore = defineStore('chat', () => {
     return {};
   };
 
+
+  const asPlainObject = (value: any): Record<string, any> => {
+    const parsed = safeJsonParse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  };
+
+  const firstDefined = (...values: any[]) => {
+    for (const value of values) {
+      if (value !== undefined && value !== null && value !== '') return value;
+    }
+    return undefined;
+  };
+
   /**
    * 从后端 answer_json 中恢复引用、检索结果或起草推荐范文。
    *
@@ -101,43 +115,125 @@ export const useChatStore = defineStore('chat', () => {
         '',
     );
 
+  const normalizeRecoverableFlag = (value: any): boolean | undefined => {
+    if (value === undefined || value === null || value === '') return undefined;
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (['false', '0', 'no', 'n'].includes(normalized)) return false;
+      if (['true', '1', 'yes', 'y'].includes(normalized)) return true;
+    }
+    return undefined;
+  };
+
+  const getAnswerRecoverable = (qa: any, answerPayload: any, messageStatus: string) => {
+    const explicit = normalizeRecoverableFlag(
+      answerPayload.recoverable ??
+        answerPayload.taskRecoverable ??
+        answerPayload.task_recoverable ??
+        qa.recoverable ??
+        qa.taskRecoverable ??
+        qa.task_recoverable,
+    );
+    if (explicit !== undefined) return explicit;
+    return isRunningMessageStatus(messageStatus);
+  };
+
   /** 获取并归一化业务数据：getAnswerMetadata。 */
   const getAnswerMetadata = (qa: any, answerPayload: any) => {
-    const baseMetadata =
+    const baseMetadata = asPlainObject(
       answerPayload.metadata ||
-      answerPayload.meta ||
-      qa.metadata ||
-      qa.answerMetadata ||
-      qa.answer_metadata ||
-      undefined;
+        answerPayload.meta ||
+        qa.metadata ||
+        qa.answerMetadata ||
+        qa.answer_metadata ||
+        {},
+    );
 
-    const reviewContext =
+    const reviewContext = asPlainObject(
       answerPayload.reviewContext ||
-      answerPayload.review_context ||
-      qa.reviewContext ||
-      qa.review_context ||
-      undefined;
-
-    if (!reviewContext) return baseMetadata;
-
-    return {
-      ...(baseMetadata || {}),
-      reviewContext,
-      complianceOriginalText:
-        baseMetadata?.complianceOriginalText ||
-        reviewContext.originalText ||
-        reviewContext.original_text ||
-        '',
-      complianceFileName:
-        baseMetadata?.complianceFileName ||
-        reviewContext.fileName ||
-        reviewContext.file_name ||
-        '',
-      complianceParams:
-        baseMetadata?.complianceParams ||
+        answerPayload.review_context ||
+        qa.reviewContext ||
+        qa.review_context ||
+        baseMetadata.reviewContext ||
+        baseMetadata.review_context ||
+        {},
+    );
+    const complianceParams = asPlainObject(
+      baseMetadata.complianceParams ||
+        baseMetadata.compliance_params ||
         reviewContext.reviewParams ||
         reviewContext.review_params ||
-        undefined,
+        {},
+    );
+
+    if (!Object.keys(baseMetadata).length && !Object.keys(reviewContext).length && !Object.keys(complianceParams).length) {
+      return undefined;
+    }
+
+    const mergedReviewContext = {
+      ...complianceParams,
+      ...reviewContext,
+      reviewParams: Object.keys(complianceParams).length ? complianceParams : reviewContext.reviewParams,
+    };
+
+    return {
+      ...baseMetadata,
+      reviewContext: Object.keys(mergedReviewContext).length ? mergedReviewContext : baseMetadata.reviewContext,
+      complianceOriginalText: firstDefined(
+        baseMetadata.complianceOriginalText,
+        baseMetadata.compliance_original_text,
+        reviewContext.originalText,
+        reviewContext.original_text,
+        complianceParams.originalText,
+        complianceParams.original_text,
+      ) || '',
+      complianceFileName: firstDefined(
+        baseMetadata.complianceFileName,
+        baseMetadata.compliance_file_name,
+        reviewContext.fileName,
+        reviewContext.file_name,
+        complianceParams.fileName,
+        complianceParams.file_name,
+      ) || '',
+      complianceParams: Object.keys(complianceParams).length
+        ? complianceParams
+        : baseMetadata.complianceParams || baseMetadata.compliance_params,
+      pdfContextId: firstDefined(
+        baseMetadata.pdfContextId,
+        baseMetadata.pdf_context_id,
+        reviewContext.pdfContextId,
+        reviewContext.pdf_context_id,
+        complianceParams.pdfContextId,
+        complianceParams.pdf_context_id,
+      ),
+      pdfType: firstDefined(baseMetadata.pdfType, baseMetadata.pdf_type, reviewContext.pdfType, reviewContext.pdf_type),
+      sourceFileUrl: firstDefined(
+        baseMetadata.sourceFileUrl,
+        baseMetadata.source_file_url,
+        reviewContext.sourceFileUrl,
+        reviewContext.source_file_url,
+        complianceParams.sourceFileUrl,
+        complianceParams.source_file_url,
+      ),
+      parsedTxtUrl: firstDefined(baseMetadata.parsedTxtUrl, baseMetadata.parsed_txt_url, reviewContext.parsedTxtUrl, reviewContext.parsed_txt_url),
+      parsedMarkdownUrl: firstDefined(baseMetadata.parsedMarkdownUrl, baseMetadata.parsed_markdown_url, reviewContext.parsedMarkdownUrl, reviewContext.parsed_markdown_url),
+      locatorMode: firstDefined(baseMetadata.locatorMode, baseMetadata.locator_mode, reviewContext.locatorMode, reviewContext.locator_mode),
+      locatorAvailable: firstDefined(
+        typeof baseMetadata.locatorAvailable === 'boolean' ? baseMetadata.locatorAvailable : undefined,
+        baseMetadata.locator_available,
+        reviewContext.locatorAvailable,
+        reviewContext.locator_available,
+      ),
+      locatorUnavailableReason: firstDefined(
+        baseMetadata.locatorUnavailableReason,
+        baseMetadata.locator_unavailable_reason,
+        reviewContext.locatorUnavailableReason,
+        reviewContext.locator_unavailable_reason,
+      ),
+      reviewFileUrl: firstDefined(baseMetadata.reviewFileUrl, baseMetadata.review_file_url, reviewContext.reviewFileUrl, reviewContext.review_file_url),
+      textSource: firstDefined(baseMetadata.textSource, baseMetadata.text_source, reviewContext.textSource, reviewContext.text_source),
     };
   };
 
@@ -248,12 +344,14 @@ export const useChatStore = defineStore('chat', () => {
         ...(assistantMessage as any).metadata,
       };
       const answer = {
-        responseContent: assistantMessage.content || '',
+        responseContent: sanitizeAgentText(assistantMessage.content || ''),
         data_json: assistantMessage.sources || [],
         sources: assistantMessage.sources || [],
         metadata: mergedMetadata,
         taskId: assistantMessage.taskId || undefined,
         taskStatus: assistantMessage.taskStatus || undefined,
+        recoverable: (assistantMessage as any).taskRecoverable ?? assistantMessage.streaming ?? undefined,
+        taskRecoverable: (assistantMessage as any).taskRecoverable ?? assistantMessage.streaming ?? undefined,
         streamEventCount: assistantMessage.streamEventId || undefined,
       };
 
@@ -785,15 +883,20 @@ export const useChatStore = defineStore('chat', () => {
               : 0;
           const messageStatus = qa.messageStatus || qa.message_status || answerPayload.messageStatus || answerPayload.message_status || answerPayload.taskStatus || answerPayload.task_status || '';
           const taskId = qa.taskId || qa.task_id || answerPayload.taskId || answerPayload.task_id || '';
+          const metadata = getAnswerMetadata(qa, answerPayload);
+          if (funcId === 'review' && metadata && messages.length > 0) {
+            (messages[messages.length - 1] as any).metadata = metadata;
+          }
 
           messages.push({
             id: qa.qaId,
             role: 'assistant',
-            content: stripReviewProgressText(getAnswerContent(qa, answerPayload), { functionId: funcId }),
+            content: sanitizeAgentText(stripReviewProgressText(getAnswerContent(qa, answerPayload), { functionId: funcId })),
             timestamp: new Date(qa.answerTime).getTime(),
             streaming: isRunningMessageStatus(messageStatus),
             taskId,
             taskStatus: messageStatus,
+            taskRecoverable: getAnswerRecoverable(qa, answerPayload, messageStatus),
             streamEventId: Number(answerPayload.streamEventCount || answerPayload.lastEventId || answerPayload.last_event_id || qa.lastEventId || qa.last_event_id || 0),
             vote:
               qa.likeStatus === 1 ? 'like' : qa.dislikeStatus === 1 ? 'dislike' : null,
@@ -801,7 +904,7 @@ export const useChatStore = defineStore('chat', () => {
             dislikeCount: qa.dislikeStatus || 0,
             sources: sources,
             match_score: matchScore,
-            metadata: getAnswerMetadata(qa, answerPayload),
+            metadata,
           });
         });
       } else if (
@@ -827,15 +930,20 @@ export const useChatStore = defineStore('chat', () => {
               : 0;
           const messageStatus = qa.messageStatus || qa.message_status || answerPayload.messageStatus || answerPayload.message_status || answerPayload.taskStatus || answerPayload.task_status || '';
           const taskId = qa.taskId || qa.task_id || answerPayload.taskId || answerPayload.task_id || '';
+          const metadata = getAnswerMetadata(qa, answerPayload);
+          if (funcId === 'review' && metadata && messages.length > 0) {
+            (messages[messages.length - 1] as any).metadata = metadata;
+          }
 
           messages.push({
             id: qa.qaId || qa.qa_id,
             role: 'assistant',
-            content: stripReviewProgressText(getAnswerContent(qa, answerPayload), { functionId: funcId }),
+            content: sanitizeAgentText(stripReviewProgressText(getAnswerContent(qa, answerPayload), { functionId: funcId })),
             timestamp: new Date(qa.answerTime || qa.answer_time || qa.updateTime || qa.update_time).getTime(),
             streaming: isRunningMessageStatus(messageStatus),
             taskId,
             taskStatus: messageStatus,
+            taskRecoverable: getAnswerRecoverable(qa, answerPayload, messageStatus),
             streamEventId: Number(answerPayload.streamEventCount || answerPayload.lastEventId || answerPayload.last_event_id || qa.lastEventId || qa.last_event_id || 0),
             vote:
               qa.likeStatus === 1 || qa.like_status === 1
@@ -847,7 +955,7 @@ export const useChatStore = defineStore('chat', () => {
             dislikeCount: qa.dislikeStatus || qa.dislike_status || 0,
             sources,
             match_score: matchScore,
-            metadata: getAnswerMetadata(qa, answerPayload),
+            metadata,
           });
         });
       } else if (
@@ -874,15 +982,20 @@ export const useChatStore = defineStore('chat', () => {
               : 0;
           const messageStatus = qa.messageStatus || qa.message_status || answerPayload.messageStatus || answerPayload.message_status || answerPayload.taskStatus || answerPayload.task_status || '';
           const taskId = qa.taskId || qa.task_id || answerPayload.taskId || answerPayload.task_id || '';
+          const metadata = getAnswerMetadata(qa, answerPayload);
+          if (funcId === 'review' && metadata && messages.length > 0) {
+            (messages[messages.length - 1] as any).metadata = metadata;
+          }
 
           messages.push({
             id: qa.qaId,
             role: 'assistant',
-            content: stripReviewProgressText(getAnswerContent(qa, answerPayload), { functionId: funcId }),
+            content: sanitizeAgentText(stripReviewProgressText(getAnswerContent(qa, answerPayload), { functionId: funcId })),
             timestamp: new Date(qa.answerTime).getTime(),
             streaming: isRunningMessageStatus(messageStatus),
             taskId,
             taskStatus: messageStatus,
+            taskRecoverable: getAnswerRecoverable(qa, answerPayload, messageStatus),
             streamEventId: Number(answerPayload.streamEventCount || answerPayload.lastEventId || answerPayload.last_event_id || qa.lastEventId || qa.last_event_id || 0),
             vote:
               qa.likeStatus === 1 ? 'like' : qa.dislikeStatus === 1 ? 'dislike' : null,
@@ -890,7 +1003,7 @@ export const useChatStore = defineStore('chat', () => {
             dislikeCount: qa.dislikeStatus || 0,
             sources: sources,
             match_score: matchScore,
-            metadata: getAnswerMetadata(qa, answerPayload),
+            metadata,
           });
         });
       } else {

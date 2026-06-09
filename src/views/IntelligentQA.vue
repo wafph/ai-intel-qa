@@ -29,9 +29,33 @@
             <div v-if="item.role === 'user'" class="message-user">
               <div class="message-header">
                 <div class="message-info">
-                  <pre class="message-content user-message-content">{{
+                  <pre
+                    class="message-content user-message-content"
+                    :class="{ 'is-collapsed': isUserQuestionCollapsed(item) }"
+                  ><span class="user-message-content-inner">{{
                     item.content
-                  }}</pre>
+                  }}</span></pre>
+                  <div class="user-message-actions">
+                    <button
+                      v-if="shouldFoldUserQuestion(item.content)"
+                      class="user-message-action-btn"
+                      type="button"
+                      :title="isUserQuestionCollapsed(item) ? 'Expand' : 'Collapse'"
+                      :aria-label="isUserQuestionCollapsed(item) ? 'Expand' : 'Collapse'"
+                      @click.stop="toggleUserQuestionFold(item.id)"
+                    >
+                      {{ isUserQuestionCollapsed(item) ? '▾' : '▴' }}
+                    </button>
+                    <button
+                      class="user-message-action-btn user-message-copy-btn"
+                      type="button"
+                      title="复制内容"
+                      aria-label="复制内容"
+                      @click.stop="copyUserQuestion(item.content)"
+                    >
+                      <img src="/images/copy.svg" alt="复制" class="user-message-copy-icon" />
+                    </button>
+                  </div>
                   <div class="message-time">{{ formatTime(item.timestamp) }}</div>
                 </div>
               </div>
@@ -56,24 +80,24 @@
                   </div>
 
                   <!-- 当前流式消息 -->
-                  <div v-if="shouldRenderStreamBlock(item)">
+                  <div v-if="item.streaming && item.id === currentStreamingMessageId">
                     <!-- 回复内容（打字机效果） -->
                     <div
-                      v-if="getStreamAnswer(item).trim() !== ''"
+                      v-if="currentAnswer && currentAnswer.trim() !== ''"
                       class="answer-streaming"
                     >
                       <div class="typing-container">
                         <div
                           class="typing-text"
-                          v-html="renderMarkdown(getStreamAnswer(item))"
+                          v-html="renderMarkdown(displayAnswer)"
                         ></div>
-                        <span v-if="isActiveStreamingMessage(item) && isTyping" class="typing-cursor">|</span>
+                        <span v-if="isTyping" class="typing-cursor">|</span>
                       </div>
                     </div>
 
                     <!-- 加载指示器（当没有任何内容时） -->
                     <div
-                      v-if="shouldShowStreamLoading(item)"
+                      v-if="streaming && (!currentAnswer || currentAnswer.trim() === '')"
                       class="thinking-indicator"
                     >
                       <div class="thinking-dots">
@@ -81,104 +105,6 @@
                         <span></span>
                         <span></span>
                       </div>
-                    </div>
-
-                    <div
-                      class="message-actions"
-                      v-if="shouldShowCompletedStreamActions(item)"
-                    >
-                      <el-button
-                        link
-                        type="primary"
-                        plain
-                        @click="toggleSourcesPanel(item)"
-                      >
-                        {{
-                          activeSourcesItem?.id === item.id && showSourcesPanel
-                            ? '隐藏来源'
-                            : '查看来源'
-                        }}
-                        <el-icon class="el-icon--right">
-                          <component
-                            :is="
-                              activeSourcesItem?.id === item.id && showSourcesPanel
-                                ? ArrowUp
-                                : ArrowRight
-                            "
-                          />
-                        </el-icon>
-                      </el-button>
-
-                      <div
-                        class="copy-container"
-                        title="复制内容"
-                        @click="handleCopy(item.content, item.id)"
-                      >
-                        <img
-                          src="/images/copy.svg"
-                          style="width: 20px; height: 20px"
-                          alt=""
-                        />
-                        <span
-                          v-if="showCopied && copiedMessageId === item.id"
-                          class="copied-text"
-                          >已复制</span
-                        >
-                      </div>
-
-                      <div class="vote-container">
-                        <img
-                          :src="
-                            item.vote === 'like'
-                              ? '/images/zhan-active.svg'
-                              : '/images/zhan.svg'
-                          "
-                          alt=""
-                          class="vote-icon"
-                          @click="handleVote(item.id, 'like')"
-                        />
-                        <span
-                          class="vote-count"
-                          :style="{
-                            color: item.vote === 'like' ? '#409eff' : '#999',
-                          }"
-                        >
-                          {{ item.likeCount || 0 }}
-                        </span>
-                      </div>
-
-                      <div class="vote-container">
-                        <img
-                          src="/images/cai.svg"
-                          alt=""
-                          class="vote-icon"
-                          @click="handleVote(item.id, 'dislike')"
-                          :style="{
-                            filter:
-                              item.vote === 'dislike'
-                                ? 'invert(29%) sepia(82%) saturate(748%) hue-rotate(327deg) brightness(97%) contrast(101%)'
-                                : 'none',
-                          }"
-                        />
-                        <span
-                          class="vote-count"
-                          :style="{
-                            color: item.vote === 'dislike' ? '#f56c6c' : '#999',
-                          }"
-                        >
-                          {{ item.dislikeCount || 0 }}
-                        </span>
-                      </div>
-
-                      <el-button
-                        link
-                        class="regenerate-btn"
-                        type="success"
-                        plain
-                        @click="handleRestart(index)"
-                      >
-                        重新生成<el-icon class="el-icon--right"><ArrowRight /></el-icon>
-                      </el-button>
                     </div>
                   </div>
                   <div v-else>
@@ -304,7 +230,7 @@
                   <div class="message-time">
                     {{ formatTime(item.timestamp) }}
                     <span
-                      v-if="isActiveStreamingMessage(item)"
+                      v-if="item.streaming && item.id === currentStreamingMessageId"
                       class="streaming-badge"
                     >
                       <span class="streaming-dot"></span>
@@ -332,7 +258,7 @@
       >
         <div class="sources-header">
           <h3>📄 参考来源</h3>
-          <el-icon class="close-btn" @click="closeSourcesPanel"><Close /></el-icon>
+          <el-icon class="close-btn side-panel-close-btn" @click="closeSourcesPanel"><Close /></el-icon>
         </div>
         <div
           class="sources-content"
@@ -432,7 +358,7 @@
       </template>
     </el-dialog>
 
-    <!-- PDF 预览弹框 -->
+    <!-- 文档预览分栏 -->
     <div v-if="showPdfViewer" class="pdf-viewer-modal" @click.self="closePdfViewer">
       <div class="pdf-viewer-container">
         <div class="pdf-viewer-header">
@@ -455,7 +381,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, watch, computed, nextTick, onMounted, onUnmounted } from 'vue';
 import MarkdownIt from 'markdown-it';
 import { ElMessage } from 'element-plus';
 import { ArrowRight, ArrowUp, Close } from '@element-plus/icons-vue';
@@ -464,6 +390,7 @@ import { API } from '@/api/api';
 import { authRequest, isSuccessStatus } from '@/services/http';
 import { fetchWatermarkDocument, isPdfDocument, downloadDocumentBlob, openDocumentUrl } from '@/services/documentDownload';
 import { getSourceDirectUrl, getSourceFileId, getSourceTitle } from '@/services/sourceUtils';
+import { copyTextToClipboard, shouldCollapseUserQuestion } from '@/utils/messageCollapse';
 const chatStore = useChatStore();
 
 const displayAnswer = ref<string>('');
@@ -478,6 +405,27 @@ const emit = defineEmits(['regenerate', 'sources-panel-toggle']);
 const showSourcesPanel = ref(false);
 const activeSourcesItem = ref<any>(null);
 const sourceCollapsed = ref<Record<string, boolean>>({});
+
+const expandedUserQuestionMap = reactive<Record<string, boolean>>({});
+const shouldFoldUserQuestion = (content?: string) => shouldCollapseUserQuestion(content);
+const isUserQuestionCollapsed = (item: { id?: string; content?: string }) => {
+  const id = String(item?.id || '');
+  return shouldFoldUserQuestion(item?.content) && !expandedUserQuestionMap[id];
+};
+const toggleUserQuestionFold = (id?: string) => {
+  const key = String(id || '');
+  if (!key) return;
+  expandedUserQuestionMap[key] = !expandedUserQuestionMap[key];
+};
+const copyUserQuestion = async (content?: string) => {
+  const copied = await copyTextToClipboard(content);
+  if (copied) {
+    ElMessage.success({ message: 'Copied', offset: 72 });
+  } else {
+    ElMessage.error({ message: 'Copy failed', offset: 72 });
+  }
+};
+
 
 // PDF 预览相关状态
 const showPdfViewer = ref(false);
@@ -520,30 +468,6 @@ const props = withDefaults(defineProps<Props>(), {
   currentAnswer: '',
   currentStreamingMessageId: null,
 });
-
-const streamedMessageIds = ref<Set<string>>(new Set());
-
-/** 记录并判断已经走过流式渲染的消息，避免结束后切换到最终回复块重复显示。 */
-const isActiveStreamingMessage = (item: ChatMessage) =>
-  Boolean(item.streaming && item.id === props.currentStreamingMessageId);
-
-const hasStreamedMessage = (item: ChatMessage) => streamedMessageIds.value.has(item.id);
-
-const shouldRenderStreamBlock = (item: ChatMessage) =>
-  isActiveStreamingMessage(item) || hasStreamedMessage(item);
-
-const getStreamAnswer = (item: ChatMessage) =>
-  isActiveStreamingMessage(item)
-    ? displayAnswer.value || props.currentAnswer || item.content || ''
-    : item.content || '';
-
-const shouldShowStreamLoading = (item: ChatMessage) =>
-  isActiveStreamingMessage(item) &&
-  Boolean(props.streaming) &&
-  !(props.currentAnswer || '').trim();
-
-const shouldShowCompletedStreamActions = (item: ChatMessage) =>
-  hasStreamedMessage(item) && !isActiveStreamingMessage(item) && Boolean(item.content?.trim());
 
 // 反馈对话框相关
 const feedbackDialogVisible = ref(false);
@@ -729,6 +653,26 @@ const closePdfViewer = () => {
   currentPdfTitle.value = '';
 };
 
+
+const keepActionAreaVisible = (messageId: string) => {
+  nextTick(() => {
+    const node = document.querySelector(`[data-message-id="${messageId}"] .message-actions`) ||
+      document.querySelector(`[data-message-id="${messageId}"]`);
+    node?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  });
+};
+
+const restoreMessageAnchor = (messageId?: string) => {
+  if (!messageId) return;
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      const node = document.querySelector(`[data-message-id="${messageId}"] .message-actions`) ||
+        document.querySelector(`[data-message-id="${messageId}"]`);
+      node?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  });
+};
+
 // 切换参考来源面板
 const toggleSourcesPanel = (item: ChatMessage) => {
   if (activeSourcesItem.value?.id === item.id && showSourcesPanel.value) {
@@ -738,16 +682,19 @@ const toggleSourcesPanel = (item: ChatMessage) => {
     // 否则打开新面板
     activeSourcesItem.value = item;
     showSourcesPanel.value = true;
+    keepActionAreaVisible(item.id);
   }
   emit('sources-panel-toggle', showSourcesPanel.value);
 };
 
 /** 关闭面板、菜单或弹窗：closeSourcesPanel。 */
 const closeSourcesPanel = () => {
+  const messageId = activeSourcesItem.value?.id;
   showSourcesPanel.value = false;
   activeSourcesItem.value = null;
   sourceCollapsed.value = {};
   emit('sources-panel-toggle', false);
+  restoreMessageAnchor(messageId);
 };
 
 // 检查源是否折叠
@@ -1072,17 +1019,13 @@ const removeDuplicateReasoning = (reasoningText: string) => {
 watch(
   () => props.currentAnswer,
   (newAnswer, oldAnswer = '') => {
-    if (!newAnswer) {
-      displayAnswer.value = '';
-      stopTypingEffect();
-      scrollToBottom();
-      return;
-    }
-
     if (newAnswer && newAnswer !== oldAnswer) {
       const newText = newAnswer.substring(oldAnswer.length);
       if (newText) {
         appendToTypingQueue(newText);
+      } else if (newAnswer === '') {
+        displayAnswer.value = '';
+        stopTypingEffect();
       }
     }
     scrollToBottom();
@@ -1104,30 +1047,17 @@ watch(
 // 监听当前流式消息ID变化
 watch(
   () => props.currentStreamingMessageId,
-  (newId, oldId) => {
-    if (newId) {
-      streamedMessageIds.value = new Set([...streamedMessageIds.value, newId]);
-      if (newId !== oldId && oldId !== undefined) {
-        // 新问题或重新生成开始时，清空上一轮打字缓存，避免新回答接在旧回答后面。
-        displayAnswer.value = '';
-        stopTypingEffect();
-      }
-    }
+  (newId) => {
     if (!newId) {
       stopTypingEffect();
     }
   },
-  { immediate: true },
 );
 
 // 监听聊天数据变化
 watch(
   () => props.chatData,
   () => {
-    const currentIds = new Set((props.chatData?.messages || []).map((message) => message.id));
-    streamedMessageIds.value = new Set(
-      [...streamedMessageIds.value].filter((messageId) => currentIds.has(messageId)),
-    );
     nextTick(() => {
       scrollToBottom();
     });
@@ -1625,13 +1555,23 @@ onUnmounted(() => {
         color: #303133;
       }
 
-      .close-btn {
+      .side-panel-close-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         cursor: pointer;
         color: #909399;
         font-size: 20px;
+        background: transparent;
+        border: none;
+        transition: color 0.18s ease, background 0.18s ease;
 
         &:hover {
           color: #409eff;
+          background: rgba(64, 158, 255, 0.08);
         }
       }
     }

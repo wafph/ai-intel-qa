@@ -62,6 +62,15 @@
             :class="{ 'sources-panel-visible': isSourcesPanelVisible }"
             :style="inputContainerStyle"
           >
+            <transition name="compliance-processing-fade">
+              <div
+                v-if="activeTab === '合规审核' && isComplianceFileProcessing"
+                class="compliance-processing-indicator"
+              >
+                <span class="compliance-processing-spinner" aria-hidden="true"></span>
+                <span>{{ complianceFileProcessingText || '文件正在解析中，请稍候...' }}</span>
+              </div>
+            </transition>
             <ChatInput
               ref="chatInputRef"
               :placeholder="inputPlaceholder"
@@ -71,8 +80,11 @@
               :custom-upload="customUpload"
               :uploaded-file-name="uploadedFileName"
               :uploaded-file-meta="uploadedFileMeta"
+              :is-compliance-file-processing="isComplianceFileProcessing"
+              :compliance-file-processing-text="complianceFileProcessingText"
               @send="handleSendMessage"
               @stop="stopStream"
+              @remove-upload="handleRemoveUploadedFile"
             >
               <ComplianceReviewExtras
                 v-if="activeTab === '合规审核'"
@@ -117,6 +129,7 @@ const {
   handleSelectAll,
   handleSelectChat,
   handleSendMessage,
+  handleRemoveUploadedFile,
   handleSearchHistory,
   handleClearHistorySearch,
   handleSelectSearchResult,
@@ -142,6 +155,8 @@ const {
   toggleSidebar,
   uploadedFileMeta,
   uploadedFileName,
+  isComplianceFileProcessing,
+  complianceFileProcessingText,
   userStore,
 } = useAppShell();
 

@@ -211,3 +211,87 @@ body {
     background: transparent;
   }
 }
+
+/* v12-2-14：历史问题 5 行折叠修复。
+   折叠文本放到无 padding 的内层裁剪，避免气泡 padding 导致第 6 行露出半截。 */
+.history-item.user-message .message-info {
+  margin-right: 0 !important;
+}
+
+.user-message-content-inner {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.user-message-content.is-collapsed {
+  display: block !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  white-space: pre-wrap !important;
+  max-height: none !important;
+}
+
+.user-message-content.is-collapsed .user-message-content-inner {
+  display: -webkit-box !important;
+  -webkit-box-orient: vertical !important;
+  -webkit-line-clamp: 5 !important;
+  line-clamp: 5 !important;
+  line-height: 24px !important;
+  max-height: 120px !important;
+  overflow: hidden !important;
+}
+
+.user-message-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.user-message-action-btn {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(28, 115, 235, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1c73eb;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.user-message-action-btn:hover {
+  border-color: rgba(28, 115, 235, 0.45);
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(28, 115, 235, 0.16);
+  transform: translateY(-1px);
+}
+
+.user-message-copy-btn {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.user-message-copy-btn:hover {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  opacity: 0.8;
+}
+
+.user-message-copy-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.input-container {
+  box-sizing: border-box;
+}
