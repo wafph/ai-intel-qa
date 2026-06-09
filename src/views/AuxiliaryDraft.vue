@@ -284,7 +284,7 @@ import {
   openDocumentUrl,
 } from '@/services/documentDownload';
 import { getSourceDirectUrl, getSourceFileId, getSourceTitle } from '@/services/sourceUtils';
-import { copyTextToClipboard, shouldCollapseUserQuestion } from '@/utils/messageCollapse';
+import { shouldCollapseUserQuestion } from '@/utils/messageCollapse';
 const emit = defineEmits(['regenerate', 'sources-panel-toggle']);
 
 interface Props {
@@ -345,14 +345,15 @@ const toggleUserQuestionFold = (id?: string) => {
   if (!key) return;
   expandedUserQuestionMap[key] = !expandedUserQuestionMap[key];
 };
-const copyUserQuestion = async (content?: string) => {
-  const copied = await copyTextToClipboard(content);
-  if (copied) {
-    ElMessage.success({ message: 'Copied', offset: 72 });
-  } else {
-    ElMessage.error({ message: 'Copy failed', offset: 72 });
-  }
-};
+
+// const copyUserQuestion = async (content?: string) => {
+//   const copied = await copyTextToClipboard(content);
+//   if (copied) {
+//     ElMessage.success({ message: 'Copied', offset: 72 });
+//   } else {
+//     ElMessage.error({ message: 'Copy failed', offset: 72 });
+//   }
+// };
 
 // PDF 预览相关状态
 const showPdfViewer = ref(false);

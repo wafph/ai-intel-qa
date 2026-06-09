@@ -247,7 +247,7 @@ import { ElIcon, ElMessage } from 'element-plus';
 import { CaretBottom, CaretTop, Refresh } from '@element-plus/icons-vue';
 import { fetchWatermarkDocument, isPdfDocument, downloadDocumentBlob, openDocumentUrl } from '@/services/documentDownload';
 import { getSourceDirectUrl, getSourceFileId, getSourceTitle } from '@/services/sourceUtils';
-import { copyTextToClipboard, shouldCollapseUserQuestion } from '@/utils/messageCollapse';
+import { shouldCollapseUserQuestion } from '@/utils/messageCollapse';
 
 // 状态变量
 const displayAnswer = ref<string>('');
@@ -278,14 +278,15 @@ const toggleUserQuestionFold = (id?: string) => {
   if (!key) return;
   expandedUserQuestionMap[key] = !expandedUserQuestionMap[key];
 };
-const copyUserQuestion = async (content?: string) => {
-  const copied = await copyTextToClipboard(content);
-  if (copied) {
-    ElMessage.success({ message: 'Copied', offset: 72 });
-  } else {
-    ElMessage.error({ message: 'Copy failed', offset: 72 });
-  }
-};
+
+// const copyUserQuestion = async (content?: string) => {
+//   const copied = await copyTextToClipboard(content);
+//   if (copied) {
+//     ElMessage.success({ message: 'Copied', offset: 72 });
+//   } else {
+//     ElMessage.error({ message: 'Copy failed', offset: 72 });
+//   }
+// };
 
 
 // Props

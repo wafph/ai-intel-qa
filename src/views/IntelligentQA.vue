@@ -31,7 +31,10 @@
                 <div class="message-info">
                   <pre
                     class="message-content user-message-content"
-                    :class="{ 'is-collapsed': isUserQuestionCollapsed(item) }"
+                    :class="{
+                      'is-collapsed': isUserQuestionCollapsed(item),
+                      'has-actions': shouldFoldUserQuestion(item.content),
+                    }"
                   ><span class="user-message-content-inner">{{
                     item.content
                   }}</span></pre>

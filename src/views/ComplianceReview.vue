@@ -251,7 +251,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { API } from '@/api/api';
 import { isSuccessStatus, request } from '@/services/http';
 import { fetchReviewPdfContext } from '@/services/reviewPdfPrepare';
-import { copyTextToClipboard, shouldCollapseUserQuestion } from '@/utils/messageCollapse';
+import { shouldCollapseUserQuestion } from '@/utils/messageCollapse';
 
 const displayAnswer = ref<string>('');
 const typingSpeed = 20;
@@ -272,14 +272,15 @@ const toggleUserQuestionFold = (id?: string) => {
   if (!key) return;
   expandedUserQuestionMap[key] = !expandedUserQuestionMap[key];
 };
-const copyUserQuestion = async (content?: string) => {
-  const copied = await copyTextToClipboard(content);
-  if (copied) {
-    ElMessage.success({ message: 'Copied', offset: 72 });
-  } else {
-    ElMessage.error({ message: 'Copy failed', offset: 72 });
-  }
-};
+
+// const copyUserQuestion = async (content?: string) => {
+//   const copied = await copyTextToClipboard(content);
+//   if (copied) {
+//     ElMessage.success({ message: 'Copied', offset: 72 });
+//   } else {
+//     ElMessage.error({ message: 'Copy failed', offset: 72 });
+//   }
+// };
 
 
 interface Props {
