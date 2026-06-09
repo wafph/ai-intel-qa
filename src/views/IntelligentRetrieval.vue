@@ -43,7 +43,7 @@
                 >
                   {{ isUserQuestionCollapsed(item) ? '▾' : '▴' }}
                 </button>
-                <button
+                <!-- <button
                   class="user-message-action-btn user-message-copy-btn"
                   type="button"
                   title="复制内容"
@@ -51,7 +51,7 @@
                   @click.stop="copyUserQuestion(item.content)"
                 >
                   <img src="/images/copy.svg" alt="复制" class="user-message-copy-icon" />
-                </button>
+                </button> -->
               </div>
               <div class="message-time">{{ formatTime(item.timestamp) }}</div>
             </div>

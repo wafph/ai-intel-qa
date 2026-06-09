@@ -46,7 +46,7 @@
                     >
                       {{ isUserQuestionCollapsed(item) ? '▾' : '▴' }}
                     </button>
-                    <button
+                    <!-- <button
                       class="user-message-action-btn user-message-copy-btn"
                       type="button"
                       title="复制内容"
@@ -54,7 +54,7 @@
                       @click.stop="copyUserQuestion(item.content)"
                     >
                       <img src="/images/copy.svg" alt="复制" class="user-message-copy-icon" />
-                    </button>
+                    </button> -->
                   </div>
                   <div class="message-time">{{ formatTime(item.timestamp) }}</div>
                 </div>
@@ -111,9 +111,27 @@
                     <!-- 显示最终回复内容 -->
                     <div
                       class="message-content pad"
-                      v-html="renderMarkdown(item.content)"
                       ref="finalContentRef"
-                    ></div>
+                    >
+                      <div v-html="renderMarkdown(item.content)"></div>
+                      <div
+                        v-if="getUniqueSources(item.sources).length > 0"
+                        class="answer-sources"
+                      >
+                        <div class="answer-sources-title">引用来源</div>
+                        <div class="answer-sources-list">
+                          <button
+                            v-for="(source, sourceIndex) in getUniqueSources(item.sources)"
+                            :key="`${source.title}-${sourceIndex}`"
+                            type="button"
+                            class="answer-source-title"
+                            @click="handleAnswerSourceTitleClick(source, $event)"
+                          >
+                            {{ source.title }}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
 
                     <!-- 操作按钮区域 -->
                     <div
@@ -265,8 +283,8 @@
           v-if="activeSourcesItem && activeSourcesItem.sources"
         >
           <div
-            v-for="(source, sourceIndex) in activeSourcesItem.sources"
-            :key="sourceIndex"
+            v-for="(source, sourceIndex) in getUniqueSources(activeSourcesItem.sources)"
+            :key="`${source.title}-${sourceIndex}`"
             class="source-item"
           >
             <div
@@ -390,7 +408,7 @@ import { API } from '@/api/api';
 import { authRequest, isSuccessStatus } from '@/services/http';
 import { fetchWatermarkDocument, isPdfDocument, downloadDocumentBlob, openDocumentUrl } from '@/services/documentDownload';
 import { getSourceDirectUrl, getSourceFileId, getSourceTitle } from '@/services/sourceUtils';
-import { copyTextToClipboard, shouldCollapseUserQuestion } from '@/utils/messageCollapse';
+import { shouldCollapseUserQuestion } from '@/utils/messageCollapse';
 const chatStore = useChatStore();
 
 const displayAnswer = ref<string>('');
@@ -417,16 +435,6 @@ const toggleUserQuestionFold = (id?: string) => {
   if (!key) return;
   expandedUserQuestionMap[key] = !expandedUserQuestionMap[key];
 };
-const copyUserQuestion = async (content?: string) => {
-  const copied = await copyTextToClipboard(content);
-  if (copied) {
-    ElMessage.success({ message: 'Copied', offset: 72 });
-  } else {
-    ElMessage.error({ message: 'Copy failed', offset: 72 });
-  }
-};
-
-
 // PDF 预览相关状态
 const showPdfViewer = ref(false);
 const pdfViewerUrl = ref('');
@@ -536,6 +544,20 @@ const formatScore = (score: number | string | undefined): string => {
   return (numScore * 100).toFixed(1);
 };
 
+// 同一回答可能返回多个同标题片段，引用来源按标题保留第一条。
+const getUniqueSources = (sources?: any[]): any[] => {
+  const seenTitles = new Set<string>();
+
+  return (sources || []).filter((source) => {
+    const title = String(source?.title || '').trim();
+    if (!title) return true;
+    if (seenTitles.has(title)) return false;
+
+    seenTitles.add(title);
+    return true;
+  });
+};
+
 // 复制文本到剪贴板
 const copyToClipboard = async (text: string) => {
   try {
@@ -590,6 +612,74 @@ const copySource = async (source: any) => {
     success
       ? ElMessage.success('已复制范文片段')
       : ElMessage.error('复制失败（降级方案）');
+  }
+};
+
+// 左侧引用中的非 PDF 文件直接下载，避免占用当前问答页面。
+const downloadAnswerSourceUrl = (downloadUrl: string, title: string) => {
+  const a = document.createElement('a');
+  a.href = downloadUrl;
+  a.download = title || 'document';
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+};
+
+const openAnswerPdf = (previewWindow: Window | null, url: string) => {
+  if (!previewWindow) {
+    throw new Error('新页面被浏览器拦截，请允许本站打开新页面');
+  }
+  previewWindow.location.href = url;
+};
+
+// 左侧回答中的 PDF 在新页面打开，Word 等非 PDF 文件直接下载。
+const handleAnswerSourceTitleClick = async (source: any, event: Event) => {
+  event.stopPropagation();
+
+  const previewWindow = window.open('', '_blank');
+  if (previewWindow) previewWindow.opener = null;
+
+  try {
+    const fileId = getSourceFileId(source);
+    const title = getSourceTitle(source, 'document');
+    const directUrl = getSourceDirectUrl(source);
+
+    if (!fileId) {
+      if (!directUrl) {
+        throw new Error('来源缺少文件ID或预览地址，无法预览文档');
+      }
+      if (isPdfDocument(directUrl, '', title, directUrl)) {
+        openAnswerPdf(previewWindow, directUrl);
+      } else {
+        previewWindow?.close();
+        downloadAnswerSourceUrl(directUrl, title);
+      }
+      return;
+    }
+
+    const result = await fetchWatermarkDocument(fileId, title);
+    const isPdf = isPdfDocument(fileId, result.contentType, title, result.downloadUrl);
+
+    if (isPdf && result.downloadUrl) {
+      openAnswerPdf(previewWindow, result.downloadUrl);
+    } else if (isPdf && result.blob) {
+      const blobUrl = window.URL.createObjectURL(result.blob);
+      openAnswerPdf(previewWindow, blobUrl);
+      window.setTimeout(() => window.URL.revokeObjectURL(blobUrl), 60_000);
+    } else if (result.downloadUrl) {
+      previewWindow?.close();
+      downloadAnswerSourceUrl(result.downloadUrl, title);
+    } else if (result.blob) {
+      previewWindow?.close();
+      downloadDocumentBlob(result.blob, title, fileId);
+    } else {
+      throw new Error('水印接口未返回可预览或下载的文档内容');
+    }
+  } catch (error: any) {
+    previewWindow?.close();
+    ElMessage.error(error?.message || '获取文档失败，请稍后重试');
   }
 };
 
@@ -1394,6 +1484,41 @@ onUnmounted(() => {
 
               :deep(hr) {
                 margin: 10px 0;
+              }
+            }
+
+            .answer-sources {
+              margin-top: 14px;
+              padding-top: 14px;
+              border-top: 1px solid #e4e7ed;
+            }
+
+            .answer-sources-title {
+              margin-bottom: 8px;
+              color: #303133;
+              font-size: 15px;
+              font-weight: 600;
+            }
+
+            .answer-sources-list {
+              display: flex;
+              flex-direction: column;
+              align-items: flex-start;
+              gap: 6px;
+            }
+
+            .answer-source-title {
+              padding: 0;
+              border: none;
+              background: transparent;
+              color: #1890ff;
+              font-size: 14px;
+              line-height: 1.5;
+              text-align: left;
+              cursor: pointer;
+
+              &:hover {
+                text-decoration: underline;
               }
             }
 

@@ -56,7 +56,7 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/review-upload-api/, ''), // /review-upload-api/v1/... -> /v1/...
       },
       '/review-pdf-api': {
-        target: 'http://127.0.0.1:8006', // 智能审核 PDF 预处理服务
+        target: 'http://127.0.0.1:8000', // 智能审核 PDF 预处理服务
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/review-pdf-api/, ''), // /review-pdf-api/v1/review/pdf -> /v1/review/pdf
