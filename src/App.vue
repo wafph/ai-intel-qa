@@ -4,7 +4,10 @@
 -->
 ﻿<template>
   <template v-if="showFullLayout">
-    <div class="app-container">
+    <div
+      class="app-container"
+      :class="{ 'sidebar-collapsed': sidebarCollapsed }"
+    >
       <!-- 左侧侧边栏 -->
       <HistoryPanel
         :history-list="filteredHistory"

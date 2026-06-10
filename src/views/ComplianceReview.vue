@@ -167,11 +167,12 @@
       </div>
     </div>
 
-    <aside
-      v-if="activeOriginalMessage"
-      class="original-panel"
-      :class="{ 'sidebar-visible': activeOriginalMessage }"
-    >
+    <Transition name="original-panel-slide">
+      <aside
+        v-if="activeOriginalMessage"
+        class="original-panel"
+        :class="{ 'sidebar-visible': activeOriginalMessage }"
+      >
       <div class="original-panel-header">
         <div class="original-title">
           <el-icon><Document /></el-icon>
@@ -230,7 +231,8 @@
         class="original-content"
         v-html="renderOriginalContent"
       ></div>
-    </aside>
+      </aside>
+    </Transition>
   </div>
 </template>
 
@@ -1427,6 +1429,9 @@ onUnmounted(() => {
     height: 100%;
     min-height: 0;
     overflow: hidden;
+    transition:
+      padding 0.3s ease,
+      gap 0.3s ease;
 
     .conversation-history {
       width: 100%;
@@ -1435,6 +1440,10 @@ onUnmounted(() => {
       padding: 0 0 20px;
       overflow-y: auto;
       min-height: 0;
+      transition:
+        width 0.3s ease,
+        padding 0.3s ease,
+        margin 0.3s ease;
     }
 
     .history-item,
@@ -1444,11 +1453,14 @@ onUnmounted(() => {
   }
 
   .original-panel {
-    position: relative;
-    top: 0;
-    align-self: stretch;
-    height: 100%;
-    max-height: calc(100vh - 128px);
+    position: fixed;
+    top: 68px;
+    right: 18px;
+    bottom: 10px;
+    width: calc((100vw - var(--sidebar-width, 280px)) / 2 - 26px);
+    height: auto;
+    max-height: none;
+    margin-bottom: 0;
     min-width: 0;
     background: #fff;
     border: 1px solid #e9ecef;
@@ -1458,6 +1470,23 @@ onUnmounted(() => {
     flex-direction: column;
     overflow: hidden;
     z-index: 10;
+    transition:
+      width 0.3s ease,
+      right 0.3s ease;
+  }
+
+  .original-panel-slide-enter-active,
+  .original-panel-slide-leave-active {
+    transition:
+      opacity 0.3s ease,
+      transform 0.3s ease,
+      width 0.3s ease;
+  }
+
+  .original-panel-slide-enter-from,
+  .original-panel-slide-leave-to {
+    opacity: 0;
+    transform: translateX(28px);
   }
 
   .original-panel-header {
@@ -1652,6 +1681,10 @@ onUnmounted(() => {
     flex-direction: column;
     gap: 20px;
     width: 80%;
+    transition:
+      width 0.3s ease,
+      padding 0.3s ease,
+      margin 0.3s ease;
 
     .history-item {
       margin: 0 auto;

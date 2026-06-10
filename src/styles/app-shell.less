@@ -1,8 +1,13 @@
 ﻿.app-container {
+  --sidebar-width: 280px;
   width: 100vw;
   height: 100vh;
   display: flex;
   overflow: hidden;
+
+  &.sidebar-collapsed {
+    --sidebar-width: 0px;
+  }
 }
 
 .main-content {
@@ -19,7 +24,7 @@
   flex-direction: column;
   overflow: hidden;
   position: relative;
-  transition: width 0.2s ease, margin 0.2s ease;
+  transition: width 0.3s ease, margin 0.3s ease;
 }
 
 .dynamic-content {
@@ -39,6 +44,9 @@
   box-shadow: none;
   z-index: 10;
   position: relative;
+  transition:
+    width 0.3s ease,
+    margin 0.3s ease;
 }
 
 .stream-controls {
