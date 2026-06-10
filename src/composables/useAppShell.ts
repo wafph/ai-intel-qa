@@ -440,6 +440,9 @@ const currentConversationUuid = ref<string>('');
 const isSourcesPanelVisible = ref(false);
 const isHistoryChatActive = ref(false);
 const isSelectingHistoryChat = ref(false);
+const isHistoryListLoading = ref(true);
+const historySkeletonShownTabs = new Set<string>();
+let skipNextRouteSessionRestore = false;
 // 流式相关状态
 const isStreaming = ref<boolean>(false);
 const currentReasoning = ref<string>('');
@@ -2680,7 +2683,22 @@ const handleTabChange = async (tab: string) => {
 
   const targetRoute = routeMap[tab];
   if (targetRoute && route.path !== targetRoute) {
-    await router.push(targetRoute);
+    const shouldShowHistorySkeleton = !historySkeletonShownTabs.has(tab);
+    if (shouldShowHistorySkeleton) {
+      historySkeletonShownTabs.add(tab);
+      isHistoryListLoading.value = true;
+    }
+    skipNextRouteSessionRestore = true;
+    try {
+      await router.push(targetRoute);
+    } catch (error) {
+      skipNextRouteSessionRestore = false;
+      if (shouldShowHistorySkeleton) {
+        historySkeletonShownTabs.delete(tab);
+        isHistoryListLoading.value = false;
+      }
+      throw error;
+    }
   }
   return true;
 };
@@ -3042,7 +3060,14 @@ onMounted(async () => {
   if (!showFullLayout.value) return;
   window.addEventListener('beforeunload', handleBeforeUnload);
   loadPersistedStreamTasks();
-  await queryConversationsForCurrentRoute();
+  isHistoryListLoading.value = true;
+  try {
+    await queryConversationsForCurrentRoute();
+  } finally {
+    historySkeletonShownTabs.add(activeTab.value);
+    await nextTick();
+    isHistoryListLoading.value = false;
+  }
 
   const sessionId = route.query.id as string;
   const fromCollections = route.query.from === 'collections';
@@ -3069,7 +3094,19 @@ watch(
   () => route.fullPath,
   async () => {
     if (!showFullLayout.value) return;
-    await queryConversationsForCurrentRoute();
+    try {
+      await queryConversationsForCurrentRoute();
+    } finally {
+      await nextTick();
+      isHistoryListLoading.value = false;
+    }
+
+    if (skipNextRouteSessionRestore) {
+      skipNextRouteSessionRestore = false;
+      detachStreamSubscription();
+      resetCurrentChat();
+      return;
+    }
 
     const sessionId = route.query.id as string;
     const fromCollections = route.query.from === 'collections';
@@ -3134,6 +3171,7 @@ onUnmounted(() => {
     historySearchLoading,
     inputPlaceholder,
     isHistoryChatActive,
+    isHistoryListLoading,
     isSendDisabled,
     isSelectingHistoryChat,
     isSourcesPanelVisible,

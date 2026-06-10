@@ -62,7 +62,22 @@
         </button>
       </div>
 
-      <template v-if="isSearchMode">
+      <div v-if="loading" class="history-skeleton" aria-hidden="true">
+        <el-skeleton animated>
+          <template #template>
+            <div
+              v-for="index in historySkeletonCount"
+              :key="index"
+              class="history-skeleton-item"
+            >
+              <el-skeleton-item variant="text" class="history-skeleton-title" />
+              <el-skeleton-item variant="text" class="history-skeleton-time" />
+            </div>
+          </template>
+        </el-skeleton>
+      </div>
+
+      <template v-else-if="isSearchMode">
         <div v-if="searchLoading" class="empty-state search-state">
           <div class="empty-icon"><el-icon><Search /></el-icon></div>
           <p>正在搜索历史对话...</p>
@@ -273,6 +288,7 @@ interface Props {
   user: any;
   collapsed?: boolean;
   activeTab: string; //
+  loading?: boolean;
   authMode?: string; // 新增：local/agent，用于在左下角用户区域展示登录方式
   searchKeyword?: string;
   searchResults?: any[];
@@ -315,6 +331,11 @@ const displayUserName = computed(
 // 计算属性
 const filteredHistory = computed(() => {
   return props.historyList || [];
+});
+
+const historySkeletonCount = computed(() => {
+  const historyCount = filteredHistory.value.length;
+  return historyCount > 0 ? Math.min(historyCount, 7) : 7;
 });
 
 /** 封装当前模块内的业务逻辑：searchResults。 */
@@ -930,6 +951,27 @@ onUnmounted(() => {
 
 .history-items {
   padding: 0 0 20px 0;
+}
+
+.history-skeleton {
+  padding: 8px 0 20px;
+
+  .history-skeleton-item {
+    min-height: 60px;
+    padding: 12px 20px;
+    box-sizing: border-box;
+
+    .history-skeleton-title {
+      width: 78%;
+      height: 17px;
+    }
+
+    .history-skeleton-time {
+      width: 34%;
+      height: 12px;
+      margin-top: 9px;
+    }
+  }
 }
 
 .history-group {

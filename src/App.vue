@@ -9,6 +9,7 @@
       <HistoryPanel
         :history-list="filteredHistory"
         :active-chat-id="activeChatId"
+        :loading="isHistoryListLoading"
         :user="userStore.user"
         :collapsed="sidebarCollapsed"
         :active-tab="activeTab"
@@ -144,6 +145,7 @@ const {
   historySearchLoading,
   inputPlaceholder,
   isHistoryChatActive,
+  isHistoryListLoading,
   isSendDisabled,
   isSelectingHistoryChat,
   isSourcesPanelVisible,
@@ -181,6 +183,3 @@ const handleHeaderTabChange = async (tabName: string) => {
 </script>
 
 <style src="./styles/app-shell.less" lang="less" scoped></style>
-
-
-
