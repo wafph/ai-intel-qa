@@ -181,58 +181,66 @@
                 class="item-menu-container"
                 @click.stop
               >
-                <button class="menu-toggle-btn" @click="toggleMenu(history.id)">⋮</button>
+                <button class="menu-toggle-btn" @click="toggleMenu(history.id, $event)">⋮</button>
 
-                <div v-if="visibleMenuId === history.id" class="dropdown-menu">
-                  <button
-                    class="menu-item"
-                    :class="{ favorited: history.isCollected }"
-                    @click="handleToggleFavorite(history.id)"
+                <Teleport to="body">
+                  <div
+                    v-if="visibleMenuId === history.id"
+                    class="history-dropdown-menu"
+                    :class="{ 'opens-up': menuOpensUp }"
+                    :style="menuPositionStyle"
+                    @click.stop
                   >
-                    <span class="menu-icon">★</span>
-                    <span class="menu-text">
-                      {{ history.isCollected ? '取消收藏' : '收藏' }}
-                    </span>
-                  </button>
+                    <button
+                      class="menu-item"
+                      :class="{ favorited: history.isCollected }"
+                      @click="handleToggleFavorite(history.id)"
+                    >
+                      <span class="menu-icon">★</span>
+                      <span class="menu-text">
+                        {{ history.isCollected ? '取消收藏' : '收藏' }}
+                      </span>
+                    </button>
 
-                  <button
-                    class="menu-item pin"
-                    @click="handleTogglePin(history.id, history.topStatus === 1)"
-                  >
-                    <div class="menu-icon">
-                      <template v-if="history.topStatus === 1">
-                        <img
-                          src="/images/bottom.svg"
-                          style="width: 13px; height: 13px"
-                          alt=""
-                        />
-                      </template>
-                      <template v-else>
-                        <img
-                          src="/images/top.svg"
-                          style="width: 16px; height: 16px"
-                          alt=""
-                        />
-                      </template>
-                    </div>
-                    <span class="menu-text">
-                      {{ history.topStatus === 1 ? '取消置顶' : '置顶' }}
-                    </span>
-                  </button>
+                    <button
+                      class="menu-item pin"
+                      @click="handleTogglePin(history.id, history.topStatus === 1)"
+                    >
+                      <div class="menu-icon">
+                        <template v-if="history.topStatus === 1">
+                          <img
+                            src="/images/bottom.svg"
+                            style="width: 13px; height: 13px"
+                            alt=""
+                          />
+                        </template>
+                        <template v-else>
+                          <img
+                            src="/images/top.svg"
+                            style="width: 16px; height: 16px"
+                            alt=""
+                          />
+                        </template>
+                      </div>
+                      <span class="menu-text">
+                        {{ history.topStatus === 1 ? '取消置顶' : '置顶' }}
+                      </span>
+                    </button>
 
-                  <button
-                    class="menu-item edit"
-                    @click="startEdit(history.id, history.title)"
-                  >
-                    <el-icon class="menu-icon"><Edit /></el-icon>
-                    <span class="menu-text">修改</span>
-                  </button>
+                    <button
+                      class="menu-item edit"
+                      @click="startEdit(history.id, history.title)"
+                    >
+                      <el-icon class="menu-icon"><Edit /></el-icon>
+                      <span class="menu-text">修改</span>
+                    </button>
 
-                  <button class="menu-item delete" @click="handleDeleteChat(history.id)">
-                    <el-icon class="menu-icon"><Delete /></el-icon>
-                    <span class="menu-text">删除</span>
-                  </button>
-                </div>
+                    <button class="menu-item delete" @click="handleDeleteChat(history.id)">
+                      <el-icon class="menu-icon"><Delete /></el-icon>
+                      <span class="menu-text">删除</span>
+                    </button>
+                  </div>
+                </Teleport>
               </div>
             </div>
           </div>
@@ -317,6 +325,8 @@ const router = useRouter();
 const showUserMenu = ref(false);
 const hoveredItemId = ref<string | null>(null);
 const visibleMenuId = ref<string | null>(null);
+const menuOpensUp = ref(false);
+const menuPositionStyle = ref<Record<string, string>>({});
 const editingId = ref<string | null>(null);
 const editingTitle = ref('');
 const titleInputRef = ref<InputInstance>();
@@ -636,20 +646,63 @@ const handleMouseLeave = (itemId: string) => {
 };
 
 /** 切换面板、菜单或状态：toggleMenu。 */
-const toggleMenu = (itemId: string) => {
-  visibleMenuId.value = visibleMenuId.value === itemId ? null : itemId;
+const updateMenuPosition = (triggerRect: DOMRect, menuHeight: number, menuWidth: number) => {
+  const viewportPadding = 8;
+  const userCenter = document.querySelector('.user-center-bottom') as HTMLElement | null;
+  const bottomBoundary = userCenter?.getBoundingClientRect().top || window.innerHeight;
+  const spaceBelow = bottomBoundary - triggerRect.bottom;
+  const spaceAbove = triggerRect.top - viewportPadding;
+
+  menuOpensUp.value = spaceBelow < menuHeight + 4 && spaceAbove > spaceBelow;
+  const left = Math.min(
+    Math.max(viewportPadding, triggerRect.right - menuWidth),
+    window.innerWidth - menuWidth - viewportPadding,
+  );
+  const top = menuOpensUp.value
+    ? Math.max(viewportPadding, triggerRect.top - menuHeight - 4)
+    : Math.min(bottomBoundary - menuHeight - 4, triggerRect.bottom + 4);
+
+  menuPositionStyle.value = {
+    left: `${left}px`,
+    top: `${Math.max(viewportPadding, top)}px`,
+  };
+};
+
+const toggleMenu = (itemId: string, event: MouseEvent) => {
+  if (visibleMenuId.value === itemId) {
+    closeMenu();
+    return;
+  }
+
+  const trigger = event.currentTarget as HTMLElement | null;
+  const triggerRect = trigger?.getBoundingClientRect();
+  const menuHeight = 184;
+  const menuWidth = 120;
+  if (triggerRect) {
+    updateMenuPosition(triggerRect, menuHeight, menuWidth);
+  }
+  visibleMenuId.value = itemId;
+  nextTick(() => {
+    const menu = document.querySelector('.history-dropdown-menu') as HTMLElement | null;
+    if (triggerRect && menu) {
+      const menuRect = menu.getBoundingClientRect();
+      updateMenuPosition(triggerRect, menuRect.height, menuRect.width);
+    }
+  });
 };
 
 /** 关闭面板、菜单或弹窗：closeMenu。 */
 const closeMenu = () => {
   visibleMenuId.value = null;
   hoveredItemId.value = null;
+  menuOpensUp.value = false;
+  menuPositionStyle.value = {};
 };
 
 /** 处理用户交互或组件事件：handleClickOutsideMenu。 */
 const handleClickOutsideMenu = (event: MouseEvent) => {
-  const menuContainer = document.querySelector('.item-menu-container');
-  if (menuContainer && !menuContainer.contains(event.target as Node)) {
+  const target = event.target as HTMLElement | null;
+  if (!target?.closest('.item-menu-container, .history-dropdown-menu')) {
     closeMenu();
   }
 };
@@ -1101,24 +1154,37 @@ onUnmounted(() => {
   color: #666;
 }
 
-.dropdown-menu {
-  position: absolute;
-  top: 28px;
-  right: 0;
+:global(.history-dropdown-menu) {
+  position: fixed;
   background: white;
   border-radius: 6px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   min-width: 120px;
-  z-index: 100;
+  z-index: 3000;
   overflow: hidden;
   border: 1px solid #e9ecef;
   animation: slideDown 0.2s ease;
+
+  &.opens-up {
+    animation-name: slideUp;
+  }
 }
 
 @keyframes slideDown {
   from {
     opacity: 0;
     transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
   }
   to {
     opacity: 1;

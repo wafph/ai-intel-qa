@@ -36,6 +36,42 @@
   scroll-behavior: auto;
 }
 
+.content-loading-state {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.content-loading-icon {
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  border: 3px solid #666666;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: contentLoadingRotate 0.9s linear infinite;
+}
+
+.content-loading-fade-enter-active,
+.content-loading-fade-leave-active {
+  transition: opacity 0.16s ease;
+}
+
+.content-loading-fade-enter-from,
+.content-loading-fade-leave-to {
+  opacity: 0;
+}
+
+@keyframes contentLoadingRotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .input-container {
   width: 80%;
   margin: 0 auto 26px;

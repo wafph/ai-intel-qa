@@ -46,6 +46,11 @@
         <div class="content-area">
           <!-- 路由视图区域 -->
           <div class="dynamic-content">
+            <transition name="content-loading-fade">
+              <div v-if="isContentAreaLoading" class="content-loading-state">
+                <span class="content-loading-icon" aria-label="加载中"></span>
+              </div>
+            </transition>
             <router-view
               v-if="shouldRenderContentView"
               :key="activeChatId"
@@ -171,10 +176,13 @@ const shouldRenderContentView = computed(() => {
 
   return Boolean(
     activeTab.value &&
-      !isSelectingHistoryChat.value &&
       (!isHistoryChatActive.value || hasCurrentMessages),
   );
 });
+
+const isContentAreaLoading = computed(
+  () => isSelectingHistoryChat.value || isHistoryListLoading.value,
+);
 
 /** 处理用户交互或组件事件：handleHeaderTabChange。 */
 const handleHeaderTabChange = async (tabName: string) => {

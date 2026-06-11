@@ -167,6 +167,17 @@
                         </div>
                       </div>
                     </div>
+
+                    <div
+                      v-if="item.content !== '用户停止了生成'"
+                      class="retrieval-actions"
+                    >
+                      <el-tooltip content="重新检索" placement="top">
+                        <el-button link type="success" plain @click="handleRestart(index)">
+                          <el-icon><Refresh /></el-icon>
+                        </el-button>
+                      </el-tooltip>
+                    </div>
                   </div>
 
                   <!-- 使用 Element Plus 分页组件 -->
@@ -184,28 +195,21 @@
                 </div>
 
                 <!-- 当没有来源信息时，显示原有回复内容 -->
-                <div v-else>
+                <div v-else class="plain-response-container">
                   <div
                     class="message-content pad"
                     v-html="renderMarkdown(item.content)"
                   ></div>
-                </div>
-
-                <!-- ✅ 修改：重新检索和导出按钮 - 显示条件更宽松 -->
-                <div
-                  class="retrieval-actions"
-                  style="display: flex; align-items: center; margin-left: 15px"
-                  v-if="
-                    !item.streaming &&
-                    (item.content || (item.sources && item.sources.length > 0)) &&
-                    item.content !== '用户停止了生成'
-                  "
-                >
-                  <el-tooltip content="重新检索" placement="top">
-                    <el-button link type="success" plain @click="handleRestart(index)">
-                      <el-icon><Refresh /></el-icon>
-                    </el-button>
-                  </el-tooltip>
+                  <div
+                    v-if="item.content && item.content !== '用户停止了生成'"
+                    class="retrieval-actions"
+                  >
+                    <el-tooltip content="重新检索" placement="top">
+                      <el-button link type="success" plain @click="handleRestart(index)">
+                        <el-icon><Refresh /></el-icon>
+                      </el-button>
+                    </el-tooltip>
+                  </div>
                 </div>
               </div>
 
@@ -923,10 +927,12 @@ onUnmounted(() => {
           }
 
           .retrieval-actions {
-            width: calc(100% - 80px);
+            display: flex;
+            align-items: center;
             gap: 8px;
-            margin: -64px 0 26px 40px !important;
-            padding-top: 10px;
+            margin: 0;
+            padding: 14px 20px 18px;
+            border-top: 1px solid #f0f0f0;
             position: relative;
             z-index: 2;
 
@@ -988,6 +994,20 @@ onUnmounted(() => {
   border-radius: 22px;
   background: @white;
   margin-bottom: 20px;
+}
+
+.plain-response-container {
+  overflow: hidden;
+  border-radius: 22px;
+  background: @white;
+  margin-bottom: 20px;
+
+  .message-content {
+    margin-bottom: 0 !important;
+    padding-bottom: 20px !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+  }
 }
 
 .search-results-box {

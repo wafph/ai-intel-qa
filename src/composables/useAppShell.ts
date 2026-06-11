@@ -1894,9 +1894,7 @@ const handleSelectChat = async (chatId: string) => {
   isHistoryChatActive.value = true;
   try {
     hasAutoCreated = false;
-    // 先清空，再设置，确保触发响应式更新。只断开当前浏览器订阅，不停止后端任务。
-    activeChatId.value = '';
-    await nextTick();
+    // 请求完成前保留当前会话内容，加载完成后再一次性切换到目标会话。
     const localTask = getTaskBySessionId(chatId);
     let session = chatStore.getChatSession(chatId);
     if (!session && localTask) {
