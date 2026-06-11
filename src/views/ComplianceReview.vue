@@ -885,11 +885,13 @@ const buildSearchCandidates = (text: string) => {
 
   const candidates = new Set<string>();
   const quotePatterns = [
-    /“([^”]{4,})”/g,
-    /"([^"]{4,})"/g,
-    /「([^」]{4,})」/g,
-    /『([^』]{4,})』/g,
-    /《([^》]{4,})》/g,
+    /“([^”]+)”/g,
+    /"([^"]+)"/g,
+    /‘([^’]+)’/g,
+    /'([^']+)'/g,
+    /「([^」]+)」/g,
+    /『([^』]+)』/g,
+    /《([^》]+)》/g,
   ];
 
   quotePatterns.forEach((pattern) => {
@@ -907,36 +909,43 @@ const buildSearchCandidates = (text: string) => {
   cleaned
     .split(/[。；;！!？?\n]/)
     .map((item) => item.trim())
-    .filter((item) => item.length >= 4)
+    .filter(Boolean)
     .forEach((item) => candidates.add(item));
 
   candidates.add(cleaned);
 
   return [...candidates]
     .map((item) => item.replace(/^[-*序号\d.、\s]+/, '').trim())
-    .filter((item) => item.length >= 4)
+    .filter((item) => normalizeLocatorText(item).length > 0)
     .sort((a, b) => b.length - a.length);
 };
 
-/** 封装当前模块内的业务逻辑：findCompactMatch。 */
-const findCompactMatch = (source: string, candidate: string) => {
+const normalizeLocatorText = (text: string) =>
+  String(text || '')
+    .normalize('NFKC')
+    .replace(/[\s\p{P}\p{S}]/gu, '')
+    .toLowerCase();
+
+/** 忽略空格、符号和单双引号差异，同时保留原文位置用于高亮。 */
+const findNormalizedMatch = (source: string, candidate: string) => {
   const sourcePositions: number[] = [];
-  let compactSource = '';
+  let normalizedSource = '';
   for (let i = 0; i < source.length; i++) {
-    if (!/\s/.test(source[i])) {
+    const normalizedChar = normalizeLocatorText(source[i]);
+    for (const char of normalizedChar) {
       sourcePositions.push(i);
-      compactSource += source[i];
+      normalizedSource += char;
     }
   }
 
-  const compactCandidate = candidate.replace(/\s+/g, '');
-  if (compactCandidate.length < 4) return null;
+  const normalizedCandidate = normalizeLocatorText(candidate);
+  if (!normalizedCandidate) return null;
 
-  const compactIndex = compactSource.indexOf(compactCandidate);
-  if (compactIndex === -1) return null;
+  const normalizedIndex = normalizedSource.indexOf(normalizedCandidate);
+  if (normalizedIndex === -1) return null;
 
-  const start = sourcePositions[compactIndex];
-  const end = sourcePositions[compactIndex + compactCandidate.length - 1] + 1 || start;
+  const start = sourcePositions[normalizedIndex];
+  const end = sourcePositions[normalizedIndex + normalizedCandidate.length - 1] + 1 || start;
   return source.slice(start, end);
 };
 
@@ -948,25 +957,19 @@ const findOriginalMatch = (source: string, text: string) => {
       return candidate;
     }
 
-    const compactMatch = findCompactMatch(source, candidate);
-    if (compactMatch) {
-      return compactMatch;
+    const normalizedMatch = findNormalizedMatch(source, candidate);
+    if (normalizedMatch) {
+      return normalizedMatch;
     }
   }
   return '';
 };
 
-const normalizeLocatorText = (text: string) =>
-  String(text || '')
-    .replace(/\s+/g, '')
-    .replace(/[，。；：、“”‘’（）()【】\[\]{}《》<>·•\-—_]/g, '')
-    .toLowerCase();
-
 const findPdfMatch = (query: string) => {
   if (!query || pdfPages.value.length === 0) return null;
   const candidates = buildSearchCandidates(query)
     .map((item) => normalizeLocatorText(item))
-    .filter((item) => item.length >= 4);
+    .filter(Boolean);
 
   for (const page of pdfPages.value) {
     const compactParts: string[] = [];
@@ -1209,7 +1212,7 @@ const locateOriginalText = (rawText: string, item: ChatMessage) => {
 /** 处理用户交互或组件事件：handleAnswerSelection。 */
 const handleAnswerSelection = (item: ChatMessage) => {
   const selection = window.getSelection()?.toString() || '';
-  if (selection.trim().length >= 4) {
+  if (normalizeLocatorText(selection).length > 0) {
     locateOriginalText(selection, item);
   }
 };
