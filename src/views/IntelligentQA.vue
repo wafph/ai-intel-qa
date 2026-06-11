@@ -51,7 +51,9 @@
                         @click.stop="toggleUserQuestionFold(item.id)"
                       >
                         <el-icon>
-                          <component :is="isUserQuestionCollapsed(item) ? CaretBottom : CaretTop" />
+                          <component
+                            :is="isUserQuestionCollapsed(item) ? CaretBottom : CaretTop"
+                          />
                         </el-icon>
                       </button>
                     </el-tooltip>
@@ -118,10 +120,7 @@
                   </div>
                   <div v-else>
                     <!-- 显示最终回复内容 -->
-                    <div
-                      class="message-content pad"
-                      ref="finalContentRef"
-                    >
+                    <div class="message-content pad" ref="finalContentRef">
                       <div v-html="renderMarkdown(item.content)"></div>
                       <div
                         v-if="getUniqueSources(item.sources).length > 0"
@@ -134,7 +133,10 @@
                           :aria-expanded="isAnswerSourcesExpanded(item.id)"
                           @click="toggleAnswerSources(item.id)"
                         >
-                          <span>共参考 {{ getUniqueSources(item.sources).length }} 篇文献</span>
+                          <span
+                            >共参考
+                            {{ getUniqueSources(item.sources).length }} 篇文献</span
+                          >
                           <span
                             class="answer-sources-arrow"
                             :class="{ 'is-expanded': isAnswerSourcesExpanded(item.id) }"
@@ -147,7 +149,9 @@
                           class="answer-sources-list"
                         >
                           <button
-                            v-for="(source, sourceIndex) in getUniqueSources(item.sources)"
+                            v-for="(source, sourceIndex) in getUniqueSources(
+                              item.sources,
+                            )"
                             :key="`${source.title}-${sourceIndex}`"
                             type="button"
                             class="answer-source-title"
@@ -166,8 +170,13 @@
                     >
                       <!-- 查看来源按钮 -->
                       <el-tooltip content="查看来源" placement="top">
-                        <el-button link type="primary" plain @click="toggleSourcesPanel(item)">
-                          <el-icon><ScaleToOriginal /></el-icon>
+                        <el-button
+                          link
+                          type="primary"
+                          plain
+                          @click="toggleSourcesPanel(item)"
+                        >
+                          <el-icon><View /></el-icon>
                         </el-button>
                       </el-tooltip>
 
@@ -291,8 +300,21 @@
         :class="{ 'sidebar-visible': showSourcesPanel }"
       >
         <div class="sources-header">
-          <h3>📄 参考来源</h3>
-          <el-icon class="close-btn side-panel-close-btn" @click="closeSourcesPanel"><Close /></el-icon>
+          <h3>参考来源</h3>
+          <div class="sources-header-actions">
+            <el-tooltip
+              :content="areAllSourcesCollapsed ? '全部展开' : '全部收起'"
+              placement="bottom"
+            >
+              <el-icon class="panel-action-btn" @click="toggleAllSources">
+                <ArrowDown v-if="areAllSourcesCollapsed" />
+                <ArrowUp v-else />
+              </el-icon>
+            </el-tooltip>
+            <el-icon class="close-btn side-panel-close-btn" @click="closeSourcesPanel"
+              ><Close
+            /></el-icon>
+          </div>
         </div>
         <div
           class="sources-content"
@@ -423,14 +445,25 @@ import {
   CaretTop,
   Close,
   CopyDocument,
+  ArrowDown,
+  ArrowUp,
   Refresh,
-  ScaleToOriginal,
+  View,
 } from '@element-plus/icons-vue';
 import { useChatStore } from '@/stores/chat';
 import { API } from '@/api/api';
 import { authRequest, isSuccessStatus } from '@/services/http';
-import { fetchWatermarkDocument, isPdfDocument, downloadDocumentBlob, openDocumentUrl } from '@/services/documentDownload';
-import { getSourceDirectUrl, getSourceFileId, getSourceTitle } from '@/services/sourceUtils';
+import {
+  fetchWatermarkDocument,
+  isPdfDocument,
+  downloadDocumentBlob,
+  openDocumentUrl,
+} from '@/services/documentDownload';
+import {
+  getSourceDirectUrl,
+  getSourceFileId,
+  getSourceTitle,
+} from '@/services/sourceUtils';
 import { shouldCollapseUserQuestion } from '@/utils/messageCollapse';
 const chatStore = useChatStore();
 
@@ -764,10 +797,10 @@ const closePdfViewer = () => {
   currentPdfTitle.value = '';
 };
 
-
 const keepActionAreaVisible = (messageId: string) => {
   nextTick(() => {
-    const node = document.querySelector(`[data-message-id="${messageId}"] .message-actions`) ||
+    const node =
+      document.querySelector(`[data-message-id="${messageId}"] .message-actions`) ||
       document.querySelector(`[data-message-id="${messageId}"]`);
     node?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   });
@@ -777,7 +810,8 @@ const restoreMessageAnchor = (messageId?: string) => {
   if (!messageId) return;
   nextTick(() => {
     requestAnimationFrame(() => {
-      const node = document.querySelector(`[data-message-id="${messageId}"] .message-actions`) ||
+      const node =
+        document.querySelector(`[data-message-id="${messageId}"] .message-actions`) ||
         document.querySelector(`[data-message-id="${messageId}"]`);
       node?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
@@ -819,6 +853,23 @@ const isSourceCollapsed = (sourceIndex: string | number): boolean => {
 const toggleSourceItem = (messageId: string, sourceIndex: string | number) => {
   const key = `${messageId}-${sourceIndex}`;
   sourceCollapsed.value[key] = !sourceCollapsed.value[key];
+};
+
+const activePanelSources = computed(() =>
+  getUniqueSources(activeSourcesItem.value?.sources),
+);
+const areAllSourcesCollapsed = computed(
+  () =>
+    activePanelSources.value.length > 0 &&
+    activePanelSources.value.every((_, sourceIndex) => isSourceCollapsed(sourceIndex)),
+);
+const toggleAllSources = () => {
+  const messageId = activeSourcesItem.value?.id;
+  if (!messageId) return;
+  const shouldCollapse = !areAllSourcesCollapsed.value;
+  activePanelSources.value.forEach((_, sourceIndex) => {
+    sourceCollapsed.value[`${messageId}-${sourceIndex}`] = shouldCollapse;
+  });
 };
 
 // 重新生成
@@ -1234,7 +1285,7 @@ onUnmounted(() => {
 
     // 当右侧面板显示时，留出空间
     &:has(~ .sources-sidebar.sidebar-visible) {
-      padding-right: 250px;
+      padding-right: var(--sources-panel-width, 450px);
     }
   }
 
@@ -1733,10 +1784,11 @@ onUnmounted(() => {
   /* 右侧固定参考来源面板 */
   .sources-sidebar {
     position: fixed;
-    right: -350px;
-    top: 70px;
-    width: 350px;
-    height: 93vh;
+    right: calc(-1 * var(--sources-panel-width, 450px));
+    top: 57px;
+    bottom: 0;
+    width: var(--sources-panel-width, 450px);
+    height: 94vh;
     background: #ffffff;
     border-left: 1px solid #e9ecef;
     box-shadow: -4px 0 20px rgba(0, 0, 0, 0.1);
@@ -1753,17 +1805,43 @@ onUnmounted(() => {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 20px;
-      border-bottom: 1px solid #e9ecef;
-      background: #f8f9fa;
+      min-height: 68px;
+      padding: 0 20px;
+      border-bottom: 1px solid #edf1f7;
+      background: #ffffff;
 
       h3 {
+        display: flex;
+        align-items: center;
+        gap: 10px;
         margin: 0;
-        font-size: 18px;
+        font-size: 17px;
         font-weight: 600;
-        color: #303133;
+        color: #1f2937;
+
+        &::before {
+          content: '文';
+          width: 28px;
+          height: 28px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 8px;
+          color: #ffffff;
+          font-size: 13px;
+          font-weight: 600;
+          background: linear-gradient(135deg, #409eff, #7c8cff);
+          box-shadow: 0 5px 12px rgba(64, 158, 255, 0.24);
+        }
       }
 
+      .sources-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .panel-action-btn,
       .side-panel-close-btn {
         width: 28px;
         height: 28px;
@@ -1776,7 +1854,9 @@ onUnmounted(() => {
         font-size: 20px;
         background: transparent;
         border: none;
-        transition: color 0.18s ease, background 0.18s ease;
+        transition:
+          color 0.18s ease,
+          background 0.18s ease;
 
         &:hover {
           color: #409eff;
@@ -1788,7 +1868,17 @@ onUnmounted(() => {
     .sources-content {
       flex: 1;
       overflow-y: auto;
-      padding: 20px;
+      padding: 16px;
+      background: #f6f8fb;
+
+      &::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        border-radius: 999px;
+        background: #cbd5e1;
+      }
     }
 
     .no-sources {
@@ -1801,12 +1891,22 @@ onUnmounted(() => {
     }
 
     .source-item {
-      background: #f8f9fa;
-      border-radius: 8px;
-      margin-bottom: 12px;
-      border-left: 3px solid #409eff;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      background: #ffffff;
+      border-radius: 12px;
+      margin-bottom: 14px;
+      border: 1px solid #e5ebf3;
+      box-shadow: 0 5px 18px rgba(31, 45, 61, 0.06);
       overflow: hidden;
+      transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease,
+        transform 0.2s ease;
+
+      &:hover {
+        border-color: #c9dcf7;
+        box-shadow: 0 8px 24px rgba(31, 122, 240, 0.1);
+        transform: translateY(-1px);
+      }
 
       &:last-child {
         margin-bottom: 0;
@@ -1816,56 +1916,78 @@ onUnmounted(() => {
     .source-title {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      padding: 12px;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 14px;
       font-size: 14px;
       color: #303133;
       cursor: pointer;
       user-select: none;
-      background: #f0f7ff;
-      transition: background-color 0.3s ease;
+      background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+      transition: background-color 0.2s ease;
 
       &:hover {
-        background: #e6f7ff;
+        background: #f3f8ff;
       }
 
       .title-content {
         display: flex;
-        justify-content: space-between;
-        align-items: center;
+        align-items: flex-start;
+        gap: 10px;
         flex: 1;
-        margin-right: 10px;
+        min-width: 0;
       }
 
       .collapse-icon {
-        font-size: 12px;
-        color: #909399;
-        transition: transform 0.3s ease;
+        width: 24px;
+        height: 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        font-size: 10px;
+        color: #7b8ba5;
+        background: #edf3fb;
+        transition:
+          color 0.2s ease,
+          background 0.2s ease;
         flex-shrink: 0;
       }
     }
 
     .source-details {
-      transition: all 0.3s ease;
+      padding: 0 14px 12px;
+      transition: all 0.25s ease;
       overflow: hidden;
     }
 
     .source-subtitle {
       font-size: 12px;
-      color: #909399;
-      padding: 0 12px 8px 12px;
+      line-height: 1.55;
+      color: #8a96a8;
+      padding: 0 0 10px;
     }
 
     .source-content {
       font-size: 13px;
-      color: #606266;
-      line-height: 1.6;
-      padding: 0 12px 8px 12px;
-      max-height: 200px;
+      color: #4b5563;
+      line-height: 1.75;
+      padding: 12px;
+      max-height: 240px;
       overflow-y: auto;
-      background: #ffffff;
-      margin: 0 12px 8px 12px;
-      border-radius: 4px;
+      white-space: pre-wrap;
+      background: #f8fafc;
+      border: 1px solid #edf1f6;
+      border-radius: 8px;
+
+      &::-webkit-scrollbar {
+        width: 5px;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        border-radius: 999px;
+        background: #cbd5e1;
+      }
     }
 
     .source-footer {
@@ -1874,26 +1996,40 @@ onUnmounted(() => {
       align-items: center;
       font-size: 12px;
       color: #909399;
-      padding: 8px 12px;
-      border-top: 1px solid #f0f0f0;
+      padding: 10px 0 0;
+
+      :deep(.el-button) {
+        height: 26px;
+        padding: 0 10px;
+        border-radius: 999px;
+        background: #eef6ff;
+        font-weight: 500;
+      }
     }
 
     .source-score {
+      flex-shrink: 0;
       font-size: 12px;
-      color: #52c41a;
-      font-weight: 500;
-      background: #f6ffed;
-      padding: 2px 6px;
-      border-radius: 10px;
-      border: 1px solid #b7eb8f;
+      line-height: 20px;
+      color: #389e0d;
+      font-weight: 600;
+      background: #f1faeb;
+      padding: 1px 8px;
+      border-radius: 999px;
+      border: 1px solid #b7e397;
+      white-space: nowrap;
     }
 
     .source-title-clickable {
+      flex: 1;
+      min-width: 0;
+      line-height: 1.55;
       cursor: pointer;
-      color: #1890ff;
+      color: #1677d2;
+      font-weight: 600;
 
       &:hover {
-        text-decoration: underline;
+        color: #0958b5;
       }
     }
   }

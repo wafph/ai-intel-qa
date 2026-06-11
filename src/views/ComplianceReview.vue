@@ -121,7 +121,7 @@
                       plain
                       @click="handleOriginalMarkButtonClick(item)"
                     >
-                      <el-icon><Position /></el-icon>
+                      <el-icon><FolderChecked /></el-icon>
                     </el-button>
                   </el-tooltip>
                   <el-tooltip content="导出报告" placement="top">
@@ -175,7 +175,7 @@
       >
       <div class="original-panel-header">
         <div class="original-title">
-          <el-icon><Document /></el-icon>
+          <el-icon><FolderChecked /></el-icon>
           <h3>{{ activeOriginalFileName }}</h3>
         </div>
         <el-icon class="close-btn side-panel-close-btn" @click="closeOriginalPanel"><Close /></el-icon>
@@ -244,9 +244,8 @@ import {
   CaretBottom,
   CaretTop,
   Close,
-  Document,
   Download,
-  Position,
+  FolderChecked,
   Refresh,
 } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
@@ -1454,17 +1453,15 @@ onUnmounted(() => {
 
   .original-panel {
     position: fixed;
-    top: 68px;
-    right: 18px;
-    bottom: 10px;
-    width: calc((100vw - var(--sidebar-width, 280px)) / 2 - 26px);
+    top: 50px;
+    right: 0;
+    bottom: 0;
+    width: calc((100vw - var(--sidebar-width, 280px)) / 2 );
     height: auto;
     max-height: none;
-    margin-bottom: 0;
     min-width: 0;
     background: #fff;
     border: 1px solid #e9ecef;
-    border-radius: 18px;
     box-shadow: 0 12px 30px rgba(31, 45, 61, 0.12);
     display: flex;
     flex-direction: column;

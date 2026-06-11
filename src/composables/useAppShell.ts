@@ -2961,11 +2961,10 @@ const inputContainerStyle = computed<CSSProperties>(() => {
     }
 
     if (activeTab.value === '智能问答' || activeTab.value === '辅助起草') {
-      // 问答/起草右侧来源面板打开后，对话区通过 padding-right: 250px 预留空间，
-      // conversation-history 仍是该对话区的 80%，这里同步计算左右边界。
+      // 来源面板打开后，输入框与左侧对话内容在剩余区域内保持相同宽度和左右间距。
       return {
-        width: 'calc(80% - 200px)',
-        margin: '0 auto 26px calc(10% - 25px)',
+        width: 'calc((100% - var(--sources-panel-width, 450px)) * 0.8)',
+        margin: '0 0 26px calc((100% - var(--sources-panel-width, 450px)) * 0.1)',
         boxSizing: 'border-box',
       };
     }
@@ -2981,6 +2980,9 @@ const inputContainerStyle = computed<CSSProperties>(() => {
 // 新增事件处理函数
 const handleSourcesPanelToggle = (visible: boolean) => {
   isSourcesPanelVisible.value = visible;
+  if (visible && activeTab.value === '合规审核') {
+    sidebarCollapsed.value = true;
+  }
 };
 
 // 处理置顶/取消置顶
