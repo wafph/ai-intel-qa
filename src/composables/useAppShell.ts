@@ -1935,6 +1935,9 @@ const handleSelectChat = async (chatId: string) => {
       await chatStore.loadSessionHistory(chatId).catch(() => {});
     }
     activeChatId.value = chatId;
+    await nextTick();
+    // 目标历史会话内容完成渲染后，再恢复底部输入框的默认宽度。
+    isSourcesPanelVisible.value = false;
     persistLastActiveSession(chatStore.getFuncIdByTab(activeTab.value), chatId);
     resetStreamState();
     scrollToBottom();

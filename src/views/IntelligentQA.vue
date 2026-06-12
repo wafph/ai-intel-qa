@@ -321,8 +321,8 @@
           v-if="activeSourcesItem && activeSourcesItem.sources"
         >
           <div
-            v-for="(source, sourceIndex) in getUniqueSources(activeSourcesItem.sources)"
-            :key="`${source.title}-${sourceIndex}`"
+            v-for="(sourceGroup, sourceIndex) in activePanelSources"
+            :key="`${sourceGroup.source.title}-${sourceIndex}`"
             class="source-item"
           >
             <div
@@ -331,29 +331,32 @@
             >
               <div class="title-content">
                 <strong
-                  @click.stop="handleSourceTitleClick(source, $event)"
+                  @click.stop="handleSourceTitleClick(sourceGroup.source, $event)"
                   class="source-title-clickable"
                 >
-                  {{ source.title }}
+                  {{ sourceGroup.source.title }}
                 </strong>
-                <span class="source-score">
-                  匹配度: {{ formatScore(source.match_score || source.score) }}%
-                </span>
               </div>
               <span class="collapse-icon">
                 {{ isSourceCollapsed(sourceIndex) ? '▶' : '▼' }}
               </span>
             </div>
             <div v-show="!isSourceCollapsed(sourceIndex)" class="source-details">
-              <div class="source-subtitle">{{ source.subtitle }}</div>
-              <div class="source-content">{{ source.content }}</div>
-              <div class="source-footer">
-                <span class="source-date">
-                  更新时间: {{ formatSourceDate(source.update_date_time) }}
-                </span>
-                <el-button link size="small" type="primary" @click="copySource(source)">
-                  复制片段
-                </el-button>
+              <div
+                v-for="(source, chunkIndex) in sourceGroup.sources"
+                :key="source.chunk_id || `${sourceGroup.source.title}-${chunkIndex}`"
+                class="source-chunk"
+              >
+                <div class="source-subtitle">{{ source.subtitle }}</div>
+                <div class="source-content">{{ source.content }}</div>
+                <div class="source-footer">
+                  <span class="source-score">
+                    匹配度: {{ formatScore(source.match_score || source.score) }}%
+                  </span>
+                  <el-button link size="small" type="primary" @click="copySource(source)">
+                    复制片段
+                  </el-button>
+                </div>
               </div>
             </div>
           </div>
@@ -610,7 +613,7 @@ const formatScore = (score: number | string | undefined): string => {
   return (numScore * 100).toFixed(1);
 };
 
-// 同一回答可能返回多个同标题片段，引用来源按标题保留第一条。
+// 左侧回复中的引用来源按标题保留第一条。
 const getUniqueSources = (sources?: any[]): any[] => {
   const seenTitles = new Set<string>();
 
@@ -622,6 +625,34 @@ const getUniqueSources = (sources?: any[]): any[] => {
     seenTitles.add(title);
     return true;
   });
+};
+
+interface SourceGroup {
+  source: any;
+  sources: any[];
+}
+
+// 右侧来源面板按文档标题分组，同一文档下保留并展示所有切片。
+const groupSourcesByTitle = (sources?: any[]): SourceGroup[] => {
+  const groups = new Map<string, SourceGroup>();
+
+  (sources || []).forEach((source, sourceIndex) => {
+    const title = String(source?.title || '').trim();
+    const key = title || `__untitled-${sourceIndex}`;
+    const existingGroup = groups.get(key);
+
+    if (!existingGroup) {
+      groups.set(key, {
+        source,
+        sources: [source],
+      });
+      return;
+    }
+
+    existingGroup.sources.push(source);
+  });
+
+  return Array.from(groups.values());
 };
 
 // 复制文本到剪贴板
@@ -643,19 +674,6 @@ const copyToClipboard = async (text: string) => {
   } catch (error) {
     return false;
   }
-};
-
-// 格式化来源更新时间
-const formatSourceDate = (timestamp: string) => {
-  if (!timestamp) return '';
-  const date = new Date(parseInt(timestamp));
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 };
 
 // 复制来源片段
@@ -855,8 +873,8 @@ const toggleSourceItem = (messageId: string, sourceIndex: string | number) => {
   sourceCollapsed.value[key] = !sourceCollapsed.value[key];
 };
 
-const activePanelSources = computed(() =>
-  getUniqueSources(activeSourcesItem.value?.sources),
+const activePanelSources = computed<SourceGroup[]>(
+  () => groupSourcesByTitle(activeSourcesItem.value?.sources),
 );
 const areAllSourcesCollapsed = computed(
   () =>
@@ -1959,6 +1977,15 @@ onUnmounted(() => {
       padding: 0 14px 12px;
       transition: all 0.25s ease;
       overflow: hidden;
+    }
+
+    .source-chunk {
+      padding-top: 12px;
+
+      & + .source-chunk {
+        margin-top: 12px;
+        border-top: 1px dashed #dfe6ef;
+      }
     }
 
     .source-subtitle {
