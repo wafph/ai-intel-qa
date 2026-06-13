@@ -124,7 +124,7 @@
 
                     <div
                       v-for="(source, idx) in paginatedSources(item)"
-                      :key="source.chunk_id || idx"
+                      :key="getSourceExpandKey(item, source, idx)"
                       class="search-result-item"
                     >
                       <h3 class="source-title">
@@ -137,18 +137,18 @@
                       <div class="result-content-wrapper">
                         <div
                           class="result-content"
-                          :class="{ truncated: !expandedStates[source.chunk_id] }"
+                          :class="{ truncated: !expandedStates[getSourceExpandKey(item, source, idx)] }"
                         >
-                          {{ getDisplayContent(source) }}
+                          {{ getDisplayContent(source, getSourceExpandKey(item, source, idx)) }}
                         </div>
 
                         <div class="result-meta">
                           <span
                             v-if="shouldShowExpand(source)"
                             class="expand-toggle"
-                            @click="toggleExpand(source.chunk_id)"
+                            @click="toggleExpand(getSourceExpandKey(item, source, idx))"
                           >
-                            {{ expandedStates[source.chunk_id] ? '收起 ↑' : '展开 ↓' }}
+                            {{ expandedStates[getSourceExpandKey(item, source, idx)] ? '收起 ↑' : '展开 ↓' }}
                           </span>
                           <span class="source-origin">
                             制度来源：
@@ -327,13 +327,18 @@ const md = new MarkdownIt({
   typographer: true,
 });
 
+const getSourceExpandKey = (item: ChatMessage, source: SourceInfo, index: number) => {
+  const sourceIndex = item.sources?.indexOf(source);
+  const stableIndex = sourceIndex === undefined || sourceIndex < 0 ? index : sourceIndex;
+  return `${item.id}-${stableIndex}-${source.chunk_id || source.title || ''}`;
+};
+
 // 获取显示内容（截断或完整）
-const getDisplayContent = (source: SourceInfo) => {
+const getDisplayContent = (source: SourceInfo, expandKey: string) => {
   const content = source.content || '';
-  const chunkId = source.chunk_id;
 
   // 如果已展开或内容长度不超过150，显示完整内容
-  if (expandedStates[chunkId] || content.length <= 150) {
+  if (expandedStates[expandKey] || content.length <= 150) {
     return content;
   }
 
@@ -413,17 +418,9 @@ const handleViewDocument = async (source: SourceInfo | any) => {
 };
 
 // 切换展开状态
-const toggleExpand = (chunkId: string) => {
-  expandedStates[chunkId] = !expandedStates[chunkId];
+const toggleExpand = (expandKey: string) => {
+  expandedStates[expandKey] = !expandedStates[expandKey];
 };
-
-// 获取当前页码（带默认值）
-// const getCurrentPage = (messageId: string): number => {
-//   if (!paginationStates[messageId]) {
-//     paginationStates[messageId] = { currentPage: 1, pageSize: 10 };
-//   }
-//   return paginationStates[messageId].currentPage;
-// };
 
 // 计算分页后的数据
 const paginatedSources = (item: ChatMessage) => {

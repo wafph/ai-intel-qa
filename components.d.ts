@@ -13,6 +13,7 @@ declare module 'vue' {
   export interface GlobalComponents {
     ChatInput: typeof import('./src/components/ChatInput.vue')['default']
     ComplianceReviewExtras: typeof import('./src/components/ComplianceReviewExtras.vue')['default']
+    ElAvatar: typeof import('element-plus/es')['ElAvatar']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElCheckbox: typeof import('element-plus/es')['ElCheckbox']
     ElCheckboxGroup: typeof import('element-plus/es')['ElCheckboxGroup']

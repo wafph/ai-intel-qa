@@ -255,9 +255,9 @@
         @click="toggleUserMenu"
         :class="{ active: showUserMenu }"
       >
-        <img
-          :src="user.avatar || '/images/user.png'"
-          alt="用户头像"
+        <el-avatar
+          :size="40"
+          :src="user.avatar || '/images/avatar.png'"
           class="user-avatar"
         />
         <div class="user-details">
@@ -1267,12 +1267,8 @@ onUnmounted(() => {
 }
 
 .user-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
 }
 
 .user-details {
