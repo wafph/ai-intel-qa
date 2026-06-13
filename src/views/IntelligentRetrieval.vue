@@ -34,7 +34,18 @@
                 class="message-content user-message-content"
                 :class="{ 'is-collapsed': isUserQuestionCollapsed(item) }"
               ><span class="user-message-content-inner">{{ item.content }}</span></pre>
-              <div class="user-message-actions">
+              <div class="user-message-meta">
+                <div class="user-message-actions">
+                  <el-tooltip content="复制内容" placement="top">
+                    <button
+                      class="user-message-action-btn user-message-copy-btn"
+                      type="button"
+                      aria-label="复制内容"
+                      @click.stop="copyUserQuestion(item.content)"
+                    >
+                      <el-icon><CopyDocument /></el-icon>
+                    </button>
+                  </el-tooltip>
                 <el-tooltip
                   v-if="shouldFoldUserQuestion(item.content)"
                   :content="isUserQuestionCollapsed(item) ? '展开' : '折叠'"
@@ -51,17 +62,9 @@
                     </el-icon>
                   </button>
                 </el-tooltip>
-                <!-- <button
-                  class="user-message-action-btn user-message-copy-btn"
-                  type="button"
-                  title="复制内容"
-                  aria-label="复制内容"
-                  @click.stop="copyUserQuestion(item.content)"
-                >
-                  <img src="/images/copy.svg" alt="复制" class="user-message-copy-icon" />
-                </button> -->
+                </div>
+                <div class="message-time">{{ formatTime(item.timestamp) }}</div>
               </div>
-              <div class="message-time">{{ formatTime(item.timestamp) }}</div>
             </div>
           </div>
         </div>
@@ -147,51 +150,39 @@
                           >
                             {{ expandedStates[source.chunk_id] ? '收起 ↑' : '展开 ↓' }}
                           </span>
-                          <div>
-                            <p class="update-date">
-                              更新日期：{{ formatUpdateDate(source.update_date_time) }}
-                            </p>
+                          <span class="source-origin">
+                            制度来源：
                             <a
-                              class="view-detail"
+                              class="source-document-link"
                               href="javascript:;"
                               @click.prevent="
                                 handleViewDocument(source)
                               "
                               :class="{ disabled: isDownloading[getSourceFileId(source) || getSourceDirectUrl(source) || source.title] }"
                             >
-                              {{
-                                isDownloading[getSourceFileId(source) || getSourceDirectUrl(source) || source.title] ? '加载中...' : '查看详情 →'
-                              }}
+                              {{ source.title }}
                             </a>
-                          </div>
+                          </span>
                         </div>
                       </div>
-                    </div>
-
-                    <div
-                      v-if="item.content !== '用户停止了生成'"
-                      class="retrieval-actions"
-                    >
-                      <el-tooltip content="重新检索" placement="top">
-                        <el-button link type="success" plain @click="handleRestart(index)">
-                          <el-icon><Refresh /></el-icon>
-                        </el-button>
-                      </el-tooltip>
+                      <div
+                        v-if="
+                          idx === paginatedSources(item).length - 1 &&
+                          item.content !== '用户停止了生成'
+                        "
+                        class="retrieval-actions retrieval-actions-in-card"
+                      >
+                        <el-tooltip content="重新检索" placement="top">
+                          <el-button link type="success" plain @click="handleRestart(index)">
+                            <el-icon><Refresh /></el-icon>
+                          </el-button>
+                        </el-tooltip>
+                        <span class="final-message-time">
+                          {{ formatTime(item.timestamp) }}
+                        </span>
+                      </div>
                     </div>
                   </div>
-
-                  <!-- 使用 Element Plus 分页组件 -->
-                  <!-- <div class="pagination-wrapper">
-                    <el-pagination
-                      :current-page="getCurrentPage(item.id)"
-                      :page-size="getPageSize(item.id)"
-                      :page-sizes="[5, 10, 20, 50]"
-                      :total="item.sources.length"
-                      layout="total, sizes, prev, pager, next, jumper"
-                      @size-change="(size) => handleSizeChange(item.id, size)"
-                      @current-change="(page) => handleCurrentChange(item.id, page)"
-                    />
-                  </div> -->
                 </div>
 
                 <!-- 当没有来源信息时，显示原有回复内容 -->
@@ -209,16 +200,19 @@
                         <el-icon><Refresh /></el-icon>
                       </el-button>
                     </el-tooltip>
+                    <span class="final-message-time">
+                      {{ formatTime(item.timestamp) }}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              <div class="message-time">
+              <div
+                v-if="item.streaming && item.id === currentStreamingMessageId"
+                class="message-time"
+              >
                 {{ formatTime(item.timestamp) }}
-                <span
-                  v-if="item.streaming && item.id === currentStreamingMessageId"
-                  class="streaming-badge"
-                >
+                <span class="streaming-badge">
                   <span class="streaming-dot"></span>
                   生成中...
                 </span>
@@ -248,10 +242,10 @@
 import { ref, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import MarkdownIt from 'markdown-it';
 import { ElIcon, ElMessage } from 'element-plus';
-import { CaretBottom, CaretTop, Refresh } from '@element-plus/icons-vue';
+import { CaretBottom, CaretTop, CopyDocument, Refresh } from '@element-plus/icons-vue';
 import { fetchWatermarkDocument, isPdfDocument, downloadDocumentBlob, openDocumentUrl } from '@/services/documentDownload';
 import { getSourceDirectUrl, getSourceFileId, getSourceTitle } from '@/services/sourceUtils';
-import { shouldCollapseUserQuestion } from '@/utils/messageCollapse';
+import { copyTextToClipboard, shouldCollapseUserQuestion } from '@/utils/messageCollapse';
 
 // 状态变量
 const displayAnswer = ref<string>('');
@@ -283,14 +277,14 @@ const toggleUserQuestionFold = (id?: string) => {
   expandedUserQuestionMap[key] = !expandedUserQuestionMap[key];
 };
 
-// const copyUserQuestion = async (content?: string) => {
-//   const copied = await copyTextToClipboard(content);
-//   if (copied) {
-//     ElMessage.success({ message: 'Copied', offset: 72 });
-//   } else {
-//     ElMessage.error({ message: 'Copy failed', offset: 72 });
-//   }
-// };
+const copyUserQuestion = async (content?: string) => {
+  const copied = await copyTextToClipboard(content);
+  if (copied) {
+    ElMessage.success({ message: '已复制', offset: 72 });
+  } else {
+    ElMessage.error({ message: '复制失败', offset: 72 });
+  }
+};
 
 
 // Props
@@ -345,19 +339,6 @@ const md = new MarkdownIt({
   linkify: true,
   typographer: true,
 });
-
-// 格式化更新日期
-const formatUpdateDate = (timeStr: string) => {
-  if (!timeStr) return '';
-  // 如果是时间戳格式
-  if (!isNaN(Number(timeStr))) {
-    const timestamp = Number(timeStr);
-    const date = new Date(timestamp);
-    return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-  }
-  // 如果是字符串格式，直接返回
-  return timeStr;
-};
 
 // 获取显示内容（截断或完整）
 const getDisplayContent = (source: SourceInfo) => {
@@ -930,11 +911,18 @@ onUnmounted(() => {
             display: flex;
             align-items: center;
             gap: 8px;
-            margin: 0;
-            padding: 14px 20px 18px;
-            border-top: 1px solid #f0f0f0;
+            padding-top: 14px;
+            background: #fff;
+            border-radius: 16px;
             position: relative;
             z-index: 2;
+
+            .final-message-time {
+              margin-left: auto;
+              color: #999;
+              font-size: 15px;
+              line-height: 28px;
+            }
 
             :deep(.el-button) {
               width: 28px;
@@ -991,8 +979,7 @@ onUnmounted(() => {
 .search-results-container {
   width: 100%;
   box-sizing: border-box;
-  border-radius: 22px;
-  background: @white;
+  background: transparent;
   margin-bottom: 20px;
 }
 
@@ -1011,41 +998,67 @@ onUnmounted(() => {
 }
 
 .search-results-box {
-  border-radius: 8px;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
 }
 
 .search-result-item {
-  padding: 20px;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 22px 24px;
+  border: 1px solid #edf0f5;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 5px 16px rgba(31, 45, 61, 0.08);
 
   .source-title {
     display: flex;
     justify-content: space-between;
+    align-items: flex-start;
+    gap: 20px;
+    margin: 0 0 14px;
+    font-size: 18px;
+    line-height: 1.5;
+    color: #20242a;
   }
 
   &:last-child {
-    border-bottom: none;
+    margin-bottom: 0;
+  }
+
+  .retrieval-actions-in-card {
+    margin: 16px -24px -22px;
+    padding: 14px 24px 18px;
+    border-radius: 0 0 16px 16px;
+    box-shadow: none;
   }
 }
 
 .result-content-wrapper {
   position: relative;
-  margin-bottom: 15px;
+  margin-bottom: 0;
 
   .result-meta {
     display: flex;
     align-items: center;
+    gap: 18px;
     font-size: 14px;
-    justify-content: space-between;
     color: #666;
-    padding-top: 10px;
-    border-top: 2px dashed #e8e8e8;
+    padding-top: 14px;
+    border-top: none;
 
-    .view-detail {
+    .source-origin {
+      display: inline-flex;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .source-document-link {
       color: #1890ff;
       text-decoration: none;
       cursor: pointer;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
 
       &:hover {
         text-decoration: underline;
@@ -1073,7 +1086,6 @@ onUnmounted(() => {
 
 .expand-toggle {
   display: inline-block;
-  margin-top: 8px;
   color: #1890ff;
   cursor: pointer;
   font-size: 14px;
@@ -1168,7 +1180,7 @@ onUnmounted(() => {
   width: 100%;
 }
 
-.view-detail {
+.source-document-link {
   &.disabled {
     color: #999;
     cursor: not-allowed;

@@ -38,7 +38,18 @@
                   ><span class="user-message-content-inner">{{
                     item.content
                   }}</span></pre>
-                  <div class="user-message-actions">
+                  <div class="user-message-meta">
+                    <div class="user-message-actions">
+                      <el-tooltip content="复制内容" placement="top">
+                        <button
+                          class="user-message-action-btn user-message-copy-btn"
+                          type="button"
+                          aria-label="复制内容"
+                          @click.stop="copyUserQuestion(item.content)"
+                        >
+                          <el-icon><CopyDocument /></el-icon>
+                        </button>
+                      </el-tooltip>
                     <el-tooltip
                       v-if="shouldFoldUserQuestion(item.content)"
                       :content="isUserQuestionCollapsed(item) ? '展开' : '折叠'"
@@ -57,17 +68,9 @@
                         </el-icon>
                       </button>
                     </el-tooltip>
-                    <!-- <button
-                      class="user-message-action-btn user-message-copy-btn"
-                      type="button"
-                      title="复制内容"
-                      aria-label="复制内容"
-                      @click.stop="copyUserQuestion(item.content)"
-                    >
-                      <img src="/images/copy.svg" alt="复制" class="user-message-copy-icon" />
-                    </button> -->
+                    </div>
+                    <div class="message-time">{{ formatTime(item.timestamp) }}</div>
                   </div>
-                  <div class="message-time">{{ formatTime(item.timestamp) }}</div>
                 </div>
               </div>
             </div>
@@ -191,18 +194,13 @@
                       >
                         <div
                           class="copy-container"
-                          @click="handleCopy(item.content, item.id)"
+                          @click="handleCopy(item.content)"
                           :class="{
                             'copy-disabled':
                               item.streaming && item.id === currentStreamingMessageId,
                           }"
                         >
                           <el-icon><CopyDocument /></el-icon>
-                          <span
-                            v-if="showCopied && copiedMessageId === item.id"
-                            class="copied-text"
-                            >已复制</span
-                          >
                         </div>
                       </el-tooltip>
 
@@ -268,14 +266,17 @@
                           <el-icon><Refresh /></el-icon>
                         </el-button>
                       </el-tooltip>
+                      <span class="final-message-time">
+                        {{ formatTime(item.timestamp) }}
+                      </span>
                     </div>
                   </div>
-                  <div class="message-time">
+                  <div
+                    v-if="item.streaming && item.id === currentStreamingMessageId"
+                    class="message-time"
+                  >
                     {{ formatTime(item.timestamp) }}
-                    <span
-                      v-if="item.streaming && item.id === currentStreamingMessageId"
-                      class="streaming-badge"
-                    >
+                    <span class="streaming-badge">
                       <span class="streaming-dot"></span>
                       生成中...
                     </span>
@@ -467,7 +468,7 @@ import {
   getSourceFileId,
   getSourceTitle,
 } from '@/services/sourceUtils';
-import { shouldCollapseUserQuestion } from '@/utils/messageCollapse';
+import { copyTextToClipboard, shouldCollapseUserQuestion } from '@/utils/messageCollapse';
 const chatStore = useChatStore();
 
 const displayAnswer = ref<string>('');
@@ -585,11 +586,6 @@ const md = new MarkdownIt({
   linkify: true,
   typographer: true,
 });
-
-// 复制相关状态
-const showCopied = ref(false);
-const copiedMessageId = ref<string | null>(null);
-let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
 // 格式化匹配度分数
 const formatScore = (score: number | string | undefined): string => {
@@ -908,8 +904,17 @@ const handleRestart = (index: number) => {
   }
 };
 
+const copyUserQuestion = async (content?: string) => {
+  const copied = await copyTextToClipboard(content);
+  if (copied) {
+    ElMessage.success({ message: '已复制', offset: 72 });
+  } else {
+    ElMessage.error({ message: '复制失败', offset: 72 });
+  }
+};
+
 // 处理复制点击事件
-const handleCopy = async (content: string, messageId: string) => {
+const handleCopy = async (content: string) => {
   if (!content || content.trim() === '') {
     return;
   }
@@ -917,17 +922,9 @@ const handleCopy = async (content: string, messageId: string) => {
   const isCopied = await copyToClipboard(content);
 
   if (isCopied) {
-    showCopied.value = true;
-    copiedMessageId.value = messageId;
-
-    if (copyTimer) {
-      clearTimeout(copyTimer);
-    }
-
-    copyTimer = setTimeout(() => {
-      showCopied.value = false;
-      copiedMessageId.value = null;
-    }, 2000);
+    ElMessage.success({ message: '已复制', offset: 72 });
+  } else {
+    ElMessage.error({ message: '复制失败', offset: 72 });
   }
 };
 
@@ -1252,9 +1249,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopTypingEffect();
-  if (copyTimer) {
-    clearTimeout(copyTimer);
-  }
 });
 </script>
 
@@ -1362,12 +1356,22 @@ onUnmounted(() => {
                 overflow-x: auto; /* 防止长行溢出 */
               }
 
-              .message-time {
-                text-align: right;
+              .user-message-meta {
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
+                gap: 8px;
+                width: 100%;
                 margin-top: 8px;
+              }
+
+              .user-message-meta .message-time {
+                text-align: right;
+                margin-top: 0;
                 color: #999;
                 font-size: 15px;
-                padding-right: 0;
+                line-height: 24px;
+                padding: 0;
               }
             }
           }
@@ -1415,6 +1419,13 @@ onUnmounted(() => {
               justify-content: flex-start; /* 操作按钮左对齐 */
               position: relative;
               z-index: 2;
+
+              .final-message-time {
+                margin-left: auto;
+                color: #999;
+                font-size: 15px;
+                line-height: 28px;
+              }
 
               > :deep(.el-button) {
                 width: 28px;
@@ -1712,30 +1723,6 @@ onUnmounted(() => {
                 opacity: 0.5;
               }
 
-              .copied-text {
-                position: absolute;
-                top: -30px;
-                left: 50%;
-                transform: translateX(-50%);
-                background: #52c41a;
-                color: white;
-                padding: 4px 8px;
-                border-radius: 4px;
-                font-size: 12px;
-                white-space: nowrap;
-                z-index: 10;
-
-                &:after {
-                  content: '';
-                  position: absolute;
-                  bottom: -4px;
-                  left: 50%;
-                  transform: translateX(-50%);
-                  border-left: 4px solid transparent;
-                  border-right: 4px solid transparent;
-                  border-top: 4px solid #52c41a;
-                }
-              }
             }
 
             .vote-container {

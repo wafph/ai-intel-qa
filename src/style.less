@@ -225,10 +225,6 @@ body {
   word-break: break-word;
 }
 
-.history-item.user-message .user-message-content.has-actions {
-  padding-bottom: 38px !important;
-}
-
 .user-message-content.is-collapsed {
   display: block !important;
   box-sizing: border-box !important;
@@ -248,15 +244,24 @@ body {
 }
 
 .user-message-actions {
-  position: absolute;
-  right: 10px;
-  bottom: 34px;
-  z-index: 1;
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 6px;
-  margin-top: 0;
+}
+
+.user-message-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.history-item.user-message .user-message-meta .message-time {
+  margin-top: 0 !important;
+  padding: 0 !important;
+  line-height: 24px;
 }
 
 .user-message-action-btn {
@@ -267,8 +272,8 @@ body {
   justify-content: center;
   border: none;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
+  background: transparent;
+  color: #606266;
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
@@ -280,7 +285,7 @@ body {
 }
 
 .user-message-action-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(96, 98, 102, 0.1);
   box-shadow: none;
 }
 
@@ -295,12 +300,6 @@ body {
   background: transparent;
   box-shadow: none;
   opacity: 0.8;
-}
-
-.user-message-copy-icon {
-  width: 20px;
-  height: 20px;
-  display: block;
 }
 
 .input-container {

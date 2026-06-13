@@ -32,7 +32,18 @@
                 class="message-content user-message-content"
                 :class="{ 'is-collapsed': isUserQuestionCollapsed(item) }"
               ><span class="user-message-content-inner">{{ item.content }}</span></pre>
-              <div class="user-message-actions">
+              <div class="user-message-meta">
+                <div class="user-message-actions">
+                  <el-tooltip content="复制内容" placement="top">
+                    <button
+                      class="user-message-action-btn user-message-copy-btn"
+                      type="button"
+                      aria-label="复制内容"
+                      @click.stop="copyUserQuestion(item.content)"
+                    >
+                      <el-icon><CopyDocument /></el-icon>
+                    </button>
+                  </el-tooltip>
                 <el-tooltip
                   v-if="shouldFoldUserQuestion(item.content)"
                   :content="isUserQuestionCollapsed(item) ? '展开' : '折叠'"
@@ -49,17 +60,9 @@
                     </el-icon>
                   </button>
                 </el-tooltip>
-                <!-- <button
-                  class="user-message-action-btn user-message-copy-btn"
-                  type="button"
-                  title="复制内容"
-                  aria-label="复制内容"
-                  @click.stop="copyUserQuestion(item.content)"
-                >
-                  <img src="/images/copy.svg" alt="复制" class="user-message-copy-icon" />
-                </button> -->
+                </div>
+                <div class="message-time">{{ formatTime(item.timestamp) }}</div>
               </div>
-              <div class="message-time">{{ formatTime(item.timestamp) }}</div>
             </div>
           </div>
         </div>
@@ -148,15 +151,18 @@
                       <el-icon><Refresh /></el-icon>
                     </el-button>
                   </el-tooltip>
+                  <span class="final-message-time">
+                    {{ formatTime(item.timestamp) }}
+                  </span>
                 </div>
               </div>
 
-              <div class="message-time">
+              <div
+                v-if="item.streaming && item.id === currentStreamingMessageId"
+                class="message-time"
+              >
                 {{ formatTime(item.timestamp) }}
-                <span
-                  v-if="item.streaming && item.id === currentStreamingMessageId"
-                  class="streaming-badge"
-                >
+                <span class="streaming-badge">
                   <span class="streaming-dot"></span>
                   生成中...
                 </span>
@@ -244,6 +250,7 @@ import {
   CaretBottom,
   CaretTop,
   Close,
+  CopyDocument,
   Download,
   FolderChecked,
   Refresh,
@@ -252,7 +259,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { API } from '@/api/api';
 import { isSuccessStatus, request } from '@/services/http';
 import { fetchReviewPdfContext } from '@/services/reviewPdfPrepare';
-import { shouldCollapseUserQuestion } from '@/utils/messageCollapse';
+import { copyTextToClipboard, shouldCollapseUserQuestion } from '@/utils/messageCollapse';
 
 const displayAnswer = ref<string>('');
 const typingSpeed = 20;
@@ -274,14 +281,14 @@ const toggleUserQuestionFold = (id?: string) => {
   expandedUserQuestionMap[key] = !expandedUserQuestionMap[key];
 };
 
-// const copyUserQuestion = async (content?: string) => {
-//   const copied = await copyTextToClipboard(content);
-//   if (copied) {
-//     ElMessage.success({ message: 'Copied', offset: 72 });
-//   } else {
-//     ElMessage.error({ message: 'Copy failed', offset: 72 });
-//   }
-// };
+const copyUserQuestion = async (content?: string) => {
+  const copied = await copyTextToClipboard(content);
+  if (copied) {
+    ElMessage.success({ message: '已复制', offset: 72 });
+  } else {
+    ElMessage.error({ message: '复制失败', offset: 72 });
+  }
+};
 
 
 interface Props {
@@ -1751,9 +1758,17 @@ onUnmounted(() => {
               align-items: center;
               gap: 8px;
               margin: -64px 0 26px 40px !important;
+              width: calc(100% - 80px);
               padding-top: 10px;
               position: relative;
               z-index: 2;
+
+              .final-message-time {
+                margin-left: auto;
+                color: #999;
+                font-size: 15px;
+                line-height: 28px;
+              }
 
               > :deep(.btnbottom) {
                 width: 28px;

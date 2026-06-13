@@ -41,7 +41,7 @@ const defaultUser = {
   username: 'testuser',
   name: 'testuser',
   nickname: '测试用户',
-  avatar: '/images/user.png',
+  avatar: '/images/default-avatar.svg',
   email: '',
   phone: '',
   is_admin: false,

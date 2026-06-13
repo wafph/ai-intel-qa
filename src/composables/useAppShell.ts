@@ -2956,7 +2956,7 @@ const inputContainerStyle = computed<CSSProperties>(() => {
       // 合规审核打开原文定位后，页面为左右分栏：左侧对话列宽约为 50% - 26px。
       return {
         width: 'calc(50% - 26px)',
-        margin: '0 auto 26px 18px',
+        margin: '0 auto 3px 18px',
         boxSizing: 'border-box',
       };
     }
@@ -2965,7 +2965,7 @@ const inputContainerStyle = computed<CSSProperties>(() => {
       // 来源面板打开后，输入框与左侧对话内容在剩余区域内保持相同宽度和左右间距。
       return {
         width: 'calc((100% - var(--sources-panel-width, 450px)) * 0.8)',
-        margin: '0 0 26px calc((100% - var(--sources-panel-width, 450px)) * 0.1)',
+        margin: '0 0 3px calc((100% - var(--sources-panel-width, 450px)) * 0.1)',
         boxSizing: 'border-box',
       };
     }
@@ -2973,7 +2973,7 @@ const inputContainerStyle = computed<CSSProperties>(() => {
 
   return {
     width: '80%',
-    margin: '0 auto 26px',
+    margin: '0 auto 3px',
     boxSizing: 'border-box',
   };
 });

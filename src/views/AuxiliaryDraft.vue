@@ -41,7 +41,18 @@
                   ><span class="user-message-content-inner">{{
                     item.content
                   }}</span></pre>
-                  <div class="user-message-actions">
+                  <div class="user-message-meta">
+                    <div class="user-message-actions">
+                      <el-tooltip content="复制内容" placement="top">
+                        <button
+                          class="user-message-action-btn user-message-copy-btn"
+                          type="button"
+                          aria-label="复制内容"
+                          @click.stop="copyUserQuestion(item.content)"
+                        >
+                          <el-icon><CopyDocument /></el-icon>
+                        </button>
+                      </el-tooltip>
                     <el-tooltip
                       v-if="shouldFoldUserQuestion(item.content)"
                       :content="isUserQuestionCollapsed(item) ? '展开' : '折叠'"
@@ -58,17 +69,9 @@
                         </el-icon>
                       </button>
                     </el-tooltip>
-                    <!-- <button
-                      class="user-message-action-btn user-message-copy-btn"
-                      type="button"
-                      title="复制内容"
-                      aria-label="复制内容"
-                      @click.stop="copyUserQuestion(item.content)"
-                    >
-                      <img src="/images/copy.svg" alt="复制" class="user-message-copy-icon" />
-                    </button> -->
+                    </div>
+                    <div class="message-time">{{ formatTime(item.timestamp) }}</div>
                   </div>
-                  <div class="message-time">{{ formatTime(item.timestamp) }}</div>
                 </div>
               </div>
             </div>
@@ -162,15 +165,18 @@
                           <el-icon><Refresh /></el-icon>
                         </el-button>
                       </el-tooltip>
+                      <span class="final-message-time">
+                        {{ formatTime(item.timestamp) }}
+                      </span>
                     </div>
                   </div>
 
-                  <div class="message-time">
+                  <div
+                    v-if="item.streaming && item.id === currentStreamingMessageId"
+                    class="message-time"
+                  >
                     {{ formatTime(item.timestamp) }}
-                    <span
-                      v-if="item.streaming && item.id === currentStreamingMessageId"
-                      class="streaming-badge"
-                    >
+                    <span class="streaming-badge">
                       <span class="streaming-dot"></span>
                       生成中...
                     </span>
@@ -281,6 +287,7 @@ import {
   CaretBottom,
   CaretTop,
   Close,
+  CopyDocument,
   Download,
   ArrowDown,
   ArrowUp,
@@ -297,7 +304,7 @@ import {
   openDocumentUrl,
 } from '@/services/documentDownload';
 import { getSourceDirectUrl, getSourceFileId, getSourceTitle } from '@/services/sourceUtils';
-import { shouldCollapseUserQuestion } from '@/utils/messageCollapse';
+import { copyTextToClipboard, shouldCollapseUserQuestion } from '@/utils/messageCollapse';
 const emit = defineEmits(['regenerate', 'sources-panel-toggle']);
 
 interface Props {
@@ -359,14 +366,14 @@ const toggleUserQuestionFold = (id?: string) => {
   expandedUserQuestionMap[key] = !expandedUserQuestionMap[key];
 };
 
-// const copyUserQuestion = async (content?: string) => {
-//   const copied = await copyTextToClipboard(content);
-//   if (copied) {
-//     ElMessage.success({ message: 'Copied', offset: 72 });
-//   } else {
-//     ElMessage.error({ message: 'Copy failed', offset: 72 });
-//   }
-// };
+const copyUserQuestion = async (content?: string) => {
+  const copied = await copyTextToClipboard(content);
+  if (copied) {
+    ElMessage.success({ message: '已复制', offset: 72 });
+  } else {
+    ElMessage.error({ message: '复制失败', offset: 72 });
+  }
+};
 
 // PDF 预览相关状态
 const showPdfViewer = ref(false);
@@ -960,6 +967,13 @@ onUnmounted(() => {
               justify-content: flex-start; /* 操作按钮左对齐 */
               position: relative;
               z-index: 2;
+
+              .final-message-time {
+                margin-left: auto;
+                color: #999;
+                font-size: 15px;
+                line-height: 28px;
+              }
 
               > :deep(.el-button) {
                 width: 28px;
