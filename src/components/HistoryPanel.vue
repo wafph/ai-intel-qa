@@ -1046,7 +1046,7 @@ onUnmounted(() => {
 }
 
 .history-item {
-  padding: 12px 20px;
+  padding: 0 20px;
   display: flex;
   align-items: center;
   gap: 12px;
