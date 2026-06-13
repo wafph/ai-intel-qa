@@ -214,7 +214,7 @@
           v-if="activeSourcesItem && activeSourcesItem.sources"
         >
           <div
-            v-for="(source, sourceIndex) in activeSourcesItem.sources"
+            v-for="(source, sourceIndex) in activePanelSources"
             :key="sourceIndex"
             class="source-item"
           >
@@ -242,9 +242,6 @@
               <div class="source-subtitle">{{ source.subtitle }}</div>
               <div class="source-content">{{ source.content }}</div>
               <div class="source-footer">
-                <span class="source-date">
-                  更新时间: {{ formatSourceDate(source.update_date_time) }}
-                </span>
                 <el-button link size="small" type="primary" @click="copySource(source)">
                   复制片段
                 </el-button>
@@ -583,7 +580,26 @@ const toggleSourceItem = (messageId: string, sourceIndex: string | number) => {
   sourceCollapsed.value[key] = !sourceCollapsed.value[key];
 };
 
-const activePanelSources = computed(() => activeSourcesItem.value?.sources || []);
+const getNormalizedSourceScore = (source: any): number => {
+  const rawScore = source?.match_score ?? source?.score;
+  const score = typeof rawScore === 'number' ? rawScore : parseFloat(rawScore);
+  if (!Number.isFinite(score)) return 0;
+  return score > 1 ? score : score * 100;
+};
+
+const activePanelSources = computed(() => {
+  const sources = activeSourcesItem.value?.sources;
+  if (!Array.isArray(sources)) return [];
+
+  return sources
+    .map((source: any, originalIndex: number) => ({ source, originalIndex }))
+    .sort(
+      (a: any, b: any) =>
+        getNormalizedSourceScore(b.source) - getNormalizedSourceScore(a.source) ||
+        a.originalIndex - b.originalIndex,
+    )
+    .map(({ source }: any) => source);
+});
 const areAllSourcesCollapsed = computed(() =>
   activePanelSources.value.length > 0 &&
   activePanelSources.value.every((_: any, sourceIndex: number) => isSourceCollapsed(sourceIndex)),
@@ -603,19 +619,6 @@ const formatScore = (score: number | string | undefined): string => {
   let numScore: number = typeof score === 'number' ? score : parseFloat(score);
   if (isNaN(numScore)) return '0.0';
   return (numScore > 1 ? numScore : numScore * 100).toFixed(1);
-};
-
-// 格式化来源更新时间
-const formatSourceDate = (timestamp: string) => {
-  if (!timestamp) return '';
-  const date = new Date(parseInt(timestamp));
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 };
 
 // 复制范文片段
@@ -969,7 +972,6 @@ onUnmounted(() => {
               z-index: 2;
 
               .final-message-time {
-                margin-left: auto;
                 color: #999;
                 font-size: 15px;
                 line-height: 28px;

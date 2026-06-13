@@ -1421,7 +1421,6 @@ onUnmounted(() => {
               z-index: 2;
 
               .final-message-time {
-                margin-left: auto;
                 color: #999;
                 font-size: 15px;
                 line-height: 28px;

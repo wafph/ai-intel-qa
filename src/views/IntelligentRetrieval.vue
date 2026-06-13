@@ -225,16 +225,6 @@
       </div>
     </div>
 
-    <!-- 文档预览分栏 -->
-    <div v-if="showPdfViewer" class="pdf-viewer-modal" @click.self="closePdfViewer">
-      <div class="pdf-viewer-container">
-        <div class="pdf-viewer-header">
-          <span>{{ currentPdfTitle }}</span>
-          <button class="close-btn" @click="closePdfViewer">×</button>
-        </div>
-        <iframe :src="pdfViewerUrl" class="pdf-iframe" frameborder="0"></iframe>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -255,9 +245,6 @@ let currentTypingIndex = 0;
 const loading = ref(false);
 const isTyping = ref(false);
 const emit = defineEmits(['regenerate']);
-const showPdfViewer = ref(false);
-const pdfViewerUrl = ref('');
-const currentPdfTitle = ref('文档预览');
 // 分页状态管理
 const paginationStates = reactive<
   Record<string, { currentPage: number; pageSize: number }>
@@ -360,6 +347,13 @@ const shouldShowExpand = (source: SourceInfo) => {
   return content.length > 150;
 };
 
+const openRetrievalPdf = (previewWindow: Window | null, url: string) => {
+  if (!previewWindow) {
+    throw new Error('新页面被浏览器拦截，请允许本站打开新页面');
+  }
+  previewWindow.location.href = url;
+};
+
 /** 处理用户交互或组件事件：handleViewDocument。 */
 const handleViewDocument = async (source: SourceInfo | any) => {
   const fileId = getSourceFileId(source);
@@ -370,16 +364,18 @@ const handleViewDocument = async (source: SourceInfo | any) => {
   if (isDownloading[loadingKey]) return;
   isDownloading[loadingKey] = true;
 
+  const previewWindow = window.open('', '_blank');
+  if (previewWindow) previewWindow.opener = null;
+
   try {
     // 按早期可用版本逻辑：检索详情优先使用 source.file_id 调用独立水印下载服务。
     // 只有缺少 file_id 时，才兜底打开来源自带直链。
     if (!fileId) {
       if (directUrl) {
         if (isPdfDocument(directUrl, 'application/pdf', title, directUrl)) {
-          pdfViewerUrl.value = directUrl;
-          currentPdfTitle.value = title || '文档预览';
-          showPdfViewer.value = true;
+          openRetrievalPdf(previewWindow, directUrl);
         } else {
+          previewWindow?.close();
           openDocumentUrl(directUrl);
         }
         return;
@@ -391,36 +387,29 @@ const handleViewDocument = async (source: SourceInfo | any) => {
 
     if (isPdfDocument(fileId, result.contentType, title, result.downloadUrl)) {
       if (result.downloadUrl) {
-        pdfViewerUrl.value = result.downloadUrl;
+        openRetrievalPdf(previewWindow, result.downloadUrl);
       } else if (result.blob) {
-        pdfViewerUrl.value = window.URL.createObjectURL(result.blob);
+        const blobUrl = window.URL.createObjectURL(result.blob);
+        openRetrievalPdf(previewWindow, blobUrl);
+        window.setTimeout(() => window.URL.revokeObjectURL(blobUrl), 60_000);
       } else {
         throw new Error('水印接口未返回可预览的文档地址');
       }
-      currentPdfTitle.value = title || '文档预览';
-      showPdfViewer.value = true;
     } else if (result.downloadUrl) {
+      previewWindow?.close();
       openDocumentUrl(result.downloadUrl);
     } else if (result.blob) {
+      previewWindow?.close();
       downloadDocumentBlob(result.blob, title, fileId);
     } else {
       throw new Error('水印接口未返回可下载的文档内容');
     }
   } catch (error: any) {
+    previewWindow?.close();
     ElMessage.error(error?.message || '获取文档失败，请稍后重试');
   } finally {
     isDownloading[loadingKey] = false;
   }
-};
-
-// 关闭 PDF 查看器
-const closePdfViewer = () => {
-  if (pdfViewerUrl.value && pdfViewerUrl.value.startsWith('blob:')) {
-    window.URL.revokeObjectURL(pdfViewerUrl.value);
-  }
-  pdfViewerUrl.value = '';
-  showPdfViewer.value = false;
-  currentPdfTitle.value = '文档预览';
 };
 
 // 切换展开状态
@@ -918,7 +907,6 @@ onUnmounted(() => {
             z-index: 2;
 
             .final-message-time {
-              margin-left: auto;
               color: #999;
               font-size: 15px;
               line-height: 28px;
@@ -1127,57 +1115,6 @@ onUnmounted(() => {
     font-size: 16px;
     color: #606266;
   }
-}
-
-.pdf-viewer-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.pdf-viewer-container {
-  width: 90%;
-  height: 90%;
-  background: white;
-  border-radius: 8px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.pdf-viewer-header {
-  padding: 16px 20px;
-  background: #f5f5f5;
-  border-bottom: 1px solid #e8e8e8;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 600;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: #666;
-  padding: 0 8px;
-
-  &:hover {
-    color: #333;
-  }
-}
-
-.pdf-iframe {
-  flex: 1;
-  width: 100%;
 }
 
 .source-document-link {
