@@ -1610,7 +1610,7 @@ onUnmounted(() => {
   .pdf-page-list {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
     gap: 12px;
     min-width: 0;
     padding: 12px 8px 18px;
@@ -1624,6 +1624,7 @@ onUnmounted(() => {
 
   .pdf-page-shell {
     position: relative;
+    margin: 0 auto;
     background: #fff;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
     overflow: hidden;

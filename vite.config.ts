@@ -56,10 +56,10 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/review-upload-api/, ''), // /review-upload-api/v1/... -> /v1/...
       },
       '/review-pdf-api': {
-        target: 'http://127.0.0.1:8000', // 智能审核 PDF 预处理服务
+        // 本地开发复用服务器已配置好的 Nginx 路由；PDF 服务未运行在开发机本地。
+        target: 'http://10.210.101.209:11316',
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/review-pdf-api/, ''), // /review-pdf-api/v1/review/pdf -> /v1/review/pdf
       },
       '/watermark-api': {
         target: 'http://10.210.101.209:8005', // 统一文件服务：水印下载
