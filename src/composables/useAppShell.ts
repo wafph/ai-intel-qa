@@ -449,9 +449,12 @@ const currentReasoning = ref<string>('');
 const currentAnswer = ref<string>('');
 let abortController: AbortController | null = null;
 const currentStreamingMessageId = ref<string | null>(null);
+let pendingStopSyncPromise: Promise<void> | null = null;
 
 const STREAM_TASK_STORAGE_KEY = 'ai_intel_v12_2_resumable_stream_tasks';
+const STOPPED_TASK_STORAGE_KEY = 'ai_intel_v12_2_stopped_stream_tasks';
 const LAST_ACTIVE_SESSION_STORAGE_KEY = 'ai_intel_v12_2_last_active_session_by_func';
+const STOPPED_TASK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const ACTIVE_TASK_STATUSES = ['pending', 'running'];
 const TERMINAL_TASK_STATUSES = ['completed', 'error', 'stopped', 'cancelled', 'canceled', 'superseded'];
 
@@ -484,6 +487,37 @@ const historySearchLoading = ref(false);
 // 大模型答案展示控制：若首段存在 <think>...</think>，只展示 </think> 之后的正式内容；没有 think 标签时正常展示。
 let answerOutputStarted = false;
 let answerPendingText = '';
+let locallyStoppedTasksCache: Record<string, number> | null = null;
+
+const getLocallyStoppedTasks = (): Record<string, number> => {
+  if (locallyStoppedTasksCache) return locallyStoppedTasksCache;
+  try {
+    const raw = localStorage.getItem(STOPPED_TASK_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    const now = Date.now();
+    const activeEntries = Object.entries(parsed as Record<string, number>).filter(
+      ([taskId, stoppedAt]) =>
+        Boolean(taskId) && Number.isFinite(Number(stoppedAt)) && now - Number(stoppedAt) < STOPPED_TASK_TTL_MS,
+    );
+    const stoppedTasks = Object.fromEntries(activeEntries);
+    localStorage.setItem(STOPPED_TASK_STORAGE_KEY, JSON.stringify(stoppedTasks));
+    locallyStoppedTasksCache = stoppedTasks;
+  } catch {
+    locallyStoppedTasksCache = {};
+  }
+  return locallyStoppedTasksCache;
+};
+
+const isTaskLocallyStopped = (taskId?: string) =>
+  Boolean(taskId && getLocallyStoppedTasks()[taskId]);
+
+const markTaskLocallyStopped = (taskId: string) => {
+  if (!taskId) return;
+  locallyStoppedTasksCache = { ...getLocallyStoppedTasks(), [taskId]: Date.now() };
+  try {
+    localStorage.setItem(STOPPED_TASK_STORAGE_KEY, JSON.stringify(locallyStoppedTasksCache));
+  } catch {}
+};
 
 // 计算属性
 const currentChatData = computed(() => {
@@ -1030,7 +1064,11 @@ const loadPersistedStreamTasks = () => {
 
     activeStreamTasks.value = Object.fromEntries(
       Object.entries(parsed as Record<string, ResumableStreamTask>).filter(
-        ([, task]) => task?.taskId && task?.sessionId && isTaskRecoverable(task),
+        ([, task]) =>
+          task?.taskId &&
+          task?.sessionId &&
+          !isTaskLocallyStopped(task.taskId) &&
+          isTaskRecoverable(task),
       ),
     );
   } catch {
@@ -1142,6 +1180,7 @@ const registerRecoverableTaskFromSession = (sessionId: string) => {
   const isSearchFunction = functionId === 'search';
   /** 封装当前模块内的业务逻辑：candidate。 */
   const candidate = [...assistantMessages].reverse().find((message: any) => {
+    if (isTaskLocallyStopped(message.taskId)) return false;
     const status = normalizeTaskStatus(message.taskStatus);
     const messageRecoverable = getRecoverableFlag(message) !== false;
     if (isRecoverableTaskStatus(status) && messageRecoverable) return true;
@@ -1263,7 +1302,13 @@ const registerRunningTasksFromSession = (sessionId: string) => {
   if (!session) return;
 
   session.messages
-    .filter((message: any) => message.role === 'assistant' && message.taskId && isTaskRecoverable(message, message.taskStatus))
+    .filter(
+      (message: any) =>
+        message.role === 'assistant' &&
+        message.taskId &&
+        !isTaskLocallyStopped(message.taskId) &&
+        isTaskRecoverable(message, message.taskStatus),
+    )
     .forEach((message: any) => {
       /** 封装当前模块内的业务逻辑：messageIndex。 */
       const messageIndex = session.messages.findIndex((item: any) => item.id === message.id);
@@ -1619,13 +1664,20 @@ const resumeTaskForSession = async (sessionId: string) => {
 
 /** 停止当前输出或任务：stopTaskOnServer。 */
 const stopTaskOnServer = async (taskId: string) => {
-  try {
-    await authRequest({
-      url: API.agent.taskStop(taskId, getCurrentAgentToken()),
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch {}
+  const response = await authRequest({
+    url: API.agent.taskStop(taskId, getCurrentAgentToken()),
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  if (!isSuccessStatus(response.status)) {
+    throw new Error(`停止任务失败: ${response.status}`);
+  }
+
+  const result = response.data;
+  if (result?.code !== undefined && !isApiSuccessCode(result.code)) {
+    throw new Error(getApiMessage(result, '停止任务失败'));
+  }
 };
 
 const sourceOnlyReplayTaskIds = new Set<string>();
@@ -1792,10 +1844,9 @@ const persistCompletedConversationForTask = async (task: ResumableStreamTask) =>
     sourcesCount: assistantMessage.sources?.length || 0,
     metadata: assistantMessage.metadata || null,
   });
-  if (completedTaskSaveSignatures.get(task.taskId) === signature) return;
-  completedTaskSaveSignatures.set(task.taskId, signature);
+  if (completedTaskSaveSignatures.get(task.taskId) === signature) return true;
 
-  await chatStore.saveConversationToServer(
+  const result = await chatStore.saveConversationToServer(
     task.sessionId,
     task.qaId || assistantMessage.id,
     userMessage,
@@ -1804,6 +1855,10 @@ const persistCompletedConversationForTask = async (task: ResumableStreamTask) =>
     assistantMessage.vote === 'dislike' ? 1 : 0,
     getFunctionIdForTask(task),
   );
+  if (result.success) {
+    completedTaskSaveSignatures.set(task.taskId, signature);
+  }
+  return result.success;
 };
 
 // 重置当前对话
@@ -1998,8 +2053,16 @@ const isSendDisabled = computed(() => {
   return isStreaming.value;
 });
 
+const waitForPendingStopSync = async () => {
+  if (pendingStopSyncPromise) {
+    await pendingStopSyncPromise;
+  }
+};
+
 /** 处理用户交互或组件事件：handleSendMessage。 */
 const handleSendMessage = async (content: string) => {
+  await waitForPendingStopSync();
+
   if (activeTab.value === '合规审核') {
     if (isComplianceSubmitting.value || isStreaming.value) {
       ElMessage.warning('审核任务正在处理中，请勿重复点击');
@@ -2242,14 +2305,16 @@ const startStream = async (queryText: string, messageId: string) => {
 };
 
 /** 处理用户交互或组件事件：handleRegenerate。 */
-const handleRegenerate = (payload: RegeneratePayload) => {
+const handleRegenerate = async (payload: RegeneratePayload) => {
   if (activeTab.value === '合规审核' && isComplianceRegenerating.value) {
     ElMessage.warning('正在准备重新审核，请稍候');
     return;
   }
 
   if (isStreaming.value) {
-    stopStream();
+    await stopStream();
+  } else {
+    await waitForPendingStopSync();
   }
 
   const content = typeof payload === 'string' ? payload : payload.content;
@@ -2266,13 +2331,13 @@ const handleRegenerate = (payload: RegeneratePayload) => {
 
     if (params) {
       lastComplianceParams.value = params;
-      handleComplianceReview();
+      await handleComplianceReview();
     } else {
       ElMessage.error('没有找到审核参数，无法重新审核');
     }
   } else {
     // 非合规审核，正常重新生成
-    handleSendMessage(content);
+    await handleSendMessage(content);
   }
 };
 
@@ -2764,13 +2829,9 @@ const handleStreamError = (messageId: string, errorMessage: string, taskId?: str
 };
 
 /** 停止当前输出或任务：stopStream。 */
-const stopStream = () => {
+const stopStream = async () => {
   const messageId = currentStreamingMessageId.value;
   const task = getTaskByMessageId(messageId);
-  if (task) {
-    void stopTaskOnServer(task.taskId);
-    removeStreamTask(task.taskId);
-  }
 
   if (abortController) {
     abortController.abort();
@@ -2784,6 +2845,7 @@ const stopStream = () => {
       if (message) {
         message.streaming = false;
         message.taskStatus = 'stopped';
+        (message as any).taskRecoverable = false;
         if (message.content === '') {
           message.content = '用户停止了生成';
         }
@@ -2793,6 +2855,48 @@ const stopStream = () => {
   isStreaming.value = false;
   currentStreamingMessageId.value = null;
   resetStreamState();
+
+  if (!task) return;
+
+  markTaskLocallyStopped(task.taskId);
+  removeStreamTask(task.taskId);
+  const chat = chatStore.getChatSession(task.sessionId);
+  const message = chat?.messages.find(
+    (item: any) => item.id === task.messageId || item.taskId === task.taskId,
+  );
+  const stoppedTask: ResumableStreamTask = {
+    ...task,
+    status: 'stopped',
+    recoverable: false,
+    answerContent: message?.content || task.answerContent || '',
+    reasoningContent: message?.reasoning || task.reasoningContent || '',
+    sources: (message as any)?.sources || task.sources || [],
+    updatedAt: Date.now(),
+  };
+
+  const syncPromise = (async () => {
+    const [stopResult, historyResult] = await Promise.allSettled([
+      stopTaskOnServer(task.taskId),
+      persistCompletedConversationForTask(stoppedTask),
+    ]);
+    if (stopResult.status === 'rejected') {
+      console.warn('同步后台任务停止状态失败:', stopResult.reason);
+    }
+    if (historyResult.status === 'rejected' || historyResult.value === false) {
+      console.warn(
+        '同步暂停状态到会话历史失败:',
+        historyResult.status === 'rejected' ? historyResult.reason : '',
+      );
+    }
+  })();
+  pendingStopSyncPromise = syncPromise;
+  try {
+    await syncPromise;
+  } finally {
+    if (pendingStopSyncPromise === syncPromise) {
+      pendingStopSyncPromise = null;
+    }
+  }
 };
 
 /** 重置组件状态：resetStreamState。 */
