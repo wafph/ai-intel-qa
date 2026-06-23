@@ -927,7 +927,7 @@ const inputPlaceholder = computed(() => {
   if (activeTab.value === '智能问答') {
     return '请输入你的问题';
   } else if (activeTab.value === '辅助起草') {
-    return '您好，请描述你的制度要求，包括使用范围、核心条款、特殊要求等...';
+    return '您好，请描述你的制度要求，包括使用范围、制度等级、核心条款、特殊要求等...';
   } else if (activeTab.value === '合规审核') {
     if (uploadedFileName.value) {
       return '';
@@ -2780,6 +2780,8 @@ const finishStream = (messageId: string, taskId?: string, status = 'completed') 
     if (message) {
       message.streaming = false;
       message.taskStatus = status;
+    // AI回复完成时间
+      message.timestamp = Date.now();
       if (taskId) message.taskId = taskId;
 
       /** 封装当前模块内的业务逻辑：historyItem。 */
