@@ -305,3 +305,62 @@ body {
 .input-container {
   box-sizing: border-box;
 }
+
+
+/* v12-2-21：流式 Markdown 表格基础可视化增强。
+   取消前端打字机后，后端 SSE 仍然增量更新 currentAnswer；这里仅保证表格、加粗等 Markdown 在流式区域稳定按块级内容展示。 */
+.message-content,
+.answer-content,
+.answer-streaming,
+.typing-text {
+  overflow-x: auto;
+}
+
+.typing-text {
+  display: block !important;
+  width: 100%;
+}
+
+.message-content table,
+.answer-content table,
+.answer-streaming table,
+.typing-text table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+  line-height: 1.6;
+  background: #fff;
+}
+
+.message-content th,
+.message-content td,
+.answer-content th,
+.answer-content td,
+.answer-streaming th,
+.answer-streaming td,
+.typing-text th,
+.typing-text td {
+  border: 1px solid #e5e7eb;
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.message-content th,
+.answer-content th,
+.answer-streaming th,
+.typing-text th {
+  background: #f6f8fb;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.message-content tr:nth-child(even),
+.answer-content tr:nth-child(even),
+.answer-streaming tr:nth-child(even),
+.typing-text tr:nth-child(even) {
+  background: #fafafa;
+}

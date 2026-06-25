@@ -1,3 +1,5 @@
+import { copyPlainText } from './clipboard';
+
 /**
  * 历史问题折叠工具。
  * 只影响前端展示，不改变发送内容、历史保存和后端请求。
@@ -24,28 +26,5 @@ export const shouldCollapseUserQuestion = (content?: string | null) => {
  * 仅用于前端交互，不改变消息内容和后端保存。
  */
 export const copyTextToClipboard = async (content?: string | null) => {
-  const text = String(content || '');
-  if (!text) return false;
-
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    textarea.setAttribute('readonly', 'readonly');
-    textarea.style.position = 'fixed';
-    textarea.style.left = '-9999px';
-    textarea.style.top = '0';
-    document.body.appendChild(textarea);
-    textarea.select();
-    const copied = document.execCommand('copy');
-    document.body.removeChild(textarea);
-    return copied;
-  } catch (err) {
-    console.warn('[messageCollapse] copy failed', err);
-    return false;
-  }
+  return copyPlainText(content);
 };

@@ -488,6 +488,8 @@ const historySearchLoading = ref(false);
 let answerOutputStarted = false;
 let answerPendingText = '';
 let locallyStoppedTasksCache: Record<string, number> | null = null;
+// 用户在 taskId 返回前点击停止时，先按 messageId 本地终止；taskId 返回后立即同步后端 stopped。
+const locallyStoppedMessageIds = new Set<string>();
 
 const getLocallyStoppedTasks = (): Record<string, number> => {
   if (locallyStoppedTasksCache) return locallyStoppedTasksCache;
@@ -517,6 +519,17 @@ const markTaskLocallyStopped = (taskId: string) => {
   try {
     localStorage.setItem(STOPPED_TASK_STORAGE_KEY, JSON.stringify(locallyStoppedTasksCache));
   } catch {}
+};
+
+const markMessageLocallyStopped = (messageId?: string | null) => {
+  if (messageId) locallyStoppedMessageIds.add(messageId);
+};
+
+const isMessageLocallyStopped = (messageId?: string | null) =>
+  Boolean(messageId && locallyStoppedMessageIds.has(messageId));
+
+const clearMessageLocallyStopped = (messageId?: string | null) => {
+  if (messageId) locallyStoppedMessageIds.delete(messageId);
 };
 
 // 计算属性
@@ -995,8 +1008,21 @@ const getRecoverableFlag = (value: any): boolean | undefined => {
   return undefined;
 };
 
+const isStopRequestedFlag = (value: any): boolean => {
+  const raw = value?.stopRequested ?? value?.stop_requested ?? value?.stopRequestedFlag ?? value?.stop_requested_flag;
+  if (raw === undefined || raw === null || raw === '') return false;
+  if (typeof raw === 'boolean') return raw;
+  if (typeof raw === 'number') return raw !== 0;
+  if (typeof raw === 'string') {
+    const normalized = raw.trim().toLowerCase();
+    return ['true', '1', 'yes', 'y'].includes(normalized);
+  }
+  return false;
+};
+
 const isTaskRecoverable = (value: any, fallbackStatus?: string) => {
   const status = normalizeTaskStatus(value?.status ?? value?.taskStatus ?? value?.task_status ?? fallbackStatus);
+  if (isStopRequestedFlag(value)) return false;
   if (!isRecoverableTaskStatus(status)) return false;
   return getRecoverableFlag(value) !== false;
 };
@@ -1526,6 +1552,7 @@ const consumeEventStream = async (
 const subscribeStreamTask = async (taskId: string, options: { allowTerminalReplay?: boolean; silent?: boolean } = {}) => {
   const task = activeStreamTasks.value[taskId];
   if (!task || activeChatId.value !== task.sessionId) return;
+  if (isTaskLocallyStopped(taskId) || isMessageLocallyStopped(task.messageId)) return;
   if (!isTaskRecoverable(task) && !options.allowTerminalReplay) return;
 
   detachStreamSubscription(false);
@@ -1678,6 +1705,7 @@ const stopTaskOnServer = async (taskId: string) => {
   if (result?.code !== undefined && !isApiSuccessCode(result.code)) {
     throw new Error(getApiMessage(result, '停止任务失败'));
   }
+  return getApiData(result) || result || {};
 };
 
 const sourceOnlyReplayTaskIds = new Set<string>();
@@ -2295,6 +2323,38 @@ const startStream = async (queryText: string, messageId: string) => {
         : undefined,
     };
 
+    if (isMessageLocallyStopped(messageId)) {
+      markTaskLocallyStopped(task.taskId);
+      const stoppedChat = chatStore.getChatSession(task.sessionId);
+      const stoppedMessage = stoppedChat?.messages.find((m: any) => m.id === messageId || m.id === task.messageId);
+      if (stoppedMessage) {
+        stoppedMessage.taskId = task.taskId;
+        stoppedMessage.streaming = false;
+        stoppedMessage.taskStatus = 'stopped';
+        (stoppedMessage as any).taskRecoverable = false;
+        stoppedMessage.streamEventId = task.lastEventId || 0;
+        (stoppedMessage as any).answerEventId = task.answerEventId || 0;
+        if (!stoppedMessage.content) stoppedMessage.content = '用户停止了生成';
+      }
+      const stoppedTask: ResumableStreamTask = {
+        ...task,
+        status: 'stopped',
+        recoverable: false,
+        answerContent: stoppedMessage?.content || '用户停止了生成',
+        reasoningContent: stoppedMessage?.reasoning || '',
+        updatedAt: Date.now(),
+      };
+      await Promise.allSettled([
+        stopTaskOnServer(task.taskId),
+        persistCompletedConversationForTask(stoppedTask),
+      ]);
+      removeStreamTask(task.taskId);
+      isStreaming.value = false;
+      currentStreamingMessageId.value = null;
+      resetStreamState();
+      return;
+    }
+
     upsertStreamTask(task, true);
     updateTaskMessage(task, { status: task.status, recoverable: task.recoverable, eventId: task.lastEventId, answerEventId: task.answerEventId });
     await subscribeStreamTask(task.taskId);
@@ -2486,6 +2546,10 @@ const appendModelOutputText = async (
   context?: { functionId?: string; tabName?: string },
 ) => {
   if (!text) return;
+  if (isMessageLocallyStopped(messageId)) return;
+  const targetChat = chatStore.getChatSession(activeChatId.value!);
+  const targetMessage = targetChat?.messages.find((m: any) => m.id === messageId);
+  if (normalizeTaskStatus(targetMessage?.taskStatus) === 'stopped' || targetMessage?.streaming === false && (targetMessage as any)?.taskRecoverable === false) return;
   if (containsUpstreamErrorText(text)) {
     throw new Error(getSafeAgentErrorMessage());
   }
@@ -2551,6 +2615,7 @@ const processStreamChunk = async (chunk: any, messageId: string, taskId?: string
   }
 
   if (taskId) {
+    if (isTaskLocallyStopped(taskId) || isMessageLocallyStopped(messageId)) return;
     const task = activeStreamTasks.value[taskId];
     if (!task) return;
 
@@ -2568,6 +2633,25 @@ const processStreamChunk = async (chunk: any, messageId: string, taskId?: string
     const payloadEvent = payload.event || payload.event_type || '';
     const eventType = chunk.eventType || payloadEvent || '';
     const normalizedStatus = chunk.status || payload.status || task.status;
+    const normalizedIncomingStatus = normalizeTaskStatus(normalizedStatus || eventType);
+    const chunkStopRequested = isStopRequestedFlag(chunk) || isStopRequestedFlag(payload) || isStopRequestedFlag(payloadData);
+    if (normalizedIncomingStatus === 'stopped' || normalizeTaskStatus(eventType) === 'stopped' || chunkStopRequested) {
+      markTaskLocallyStopped(taskId);
+      const stoppedTask: ResumableStreamTask = {
+        ...task,
+        status: 'stopped',
+        recoverable: false,
+        lastEventId: Number(chunk.eventId || task.lastEventId || 0),
+        answerEventId: task.answerEventId || 0,
+        updatedAt: Date.now(),
+      };
+      updateTaskMessage(stoppedTask, { status: 'stopped', recoverable: false, eventId: stoppedTask.lastEventId, answerEventId: stoppedTask.answerEventId });
+      removeStreamTask(taskId);
+      isStreaming.value = false;
+      currentStreamingMessageId.value = null;
+      resetStreamState();
+      return;
+    }
     const chunkRecoverableFlag = getRecoverableFlag(chunk) ?? getRecoverableFlag(payload) ?? getRecoverableFlag(payloadData);
     const nextTaskRecoverable = chunkRecoverableFlag ?? task.recoverable ?? isRecoverableTaskStatus(normalizedStatus);
     let nextTask: ResumableStreamTask = {
@@ -2659,6 +2743,8 @@ const processStreamChunk = async (chunk: any, messageId: string, taskId?: string
     }
     return;
   }
+
+  if (isMessageLocallyStopped(messageId)) return;
 
   if (chunk.event === 'error') {
     const rawMessage =
@@ -2770,6 +2856,7 @@ const handleTabChange = async (tab: string) => {
 };
 /** 封装当前模块内的业务逻辑：finishStream。 */
 const finishStream = (messageId: string, taskId?: string, status = 'completed') => {
+  if ((taskId && isTaskLocallyStopped(taskId)) || isMessageLocallyStopped(messageId)) return;
   const task = taskId ? activeStreamTasks.value[taskId] : getTaskByMessageId(messageId);
   flushPendingModelOutput(messageId, { functionId: task?.functionId, tabName: task?.tabName });
   const sessionId = task?.sessionId || activeChatId.value;
@@ -2778,6 +2865,10 @@ const finishStream = (messageId: string, taskId?: string, status = 'completed') 
     /** 封装当前模块内的业务逻辑：message。 */
     const message = chat.messages.find((m: any) => m.id === messageId || m.taskId === taskId);
     if (message) {
+      if (normalizeTaskStatus(message.taskStatus) === 'stopped' && normalizeTaskStatus(status) !== 'stopped') {
+        if (taskId) removeStreamTask(taskId);
+        return;
+      }
       message.streaming = false;
       message.taskStatus = status;
     // AI回复完成时间
@@ -2798,6 +2889,7 @@ const finishStream = (messageId: string, taskId?: string, status = 'completed') 
     void persistCompletedConversationForTask({ ...task, status, answerContent: chat?.messages.find((m: any) => m.id === messageId || m.taskId === taskId)?.content || task.answerContent || '', reasoningContent: chat?.messages.find((m: any) => m.id === messageId || m.taskId === taskId)?.reasoning || task.reasoningContent || '', sources: (chat?.messages.find((m: any) => m.id === messageId || m.taskId === taskId) as any)?.sources || task.sources || [] });
   }
   if (taskId) removeStreamTask(taskId);
+  if (normalizeTaskStatus(status) !== 'stopped') clearMessageLocallyStopped(messageId);
   isStreaming.value = false;
   currentStreamingMessageId.value = null;
   resetStreamState();
@@ -2806,6 +2898,7 @@ const finishStream = (messageId: string, taskId?: string, status = 'completed') 
 
 /** 处理用户交互或组件事件：handleStreamError。 */
 const handleStreamError = (messageId: string, errorMessage: string, taskId?: string) => {
+  if ((taskId && isTaskLocallyStopped(taskId)) || isMessageLocallyStopped(messageId)) return;
   console.error('智能体请求失败，前端已使用统一兜底文案展示:', errorMessage);
   const safeMessage = toUserSafeErrorMessage(errorMessage, getSafeAgentErrorMessage());
   const task = taskId ? activeStreamTasks.value[taskId] : getTaskByMessageId(messageId);
@@ -2833,6 +2926,7 @@ const handleStreamError = (messageId: string, errorMessage: string, taskId?: str
 /** 停止当前输出或任务：stopStream。 */
 const stopStream = async () => {
   const messageId = currentStreamingMessageId.value;
+  if (messageId) markMessageLocallyStopped(messageId);
   const task = getTaskByMessageId(messageId);
 
   if (abortController) {
@@ -2860,6 +2954,8 @@ const stopStream = async () => {
 
   if (!task) return;
 
+  markMessageLocallyStopped(task.messageId);
+  markMessageLocallyStopped(task.qaId);
   markTaskLocallyStopped(task.taskId);
   removeStreamTask(task.taskId);
   const chat = chatStore.getChatSession(task.sessionId);

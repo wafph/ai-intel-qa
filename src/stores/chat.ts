@@ -127,7 +127,21 @@ export const useChatStore = defineStore('chat', () => {
     return undefined;
   };
 
+  const getAnswerStopRequested = (qa: any, answerPayload: any) => {
+    const raw =
+      answerPayload.stopRequested ??
+      answerPayload.stop_requested ??
+      qa.stopRequested ??
+      qa.stop_requested;
+    if (raw === undefined || raw === null || raw === '') return false;
+    if (typeof raw === 'boolean') return raw;
+    if (typeof raw === 'number') return raw !== 0;
+    if (typeof raw === 'string') return ['true', '1', 'yes', 'y'].includes(raw.trim().toLowerCase());
+    return false;
+  };
+
   const getAnswerRecoverable = (qa: any, answerPayload: any, messageStatus: string) => {
+    if (getAnswerStopRequested(qa, answerPayload)) return false;
     const explicit = normalizeRecoverableFlag(
       answerPayload.recoverable ??
         answerPayload.taskRecoverable ??
@@ -139,6 +153,19 @@ export const useChatStore = defineStore('chat', () => {
     if (explicit !== undefined) return explicit;
     return isRunningMessageStatus(messageStatus);
   };
+
+  const getAnswerEventId = (qa: any, answerPayload: any) =>
+    Number(
+      answerPayload.answerEventId ||
+        answerPayload.answer_event_id ||
+        answerPayload.answerContentEventId ||
+        answerPayload.answer_content_event_id ||
+        qa.answerEventId ||
+        qa.answer_event_id ||
+        qa.answerContentEventId ||
+        qa.answer_content_event_id ||
+        0,
+    );
 
   /** 获取并归一化业务数据：getAnswerMetadata。 */
   const getAnswerMetadata = (qa: any, answerPayload: any) => {
@@ -893,11 +920,13 @@ export const useChatStore = defineStore('chat', () => {
             role: 'assistant',
             content: sanitizeAgentText(stripReviewProgressText(getAnswerContent(qa, answerPayload), { functionId: funcId })),
             timestamp: new Date(qa.answerTime).getTime(),
-            streaming: isRunningMessageStatus(messageStatus),
+            streaming: getAnswerRecoverable(qa, answerPayload, messageStatus) === true,
             taskId,
             taskStatus: messageStatus,
             taskRecoverable: getAnswerRecoverable(qa, answerPayload, messageStatus),
+            stopRequested: getAnswerStopRequested(qa, answerPayload),
             streamEventId: Number(answerPayload.streamEventCount || answerPayload.lastEventId || answerPayload.last_event_id || qa.lastEventId || qa.last_event_id || 0),
+            answerEventId: getAnswerEventId(qa, answerPayload),
             vote:
               qa.likeStatus === 1 ? 'like' : qa.dislikeStatus === 1 ? 'dislike' : null,
             likeCount: qa.likeStatus || 0,
@@ -940,11 +969,13 @@ export const useChatStore = defineStore('chat', () => {
             role: 'assistant',
             content: sanitizeAgentText(stripReviewProgressText(getAnswerContent(qa, answerPayload), { functionId: funcId })),
             timestamp: new Date(qa.answerTime || qa.answer_time || qa.updateTime || qa.update_time).getTime(),
-            streaming: isRunningMessageStatus(messageStatus),
+            streaming: getAnswerRecoverable(qa, answerPayload, messageStatus) === true,
             taskId,
             taskStatus: messageStatus,
             taskRecoverable: getAnswerRecoverable(qa, answerPayload, messageStatus),
+            stopRequested: getAnswerStopRequested(qa, answerPayload),
             streamEventId: Number(answerPayload.streamEventCount || answerPayload.lastEventId || answerPayload.last_event_id || qa.lastEventId || qa.last_event_id || 0),
+            answerEventId: getAnswerEventId(qa, answerPayload),
             vote:
               qa.likeStatus === 1 || qa.like_status === 1
                 ? 'like'
@@ -992,11 +1023,13 @@ export const useChatStore = defineStore('chat', () => {
             role: 'assistant',
             content: sanitizeAgentText(stripReviewProgressText(getAnswerContent(qa, answerPayload), { functionId: funcId })),
             timestamp: new Date(qa.answerTime).getTime(),
-            streaming: isRunningMessageStatus(messageStatus),
+            streaming: getAnswerRecoverable(qa, answerPayload, messageStatus) === true,
             taskId,
             taskStatus: messageStatus,
             taskRecoverable: getAnswerRecoverable(qa, answerPayload, messageStatus),
+            stopRequested: getAnswerStopRequested(qa, answerPayload),
             streamEventId: Number(answerPayload.streamEventCount || answerPayload.lastEventId || answerPayload.last_event_id || qa.lastEventId || qa.last_event_id || 0),
+            answerEventId: getAnswerEventId(qa, answerPayload),
             vote:
               qa.likeStatus === 1 ? 'like' : qa.dislikeStatus === 1 ? 'dislike' : null,
             likeCount: qa.likeStatus || 0,

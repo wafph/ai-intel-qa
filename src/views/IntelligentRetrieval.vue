@@ -94,7 +94,7 @@
                   class="answer-streaming"
                 >
                   <div class="typing-container">
-                    <div class="typing-text" v-html="renderMarkdown(displayAnswer)"></div>
+                    <div class="typing-text" v-html="renderMarkdown(currentAnswer)"></div>
                     <span v-if="isTyping" class="typing-cursor">|</span>
                   </div>
                 </div>

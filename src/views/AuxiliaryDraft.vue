@@ -102,7 +102,7 @@
                       <div class="typing-container">
                         <div
                           class="typing-text"
-                          v-html="renderMarkdown(displayAnswer)"
+                          v-html="renderMarkdown(currentAnswer)"
                         ></div>
                         <span v-if="isTyping" class="typing-cursor">|</span>
                       </div>
@@ -283,6 +283,7 @@ import {
 } from '@/services/documentDownload';
 import { getSourceDirectUrl, getSourceFileId, getSourceTitle } from '@/services/sourceUtils';
 import { copyTextToClipboard, shouldCollapseUserQuestion } from '@/utils/messageCollapse';
+import { copyPlainText } from '@/utils/clipboard';
 const emit = defineEmits(['regenerate', 'sources-panel-toggle']);
 
 interface Props {
@@ -599,25 +600,13 @@ const formatScore = (score: number | string | undefined): string => {
 
 // 复制范文片段
 const copySource = async (source: any) => {
-  const text = `标题：${source.title}\n子标题：${source.subtitle}\n内容：${source.content}`;
-  if (navigator.clipboard && window.isSecureContext) {
-    try {
-      await navigator.clipboard.writeText(text);
-      ElMessage.success('已复制范文片段');
-    } catch (err) {
-      ElMessage.error('复制失败');
-    }
-  } else {
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    document.body.appendChild(textarea);
-    textarea.select();
-    const success = document.execCommand('copy');
-    document.body.removeChild(textarea);
-    success
-      ? ElMessage.success('已复制范文片段')
-      : ElMessage.error('复制失败（降级方案）');
-  }
+  const text = `标题：${source.title || ''}
+子标题：${source.subtitle || ''}
+内容：${source.content || ''}`;
+  const success = await copyPlainText(text);
+  success
+    ? ElMessage.success('已复制范文片段')
+    : ElMessage.error('复制失败，请手动选择文本复制');
 };
 
 // 处理来源标题点击

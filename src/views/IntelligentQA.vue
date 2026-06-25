@@ -103,7 +103,7 @@
                       <div class="typing-container">
                         <div
                           class="typing-text"
-                          v-html="renderMarkdown(displayAnswer)"
+                          v-html="renderMarkdown(currentAnswer)"
                         ></div>
                         <span v-if="isTyping" class="typing-cursor">|</span>
                       </div>
@@ -450,6 +450,7 @@ import {
   getSourceTitle,
 } from '@/services/sourceUtils';
 import { copyTextToClipboard, shouldCollapseUserQuestion } from '@/utils/messageCollapse';
+import { copyPlainText } from '@/utils/clipboard';
 const chatStore = useChatStore();
 
 const displayAnswer = ref<string>('');
@@ -629,46 +630,18 @@ const groupSourcesByTitle = (sources?: any[]): SourceGroup[] => {
 
 // 复制文本到剪贴板
 const copyToClipboard = async (text: string) => {
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-    } else {
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      textArea.style.position = 'absolute';
-      textArea.style.left = '-9999px';
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-    }
-    return true;
-  } catch (error) {
-    return false;
-  }
+  return copyPlainText(text);
 };
 
 // 复制来源片段
 const copySource = async (source: any) => {
-  const text = `标题：${source.title}\n子标题：${source.subtitle}\n内容：${source.content}`;
-  if (navigator.clipboard && window.isSecureContext) {
-    try {
-      await navigator.clipboard.writeText(text);
-      ElMessage.success('已复制范文片段');
-    } catch (err) {
-      ElMessage.error('复制失败');
-    }
-  } else {
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    document.body.appendChild(textarea);
-    textarea.select();
-    const success = document.execCommand('copy');
-    document.body.removeChild(textarea);
-    success
-      ? ElMessage.success('已复制范文片段')
-      : ElMessage.error('复制失败（降级方案）');
-  }
+  const text = `标题：${source.title || ''}
+子标题：${source.subtitle || ''}
+内容：${source.content || ''}`;
+  const success = await copyPlainText(text);
+  success
+    ? ElMessage.success('已复制范文片段')
+    : ElMessage.error('复制失败，请手动选择文本复制');
 };
 
 const openAnswerPdf = (previewWindow: Window | null, url: string) => {

@@ -33,6 +33,8 @@ export interface ChatMessage {
   taskStatus?: 'pending' | 'running' | 'completed' | 'error' | 'stopped' | 'cancelled' | 'superseded' | string;
   taskRecoverable?: boolean;
   recoverable?: boolean;
+  stopRequested?: boolean;
+  stop_requested?: boolean | number;
   streamEventId?: number;
   /** 当前 content 已覆盖到的后端事件游标，用于恢复订阅时避免跳过中间内容。 */
   answerEventId?: number;
