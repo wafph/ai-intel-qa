@@ -39,7 +39,7 @@ export const postEventStream = (
   data: unknown,
   config: AxiosRequestConfig = {},
 ): Promise<AxiosResponse<ReadableStream<Uint8Array>>> =>
-  request<ReadableStream<Uint8Array>>({
+  authRequest<ReadableStream<Uint8Array>>({
     ...config,
     url,
     data,

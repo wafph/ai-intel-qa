@@ -58,16 +58,16 @@ export const useAppStore = defineStore('app', () => {
           password: {
             user: {
               domain: {
-                name: 'hid_b5htrig1x-jcljn', //IAM⽤户所属账号名
+                name: import.meta.env.VITE_IAM_DOMAIN || '',
               },
-              name: 'agent-dev05', //IAM⽤户名
-              password: 'agent202605', //IAM⽤户密码
+              name: import.meta.env.VITE_IAM_USERNAME || '',
+              password: import.meta.env.VITE_IAM_PASSWORD || '',
             },
           },
         },
         scope: {
           project: {
-            name: 'cn-north-4', //项⽬名称
+            name: 'cn-north-4',
           },
         },
       },

@@ -260,7 +260,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, watch, computed, nextTick, onMounted, onUnmounted } from 'vue';
-import MarkdownIt from 'markdown-it';
+import { renderMarkdown } from '@/utils/markdown';
 import {
   CaretBottom,
   CaretTop,
@@ -320,7 +320,6 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 // 响应式状态
-const md = new MarkdownIt();
 const displayAnswer = ref<string>('');
 const typingSpeed = 20;
 let typingInterval: NodeJS.Timeout | null = null;
@@ -421,12 +420,6 @@ const formatTime = (date: Date) => {
     minute: '2-digit',
     second: '2-digit',
   });
-};
-
-// 渲染 Markdown
-const renderMarkdown = (content: string) => {
-  if (!content) return '';
-  return md.render(content);
 };
 
 // 导出功能：恢复早期可用逻辑。
@@ -761,13 +754,12 @@ watch(
 
 // 监听聊天数据变化
 watch(
-  () => props.chatData,
+  () => props.chatData?.messages?.length,
   () => {
     nextTick(() => {
       scrollToBottom();
     });
   },
-  { deep: true },
 );
 
 // 在 onMounted 中添加延迟

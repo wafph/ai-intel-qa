@@ -230,7 +230,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue';
-import MarkdownIt from 'markdown-it';
+import { renderMarkdown } from '@/utils/markdown';
 import { ElIcon, ElMessage } from 'element-plus';
 import { CaretBottom, CaretTop, CopyDocument, Refresh } from '@element-plus/icons-vue';
 import { fetchWatermarkDocument, isPdfDocument, downloadDocumentBlob, openDocumentUrl } from '@/services/documentDownload';
@@ -318,13 +318,6 @@ const props = withDefaults(defineProps<Props>(), {
   currentReasoning: '',
   currentAnswer: '',
   currentStreamingMessageId: null,
-});
-
-// Markdown渲染器
-const md = new MarkdownIt({
-  html: true,
-  linkify: true,
-  typographer: true,
 });
 
 const getSourceExpandKey = (item: ChatMessage, source: SourceInfo, index: number) => {
@@ -540,12 +533,6 @@ const handleRestart = (index: number) => {
   if (userMessage) {
     emit('regenerate', userMessage.content);
   }
-};
-
-/** 封装当前模块内的业务逻辑：renderMarkdown。 */
-const renderMarkdown = (content: string) => {
-  if (!content) return '';
-  return md.render(content);
 };
 
 /** 封装当前模块内的业务逻辑：scrollToBottom。 */

@@ -245,7 +245,7 @@
 <script setup lang="ts">
 import { computed, ref, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import * as pdfjsLib from 'pdfjs-dist';
-import MarkdownIt from 'markdown-it';
+import { renderMarkdown, sanitizeHtml } from '@/utils/markdown';
 import {
   CaretBottom,
   CaretTop,
@@ -453,13 +453,6 @@ const fetchPdfData = async (url: string) => {
   return new Uint8Array(buffer);
 };
 
-const md = new MarkdownIt({
-  html: true,
-  linkify: true,
-  typographer: true,
-});
-
-/** 封装当前模块内的业务逻辑：appendToTypingQueue。 */
 const appendToTypingQueue = (text: string) => {
   if (!text) return;
 
@@ -621,79 +614,38 @@ const formatTime = (date: Date) => {
   });
 };
 
-/** 封装当前模块内的业务逻辑：renderMarkdown。 */
-const renderMarkdown = (content: string) => {
-  if (!content) return '';
-  return md.render(content);
-};
-
-/** 封装当前模块内的业务逻辑：escapeHtml。 */
-const escapeHtml = (value: string) => {
-  return value
+/** HTML 特殊字符转义，用于原文展示时防止注入。 */
+const escapeHtml = (str: string) =>
+  str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+
+/** 构造指向原文片段的链接。 */
+const createOriginalLink = (text: string, displayText?: string) => {
+  const escaped = escapeHtml(displayText || text);
+  return `<a class="original-reference-link" data-original-text="${escapeHtml(text)}" href="javascript:void(0)">${escaped}</a>`;
 };
 
-/** 创建本地/远程业务对象：createOriginalLink。 */
-const createOriginalLink = (text: string) => {
-  return `<span class="original-reference-link" data-original-text="${escapeHtml(
-    text,
-  )}">${escapeHtml(text)}</span>`;
-};
-
-/** 封装当前模块内的业务逻辑：decorateOriginalReferences。 */
+/** 将审核输出中的「原文：xxx」片段自动替换为可点击的原文定位链接。 */
 const decorateOriginalReferences = (html: string) => {
-  if (typeof document === 'undefined') return html;
-
-  const container = document.createElement('div');
-  container.innerHTML = html;
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-  const textNodes: Text[] = [];
-  let node = walker.nextNode();
-
-  while (node) {
-    textNodes.push(node as Text);
-    node = walker.nextNode();
+  const patterns = [
+    /(?:原文|原句|依据|条款|规定)[:：]\s*(?:&quot;|"|“|「|『)([^&]+?)(?:&quot;|"|”|」|』)/g,
+    /(?:原文|原句|依据|条款|规定)[:：]\s*([^<]{4,80}?)(?=<|$)/g,
+  ];
+  let result = html;
+  for (const pattern of patterns) {
+    result = result.replace(pattern, (match, captured) => {
+      const text = (captured || '').trim();
+      if (!text || text.length < 2) return match;
+      return match.replace(text, createOriginalLink(text));
+    });
   }
-
-  textNodes.forEach((textNode) => {
-    const text = textNode.nodeValue || '';
-    const referencePattern =
-      /((?:原文|原句|引用原文)\s*[:：]\s*)([“"「『《]?[^。；;！!？?\n\r]{4,}[”"」』》]?)/g;
-
-    if (!referencePattern.test(text)) return;
-
-    referencePattern.lastIndex = 0;
-    let cursor = 0;
-    let match: RegExpExecArray | null = null;
-    const fragment = document.createDocumentFragment();
-
-    while ((match = referencePattern.exec(text))) {
-      const [matchedText, label, originalText] = match;
-      if (match.index > cursor) {
-        fragment.append(document.createTextNode(text.slice(cursor, match.index)));
-      }
-
-      const wrapper = document.createElement('span');
-      wrapper.innerHTML = `${escapeHtml(label)}${createOriginalLink(originalText.trim())}`;
-      fragment.append(...Array.from(wrapper.childNodes));
-      cursor = match.index + matchedText.length;
-    }
-
-    if (cursor < text.length) {
-      fragment.append(document.createTextNode(text.slice(cursor)));
-    }
-
-    textNode.parentNode?.replaceChild(fragment, textNode);
-  });
-
-  return container.innerHTML;
+  return result;
 };
 
-/** 封装当前模块内的业务逻辑：renderReviewMarkdown。 */
 const renderReviewMarkdown = (content: string) => {
   return decorateOriginalReferences(renderMarkdown(content));
 };
@@ -863,7 +815,7 @@ const renderOriginalContent = computed(() => {
   const matchedQuery = query && originalMatchFound.value ? query : '';
   const paragraphs = originalText.replace(/\r\n/g, '\n').split(/\n{1,}/);
 
-  return paragraphs
+  return sanitizeHtml(paragraphs
     .map((paragraph, index) => {
       const text = paragraph || '';
       if (!text.trim()) return '<div class="original-paragraph blank">&nbsp;</div>';
@@ -882,7 +834,7 @@ const renderOriginalContent = computed(() => {
       const after = text.slice(pos + matchedQuery.length);
       return `<div class="original-paragraph" data-original-segment="${index}">${escapeHtml(before)}<mark data-original-mark="active">${escapeHtml(matched)}</mark>${escapeHtml(after)}</div>`;
     })
-    .join('');
+    .join(''));
 });
 
 /** 构造请求载荷或业务上下文：buildSearchCandidates。 */

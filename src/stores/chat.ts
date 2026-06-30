@@ -804,10 +804,9 @@ export const useChatStore = defineStore('chat', () => {
   // 清空所有会话
   const clearAllConversations = async () => {
     const sessionUuids = Object.keys(chatSessions.value);
-
-    for (const sessionUuid of sessionUuids) {
-      await deleteConversationBySession(sessionUuid);
-    }
+    await Promise.allSettled(
+      sessionUuids.map((uuid) => deleteConversationBySession(uuid)),
+    );
   };
 
   // 加载会话历史
@@ -861,6 +860,63 @@ export const useChatStore = defineStore('chat', () => {
     }
   };
 
+  /** 将单条 qa 记录转为 user + assistant 两条 ChatMessage。三个分支共享此逻辑。 */
+  const buildMessagesFromQa = (
+    qa: any,
+    funcId: string,
+    messages: ChatMessage[],
+    options: { timeKey?: string; altTimeKey?: string } = {},
+  ) => {
+    const { timeKey = 'questionTime', altTimeKey = 'question_time' } = options;
+
+    // 用户消息
+    messages.push({
+      id: `user_${qa.qaId || qa.qa_id}`,
+      role: 'user',
+      content: qa.questionContent || qa.question_content || '',
+      timestamp: new Date(qa[timeKey] || qa[altTimeKey] || qa.createTime || qa.create_time).getTime(),
+      vote: null,
+    });
+
+    // AI消息
+    const answerPayload = normalizeAnswerPayload(qa);
+    const sources = getAnswerSources(answerPayload);
+    const matchScore =
+      sources.length > 0
+        ? Math.max(...sources.map((s: any) => parseFloat(s.score || '0')))
+        : 0;
+    const messageStatus = qa.messageStatus || qa.message_status || answerPayload.messageStatus || answerPayload.message_status || answerPayload.taskStatus || answerPayload.task_status || '';
+    const taskId = qa.taskId || qa.task_id || answerPayload.taskId || answerPayload.task_id || '';
+    const metadata = getAnswerMetadata(qa, answerPayload);
+    if (funcId === 'review' && metadata && messages.length > 0) {
+      (messages[messages.length - 1] as any).metadata = metadata;
+    }
+
+    const likeStatus = qa.likeStatus ?? qa.like_status ?? 0;
+    const dislikeStatus = qa.dislikeStatus ?? qa.dislike_status ?? 0;
+
+    messages.push({
+      id: qa.qaId || qa.qa_id,
+      role: 'assistant',
+      content: sanitizeAgentText(stripReviewProgressText(getAnswerContent(qa, answerPayload), { functionId: funcId })),
+      timestamp: new Date(qa.answerTime || qa.answer_time || qa.updateTime || qa.update_time).getTime(),
+      streaming: getAnswerRecoverable(qa, answerPayload, messageStatus) === true,
+      taskId,
+      taskStatus: messageStatus,
+      taskRecoverable: getAnswerRecoverable(qa, answerPayload, messageStatus),
+      stopRequested: getAnswerStopRequested(qa, answerPayload),
+      streamEventId: Number(answerPayload.streamEventCount || answerPayload.lastEventId || answerPayload.last_event_id || qa.lastEventId || qa.last_event_id || 0),
+      answerEventId: getAnswerEventId(qa, answerPayload),
+      vote:
+        likeStatus === 1 ? 'like' : dislikeStatus === 1 ? 'dislike' : null,
+      likeCount: likeStatus || 0,
+      dislikeCount: dislikeStatus || 0,
+      sources,
+      match_score: matchScore,
+      metadata,
+    });
+  };
+
   // 查询会话历史
   const querySessionHistory = async (
     sessionUuid: string,
@@ -882,163 +938,16 @@ export const useChatStore = defineStore('chat', () => {
 
       const result = response.data;
       const messages: ChatMessage[] = [];
-      // 适应新的数据结构
-      if (
-        result &&
-        isApiSuccessCode(result.code) &&
-        getApiData(result) &&
-        Array.isArray(getApiData(result).historyJson)
-      ) {
-        const historyJson = getApiData(result).historyJson;
+      const apiData = getApiData(result);
 
-        historyJson.forEach((qa: any) => {
-          // 用户消息
-          messages.push({
-            id: `user_${qa.qaId}`,
-            role: 'user',
-            content: qa.questionContent,
-            timestamp: new Date(qa.questionTime).getTime(),
-            vote: null,
-          });
+      if (result && isApiSuccessCode(result.code) && apiData) {
+        // 优先使用 historyJson，其次 messages，最后兼容数组
+        const qaList: any[] =
+          Array.isArray(apiData.historyJson) ? apiData.historyJson :
+          Array.isArray(apiData.messages) ? apiData.messages :
+          Array.isArray(apiData) ? apiData : [];
 
-          // AI消息
-          const answerPayload = normalizeAnswerPayload(qa);
-          const sources = getAnswerSources(answerPayload);
-          const matchScore =
-            sources.length > 0
-              ? Math.max(...sources.map((s: any) => parseFloat(s.score || '0')))
-              : 0;
-          const messageStatus = qa.messageStatus || qa.message_status || answerPayload.messageStatus || answerPayload.message_status || answerPayload.taskStatus || answerPayload.task_status || '';
-          const taskId = qa.taskId || qa.task_id || answerPayload.taskId || answerPayload.task_id || '';
-          const metadata = getAnswerMetadata(qa, answerPayload);
-          if (funcId === 'review' && metadata && messages.length > 0) {
-            (messages[messages.length - 1] as any).metadata = metadata;
-          }
-
-          messages.push({
-            id: qa.qaId,
-            role: 'assistant',
-            content: sanitizeAgentText(stripReviewProgressText(getAnswerContent(qa, answerPayload), { functionId: funcId })),
-            timestamp: new Date(qa.answerTime).getTime(),
-            streaming: getAnswerRecoverable(qa, answerPayload, messageStatus) === true,
-            taskId,
-            taskStatus: messageStatus,
-            taskRecoverable: getAnswerRecoverable(qa, answerPayload, messageStatus),
-            stopRequested: getAnswerStopRequested(qa, answerPayload),
-            streamEventId: Number(answerPayload.streamEventCount || answerPayload.lastEventId || answerPayload.last_event_id || qa.lastEventId || qa.last_event_id || 0),
-            answerEventId: getAnswerEventId(qa, answerPayload),
-            vote:
-              qa.likeStatus === 1 ? 'like' : qa.dislikeStatus === 1 ? 'dislike' : null,
-            likeCount: qa.likeStatus || 0,
-            dislikeCount: qa.dislikeStatus || 0,
-            sources: sources,
-            match_score: matchScore,
-            metadata,
-          });
-        });
-      } else if (
-        result &&
-        isApiSuccessCode(result.code) &&
-        getApiData(result) &&
-        Array.isArray(getApiData(result).messages)
-      ) {
-        getApiData(result).messages.forEach((qa: any) => {
-          messages.push({
-            id: `user_${qa.qaId || qa.qa_id}`,
-            role: 'user',
-            content: qa.questionContent || qa.question_content || '',
-            timestamp: new Date(qa.questionTime || qa.question_time || qa.createTime || qa.create_time).getTime(),
-            vote: null,
-          });
-
-          const answerPayload = normalizeAnswerPayload(qa);
-          const sources = getAnswerSources(answerPayload);
-          const matchScore =
-            sources.length > 0
-              ? Math.max(...sources.map((source: any) => parseFloat(source.score || '0')))
-              : 0;
-          const messageStatus = qa.messageStatus || qa.message_status || answerPayload.messageStatus || answerPayload.message_status || answerPayload.taskStatus || answerPayload.task_status || '';
-          const taskId = qa.taskId || qa.task_id || answerPayload.taskId || answerPayload.task_id || '';
-          const metadata = getAnswerMetadata(qa, answerPayload);
-          if (funcId === 'review' && metadata && messages.length > 0) {
-            (messages[messages.length - 1] as any).metadata = metadata;
-          }
-
-          messages.push({
-            id: qa.qaId || qa.qa_id,
-            role: 'assistant',
-            content: sanitizeAgentText(stripReviewProgressText(getAnswerContent(qa, answerPayload), { functionId: funcId })),
-            timestamp: new Date(qa.answerTime || qa.answer_time || qa.updateTime || qa.update_time).getTime(),
-            streaming: getAnswerRecoverable(qa, answerPayload, messageStatus) === true,
-            taskId,
-            taskStatus: messageStatus,
-            taskRecoverable: getAnswerRecoverable(qa, answerPayload, messageStatus),
-            stopRequested: getAnswerStopRequested(qa, answerPayload),
-            streamEventId: Number(answerPayload.streamEventCount || answerPayload.lastEventId || answerPayload.last_event_id || qa.lastEventId || qa.last_event_id || 0),
-            answerEventId: getAnswerEventId(qa, answerPayload),
-            vote:
-              qa.likeStatus === 1 || qa.like_status === 1
-                ? 'like'
-                : qa.dislikeStatus === 1 || qa.dislike_status === 1
-                  ? 'dislike'
-                  : null,
-            likeCount: qa.likeStatus || qa.like_status || 0,
-            dislikeCount: qa.dislikeStatus || qa.dislike_status || 0,
-            sources,
-            match_score: matchScore,
-            metadata,
-          });
-        });
-      } else if (
-        result &&
-        isApiSuccessCode(result.code) &&
-        getApiData(result) &&
-        Array.isArray(getApiData(result))
-      ) {
-        // 兼容旧的数据结构
-        getApiData(result).forEach((qa: any) => {
-          messages.push({
-            id: `user_${qa.qaId}`,
-            role: 'user',
-            content: qa.questionContent,
-            timestamp: new Date(qa.questionTime).getTime(),
-            vote: null,
-          });
-
-          const answerPayload = normalizeAnswerPayload(qa);
-          const sources = getAnswerSources(answerPayload);
-          const matchScore =
-            sources.length > 0
-              ? Math.max(...sources.map((s: any) => parseFloat(s.score || '0')))
-              : 0;
-          const messageStatus = qa.messageStatus || qa.message_status || answerPayload.messageStatus || answerPayload.message_status || answerPayload.taskStatus || answerPayload.task_status || '';
-          const taskId = qa.taskId || qa.task_id || answerPayload.taskId || answerPayload.task_id || '';
-          const metadata = getAnswerMetadata(qa, answerPayload);
-          if (funcId === 'review' && metadata && messages.length > 0) {
-            (messages[messages.length - 1] as any).metadata = metadata;
-          }
-
-          messages.push({
-            id: qa.qaId,
-            role: 'assistant',
-            content: sanitizeAgentText(stripReviewProgressText(getAnswerContent(qa, answerPayload), { functionId: funcId })),
-            timestamp: new Date(qa.answerTime).getTime(),
-            streaming: getAnswerRecoverable(qa, answerPayload, messageStatus) === true,
-            taskId,
-            taskStatus: messageStatus,
-            taskRecoverable: getAnswerRecoverable(qa, answerPayload, messageStatus),
-            stopRequested: getAnswerStopRequested(qa, answerPayload),
-            streamEventId: Number(answerPayload.streamEventCount || answerPayload.lastEventId || answerPayload.last_event_id || qa.lastEventId || qa.last_event_id || 0),
-            answerEventId: getAnswerEventId(qa, answerPayload),
-            vote:
-              qa.likeStatus === 1 ? 'like' : qa.dislikeStatus === 1 ? 'dislike' : null,
-            likeCount: qa.likeStatus || 0,
-            dislikeCount: qa.dislikeStatus || 0,
-            sources: sources,
-            match_score: matchScore,
-            metadata,
-          });
-        });
+        qaList.forEach((qa: any) => buildMessagesFromQa(qa, funcId, messages));
       } else {
         console.error('返回的数据格式不正确:', result);
       }

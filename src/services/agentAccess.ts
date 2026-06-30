@@ -18,6 +18,12 @@ const DEFAULT_SCOPES = {
   mainUserInfo: {},
 };
 
+/** 解析允许的父域白名单，空数组表示不限制。 */
+const ALLOWED_PARENT_ORIGINS = (import.meta.env.VITE_ALLOWED_PARENT_ORIGINS || '')
+  .split(',')
+  .map((s: string) => s.trim())
+  .filter(Boolean);
+
 /** 获取并归一化业务数据：getAgentTokenFromUrl。 */
 const getAgentTokenFromUrl = () => {
   const params = new URLSearchParams(window.location.search);
@@ -47,6 +53,10 @@ const waitAgentTokenFromParent = (timeoutMs = 1200): Promise<string | null> => {
 
     /** 处理用户交互或组件事件：handler。 */
     const handler = (event: MessageEvent) => {
+      // 校验父域白名单，防止恶意第三方页面注入伪造 agentToken
+      if (ALLOWED_PARENT_ORIGINS.length && !ALLOWED_PARENT_ORIGINS.includes(event.origin)) {
+        return;
+      }
       targetOrigin = event.origin || '*';
       const data = event.data?.data || event.data;
       if (data?.type === 'SET_AGENTTOKEN' && data?.value) {
@@ -67,7 +77,9 @@ const waitAgentTokenFromParent = (timeoutMs = 1200): Promise<string | null> => {
           value: '',
         },
       },
-      targetOrigin,
+      targetOrigin === '*' && ALLOWED_PARENT_ORIGINS.length
+        ? ALLOWED_PARENT_ORIGINS[0]
+        : targetOrigin,
     );
   });
 };

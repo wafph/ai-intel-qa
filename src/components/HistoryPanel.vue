@@ -289,6 +289,7 @@ import { useRouter } from 'vue-router';
 import { ElMessageBox, ElMessage } from 'element-plus';
 import type { InputInstance } from 'element-plus';
 import { Expand, Fold, StarFilled } from '@element-plus/icons-vue';
+import { sanitizeHtml } from '@/utils/markdown';
 
 interface Props {
   historyList: any[];
@@ -379,7 +380,7 @@ const getHighlightText = (result: any) => {
 const normalizedSearchResults = computed(() =>
   searchResults.value.map((item) => ({
     ...item,
-    highlightText: getHighlightText(item),
+    highlightText: sanitizeHtml(getHighlightText(item)),
   })),
 );
 

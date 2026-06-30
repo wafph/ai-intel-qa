@@ -13,7 +13,7 @@
     <!-- 主容器：左右分栏布局 -->
     <div class="qa-container">
       <!-- 左侧对话区域 -->
-      <div class="qa-body">
+      <div class="qa-body" ref="qaBodyRef">
         <!-- 历史对话列表 -->
         <div class="conversation-history" v-if="hasMessages">
           <div
@@ -103,7 +103,7 @@
                       <div class="typing-container">
                         <div
                           class="typing-text"
-                          v-html="renderMarkdown(currentAnswer)"
+                          v-html="renderQAMarkdown(currentAnswer)"
                         ></div>
                         <span v-if="isTyping" class="typing-cursor">|</span>
                       </div>
@@ -124,7 +124,7 @@
                   <div v-else>
                     <!-- 显示最终回复内容 -->
                     <div class="message-content pad" ref="finalContentRef">
-                      <div v-html="renderMarkdown(item.content)"></div>
+                      <div v-html="renderQAMarkdown(item.content)"></div>
                       <div
                         v-if="getUniqueSources(item.sources).length > 0"
                         class="answer-sources"
@@ -423,7 +423,6 @@
 
 <script setup lang="ts">
 import { ref, reactive, watch, computed, nextTick, onMounted, onUnmounted } from 'vue';
-import MarkdownIt from 'markdown-it';
 import { ElMessage } from 'element-plus';
 import {
   CaretBottom,
@@ -438,6 +437,7 @@ import {
 import { useChatStore } from '@/stores/chat';
 import { API } from '@/api/api';
 import { authRequest, isSuccessStatus } from '@/services/http';
+import type { ChatSession, ChatMessage } from '@/types/chat';
 import {
   fetchWatermarkDocument,
   isPdfDocument,
@@ -451,15 +451,16 @@ import {
 } from '@/services/sourceUtils';
 import { copyTextToClipboard, shouldCollapseUserQuestion } from '@/utils/messageCollapse';
 import { copyPlainText } from '@/utils/clipboard';
+import { renderQAMarkdown } from '@/utils/markdown';
 const chatStore = useChatStore();
 
 const displayAnswer = ref<string>('');
-const typingSpeed = 20; // 打字速度（毫秒）
-let typingInterval: NodeJS.Timeout | null = null;
+let typingRAF: number | null = null;
 let currentTypingIndex = 0;
 const loading = ref(false);
 const isTyping = ref(false);
 const emit = defineEmits(['regenerate', 'sources-panel-toggle']);
+const qaBodyRef = ref<HTMLElement | null>(null);
 
 // 参考来源面板状态
 const showSourcesPanel = ref(false);
@@ -496,27 +497,6 @@ interface Props {
   currentStreamingMessageId?: string | null;
 }
 
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  reasoning?: string;
-  timestamp: Date;
-  streaming?: boolean;
-  vote?: 'like' | 'dislike' | null;
-  likeCount?: number;
-  dislikeCount?: number;
-  sources?: any[];
-}
-
-interface ChatSession {
-  id: string;
-  title: string;
-  time: string;
-  type: string;
-  messages: ChatMessage[];
-}
-
 const props = withDefaults(defineProps<Props>(), {
   streaming: true,
   currentReasoning: '',
@@ -543,25 +523,6 @@ const feedbackOptions = ref([
 /** 封装当前模块内的业务逻辑：hasMessages。 */
 const hasMessages = computed(() => {
   return props.chatData?.messages && props.chatData.messages.length > 0;
-});
-
-watch(
-  () => props.chatData,
-  (newChatData) => {
-    if (newChatData) {
-      if (newChatData.messages && newChatData.messages.length > 0) {
-        // 数据加载完成后的处理
-      }
-    }
-  },
-  { immediate: true, deep: true },
-);
-
-// Markdown渲染器
-const md = new MarkdownIt({
-  html: true,
-  linkify: true,
-  typographer: true,
 });
 
 // 格式化匹配度分数
@@ -651,8 +612,8 @@ const openAnswerPdf = (previewWindow: Window | null, url: string) => {
   previewWindow.location.href = url;
 };
 
-// 左侧回答中的 PDF 在新页面打开，非 PDF 保持原有打开或下载逻辑。
-const handleAnswerSourceTitleClick = async (source: any, event: Event) => {
+// 统一处理来源文档预览：左侧回答引用和右侧来源面板共用同一逻辑。
+const openSourceDocument = async (source: any, event: Event) => {
   event.stopPropagation();
 
   const previewWindow = window.open('', '_blank');
@@ -690,7 +651,7 @@ const handleAnswerSourceTitleClick = async (source: any, event: Event) => {
       openDocumentUrl(result.downloadUrl);
     } else if (result.blob) {
       previewWindow?.close();
-      downloadDocumentBlob(result.blob, title, fileId);
+      downloadDocumentBlob(result.blob, title || 'document', fileId);
     } else {
       throw new Error('水印接口未返回可预览或下载的文档内容');
     }
@@ -700,60 +661,11 @@ const handleAnswerSourceTitleClick = async (source: any, event: Event) => {
   }
 };
 
-// 处理来源标题点击
-const handleSourceTitleClick = async (source: any, event: Event) => {
-  event.stopPropagation();
+// 左侧回答中的引用来源点击
+const handleAnswerSourceTitleClick = openSourceDocument;
 
-  const previewWindow = window.open('', '_blank');
-  if (previewWindow) previewWindow.opener = null;
-
-  try {
-    const fileId = getSourceFileId(source);
-    const title = getSourceTitle(source, 'document');
-    const directUrl = getSourceDirectUrl(source);
-
-    // 按早期可用版本逻辑：优先使用来源 file_id 调用独立水印下载服务。
-    // /v1/files/watermark/download 由统一文件服务负责生成水印并返回 download_url；
-    // 只有缺少 file_id 时，才兜底打开来源自带直链。
-    if (!fileId) {
-      if (directUrl) {
-        if (isPdfDocument(directUrl, 'application/pdf', title, directUrl)) {
-          openAnswerPdf(previewWindow, directUrl);
-        } else {
-          previewWindow?.close();
-          openDocumentUrl(directUrl);
-        }
-        return;
-      }
-      throw new Error('来源缺少文件ID或预览地址，无法预览文档');
-    }
-
-    const result = await fetchWatermarkDocument(fileId, title);
-
-    if (isPdfDocument(fileId, result.contentType, title, result.downloadUrl)) {
-      if (result.downloadUrl) {
-        openAnswerPdf(previewWindow, result.downloadUrl);
-      } else if (result.blob) {
-        const blobUrl = window.URL.createObjectURL(result.blob);
-        openAnswerPdf(previewWindow, blobUrl);
-        window.setTimeout(() => window.URL.revokeObjectURL(blobUrl), 60_000);
-      } else {
-        throw new Error('水印接口未返回可预览的文档地址');
-      }
-    } else if (result.downloadUrl) {
-      previewWindow?.close();
-      openDocumentUrl(result.downloadUrl);
-    } else if (result.blob) {
-      previewWindow?.close();
-      downloadDocumentBlob(result.blob, title || 'document', fileId);
-    } else {
-      throw new Error('水印接口未返回可下载的文档内容');
-    }
-  } catch (error: any) {
-    previewWindow?.close();
-    ElMessage.error(error?.message || '获取文档失败，请稍后重试');
-  }
-};
+// 右侧来源面板标题点击
+const handleSourceTitleClick = openSourceDocument;
 
 const keepActionAreaVisible = (messageId: string) => {
   nextTick(() => {
@@ -1013,55 +925,50 @@ const submitDislikeFeedback = async () => {
 };
 
 // 打字机效果相关函数
+const CHARS_PER_FRAME = 5;
+
 const appendToTypingQueue = (text: string) => {
   if (!text) return;
-
-  if (!typingInterval) {
+  if (!typingRAF) {
     startTypingEffect(displayAnswer.value + text);
   } else {
     stopTypingEffect();
-    const targetText = displayAnswer.value + text;
-    startTypingEffect(targetText);
+    startTypingEffect(displayAnswer.value + text);
   }
 };
 
-/** 开始编辑、订阅或交互：startTypingEffect。 */
 const startTypingEffect = (targetText: string) => {
   stopTypingEffect();
-
   if (!targetText || targetText.trim() === '') {
     displayAnswer.value = '';
     isTyping.value = false;
     return;
   }
-
   if (displayAnswer.value === targetText) {
     isTyping.value = false;
     return;
   }
-
   currentTypingIndex = displayAnswer.value.length;
   isTyping.value = true;
 
-  typingInterval = setInterval(() => {
+  const tick = () => {
     if (currentTypingIndex < targetText.length) {
-      displayAnswer.value += targetText.charAt(currentTypingIndex);
-      currentTypingIndex++;
-
-      nextTick(() => {
-        scrollToBottom();
-      });
+      const end = Math.min(currentTypingIndex + CHARS_PER_FRAME, targetText.length);
+      displayAnswer.value = targetText.substring(0, end);
+      currentTypingIndex = end;
+      scrollToBottom();
+      typingRAF = requestAnimationFrame(tick);
     } else {
       stopTypingEffect();
     }
-  }, typingSpeed);
+  };
+  typingRAF = requestAnimationFrame(tick);
 };
 
-/** 停止当前输出或任务：stopTypingEffect。 */
 const stopTypingEffect = () => {
-  if (typingInterval) {
-    clearInterval(typingInterval);
-    typingInterval = null;
+  if (typingRAF) {
+    cancelAnimationFrame(typingRAF);
+    typingRAF = null;
   }
   isTyping.value = false;
   if (props.currentAnswer && displayAnswer.value !== props.currentAnswer) {
@@ -1070,55 +977,21 @@ const stopTypingEffect = () => {
 };
 
 // 格式化时间
-const formatTime = (date: Date) => {
-  if (!(date instanceof Date)) {
-    date = new Date(date);
-  }
-  return date.toLocaleTimeString('zh-CN', {
+const formatTime = (date: Date | number | string) => {
+  const d = date instanceof Date ? date : new Date(date);
+  return d.toLocaleTimeString('zh-CN', {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
   });
 };
 
-// 渲染 Markdown
-const renderMarkdown = (content: string) => {
-  if (!content) return '';
-  const processedContent = content.replace(/\$\$\$/g, '\n\n---\n\n');
-  return md.render(processedContent);
-};
-
 // 滚动到底部
-// 修改后的 scrollToBottom 函数
 const scrollToBottom = () => {
   nextTick(() => {
-    // 方法1：尝试查找正确的滚动容器
-    const containers = [
-      document.querySelector('.qa-body'),
-      document.querySelector('.conversation-history'),
-      document.querySelector('.dynamic-content'),
-      document.querySelector('.intelligent-qa'),
-    ];
-
-    for (const container of containers) {
-      if (container) {
-        try {
-          const isScrollable = container.scrollHeight > container.clientHeight;
-          if (isScrollable || container === containers[0]) {
-            container.scrollTop = container.scrollHeight;
-            return;
-          }
-        } catch (error) {
-          console.error('滚动失败:', error);
-        }
-      }
+    if (qaBodyRef.value) {
+      qaBodyRef.value.scrollTop = qaBodyRef.value.scrollHeight;
     }
-
-    // 方法2：如果上述方法都失败，使用全局滚动
-    window.scrollTo({
-      top: document.documentElement.scrollHeight,
-      behavior: 'smooth',
-    });
   });
 };
 
@@ -1175,15 +1048,10 @@ watch(
   },
 );
 
-// 监听聊天数据变化
+// 监听聊天数据变化（仅监听消息数量，避免 deep 遍历）
 watch(
-  () => props.chatData,
-  () => {
-    nextTick(() => {
-      scrollToBottom();
-    });
-  },
-  { deep: true },
+  () => props.chatData?.messages?.length,
+  () => nextTick(() => scrollToBottom()),
 );
 
 // 生命周期
