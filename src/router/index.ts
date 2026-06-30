@@ -1,60 +1,59 @@
 /**
  * 前端路由定义，包含登录、问答、检索、起草、审核和收藏页面。
- *
- * 本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+ * 采用嵌套路由模式：AppLayout 作为业务页面的布局外壳，独立页面（登录、404 等）不套布局。
  */
 import { createRouter, createWebHistory } from 'vue-router';
-import IntelligentQA from '../views/IntelligentQA.vue';
-import IntelligentRetrieval from '../views/IntelligentRetrieval.vue';
-import AuxiliaryDraft from '../views/AuxiliaryDraft.vue';
-import ComplianceReview from '../views/ComplianceReview.vue';
+import AppLayout from '@/components/AppLayout.vue';
 import { isAuthenticatedByStorage } from '@/services/authStorage';
 
 const routes = [
   {
     path: '/',
+    component: AppLayout,
     redirect: '/intelligent-qa',
+    children: [
+      {
+        path: 'intelligent-qa',
+        name: 'IntelligentQA',
+        component: () => import('@/views/IntelligentQA.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
+        path: 'intelligent-retrieval',
+        name: 'IntelligentRetrieval',
+        component: () => import('@/views/IntelligentRetrieval.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
+        path: 'auxiliary-draft',
+        name: 'AuxiliaryDraft',
+        component: () => import('@/views/AuxiliaryDraft.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
+        path: 'compliance-review',
+        name: 'ComplianceReview',
+        component: () => import('@/views/ComplianceReview.vue'),
+        meta: { requiresAuth: true },
+      },
+    ],
   },
   {
     path: '/login',
     name: 'Login',
-    component: () => import('../views/Login.vue'),
+    component: () => import('@/views/Login.vue'),
     meta: { public: true },
-  },
-  {
-    path: '/intelligent-qa',
-    name: 'IntelligentQA',
-    component: IntelligentQA,
-    meta: { requiresAuth: true },
-  },
-  {
-    path: '/intelligent-retrieval',
-    name: 'IntelligentRetrieval',
-    component: IntelligentRetrieval,
-    meta: { requiresAuth: true },
-  },
-  {
-    path: '/auxiliary-draft',
-    name: 'AuxiliaryDraft',
-    component: AuxiliaryDraft,
-    meta: { requiresAuth: true },
-  },
-  {
-    path: '/compliance-review',
-    name: 'ComplianceReview',
-    component: ComplianceReview,
-    meta: { requiresAuth: true },
   },
   {
     path: '/my-collections',
     name: 'MyCollections',
-    component: () => import('../views/MyCollections.vue'),
+    component: () => import('@/views/MyCollections.vue'),
     meta: { requiresAuth: true },
   },
   {
     path: '/not-found',
     name: 'NotFound',
-    component: () => import('../views/NotFond.vue'),
+    component: () => import('@/views/NotFond.vue'),
     meta: { public: true },
   },
   {

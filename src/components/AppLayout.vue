@@ -1,0 +1,194 @@
+<!--
+  应用主布局组件，承载侧边栏、顶部菜单、路由视图和输入框。
+  从 App.vue 中抽离，使根组件保持简洁。
+-->
+<template>
+  <el-config-provider :locale="locale" :message="{ grouping: true }">
+    <div
+      class="app-container"
+      :class="{ 'sidebar-collapsed': sidebarCollapsed }"
+    >
+    <!-- 左侧侧边栏 -->
+    <HistoryPanel
+      :history-list="filteredHistory"
+      :active-chat-id="activeChatId"
+      :loading="isHistoryListLoading"
+      :user="userStore.user"
+      :collapsed="sidebarCollapsed"
+      :active-tab="activeTab"
+      :auth-mode="userStore.authMode"
+      :search-keyword="historySearchKeyword"
+      :search-results="historySearchResults"
+      :search-loading="historySearchLoading"
+      @select-chat="handleSelectChat"
+      @new-chat="handleNewChat"
+      @delete-chat="handleDeleteChat"
+      @clear-history="handleClearHistory"
+      @update-title="handleUpdateTitle"
+      @toggle-favorite="handleToggleFavorite"
+      @toggle-pin="handleTogglePin"
+      @search-history="handleSearchHistory"
+      @clear-search="handleClearHistorySearch"
+      @select-search-result="handleSelectSearchResult"
+      @toggle-collapse="toggleSidebar"
+      @logout="handleLogout"
+    />
+
+    <!-- 右侧主内容区 -->
+    <div class="main-content">
+      <!-- 顶部菜单 -->
+      <HeaderMenu
+        :active-tab="activeTab"
+        @tab-change="handleHeaderTabChange"
+      />
+
+      <!-- 内容区域 -->
+      <div class="content-area">
+        <!-- 路由视图区域 -->
+        <div class="dynamic-content">
+          <transition name="content-loading-fade">
+            <div v-if="isContentAreaLoading" class="content-loading-state">
+              <span class="content-loading-icon" aria-label="加载中"></span>
+            </div>
+          </transition>
+          <router-view
+            v-if="shouldRenderContentView"
+            :key="activeChatId"
+            :chat-data="currentChatData"
+            :streaming="isStreaming"
+            :current-reasoning="currentReasoning"
+            :current-answer="currentAnswer"
+            :current-streaming-message-id="currentStreamingMessageId"
+            @stop-stream="stopStream"
+            @regenerate="handleRegenerate"
+            @sources-panel-toggle="handleSourcesPanelToggle"
+          />
+        </div>
+
+        <!-- 底部固定输入框 -->
+        <div
+          class="input-container"
+          :class="{ 'sources-panel-visible': isSourcesPanelVisible }"
+          :style="inputContainerStyle"
+        >
+          <transition name="compliance-processing-fade">
+            <div
+              v-if="activeTab === '合规审核' && isComplianceFileProcessing"
+              class="compliance-processing-indicator"
+            >
+              <span class="compliance-processing-spinner" aria-hidden="true"></span>
+              <span>{{ complianceFileProcessingText || '文件正在解析中，请稍候...' }}</span>
+            </div>
+          </transition>
+          <ChatInput
+            ref="chatInputRef"
+            :placeholder="inputPlaceholder"
+            :disabled="isSendDisabled"
+            :is-compliance-mode="activeTab === '合规审核'"
+            :streaming="isStreaming"
+            :custom-upload="customUpload"
+            :uploaded-file-name="uploadedFileName"
+            :uploaded-file-meta="uploadedFileMeta"
+            :is-compliance-file-processing="isComplianceFileProcessing"
+            :compliance-file-processing-text="complianceFileProcessingText"
+            @send="handleSendMessage"
+            @stop="stopStream"
+            @remove-upload="handleRemoveUploadedFile"
+          >
+            <ComplianceReviewExtras
+              v-if="activeTab === '合规审核'"
+              v-model:selected-dimensions="selectedDimensions"
+              @select-all="handleSelectAll"
+            />
+          </ChatInput>
+        </div>
+      </div>
+    </div>
+  </div>
+  </el-config-provider>
+</template>
+
+<script setup lang="ts">
+import { computed, nextTick, ref } from 'vue';
+import zhCn from 'element-plus/es/locale/lang/zh-cn';
+import HeaderMenu from './HeaderMenu.vue';
+import HistoryPanel from './HistoryPanel.vue';
+import ChatInput from './ChatInput.vue';
+import ComplianceReviewExtras from './ComplianceReviewExtras.vue';
+import { useAppShell } from '@/composables/useAppShell';
+
+const locale = zhCn;
+const chatInputRef = ref<InstanceType<typeof ChatInput> | null>(null);
+
+const {
+  activeChatId,
+  activeTab,
+  currentAnswer,
+  currentChatData,
+  currentReasoning,
+  currentStreamingMessageId,
+  customUpload,
+  filteredHistory,
+  handleClearHistory,
+  handleDeleteChat,
+  handleLogout,
+  handleNewChat,
+  handleRegenerate,
+  handleSelectAll,
+  handleSelectChat,
+  handleSendMessage,
+  handleRemoveUploadedFile,
+  handleSearchHistory,
+  handleClearHistorySearch,
+  handleSelectSearchResult,
+  handleSourcesPanelToggle,
+  handleTabChange,
+  handleToggleFavorite,
+  handleTogglePin,
+  handleUpdateTitle,
+  inputContainerStyle,
+  historySearchKeyword,
+  historySearchResults,
+  historySearchLoading,
+  inputPlaceholder,
+  isHistoryChatActive,
+  isHistoryListLoading,
+  isSendDisabled,
+  isSelectingHistoryChat,
+  isSourcesPanelVisible,
+  isStreaming,
+  selectedDimensions,
+  sidebarCollapsed,
+  stopStream,
+  toggleSidebar,
+  uploadedFileMeta,
+  uploadedFileName,
+  isComplianceFileProcessing,
+  complianceFileProcessingText,
+  userStore,
+} = useAppShell();
+
+/** 判断是否应渲染路由视图：shouldRenderContentView。 */
+const shouldRenderContentView = computed(() => {
+  const hasCurrentMessages = (currentChatData.value?.messages?.length || 0) > 0;
+
+  return Boolean(
+    activeTab.value &&
+      (!isHistoryChatActive.value || hasCurrentMessages),
+  );
+});
+
+const isContentAreaLoading = computed(
+  () => isSelectingHistoryChat.value || isHistoryListLoading.value,
+);
+
+/** 处理顶部 Tab 切换事件。 */
+const handleHeaderTabChange = async (tabName: string) => {
+  const changed = await handleTabChange(tabName);
+  if (changed === false) return;
+  await nextTick();
+  chatInputRef.value?.clearInput();
+};
+</script>
+
+<style src="@/styles/app-shell.less" lang="less" scoped></style>
