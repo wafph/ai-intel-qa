@@ -111,7 +111,7 @@ interface Props {
   disabled?: boolean;
   isComplianceMode?: boolean;
   streaming?: boolean;
-  customUpload?: (options: any) => Promise<void> | void;
+  customUpload?: (options: any) => Promise<void>;
   uploadedFileName?: string;
   uploadedFileMeta?: string;
   isComplianceFileProcessing?: boolean;
