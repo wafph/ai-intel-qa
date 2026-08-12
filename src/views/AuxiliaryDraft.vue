@@ -1008,13 +1008,15 @@ onUnmounted(() => {
                 margin: 8px 0;
               }
 
-              :deep(code) {
+              // 内联代码样式（不在 pre 内部的 code）
+              :deep(:not(pre) > code) {
                 background: #f5f5f5;
                 padding: 2px 4px;
                 border-radius: 4px;
                 font-family: 'Courier New', monospace;
               }
 
+              // 代码块样式
               :deep(pre) {
                 background: #2d2d2d;
                 color: #f8f8f2;
@@ -1022,6 +1024,15 @@ onUnmounted(() => {
                 border-radius: 8px;
                 overflow-x: auto;
                 margin: 12px 0;
+              }
+
+              // pre 内部的 code 继承 pre 样式
+              :deep(pre code) {
+                background: transparent;
+                color: inherit;
+                padding: 0;
+                border-radius: 0;
+                font-family: 'Courier New', monospace;
               }
 
               :deep(blockquote) {
@@ -1090,13 +1101,15 @@ onUnmounted(() => {
               width: 100%;
               box-sizing: border-box;
 
-              :deep(code) {
+              // 内联代码样式（不在 pre 内部的 code）
+              :deep(:not(pre) > code) {
                 background: #f5f5f5;
                 padding: 2px 4px;
                 border-radius: 4px;
                 font-family: 'Courier New', monospace;
               }
 
+              // 代码块样式
               :deep(pre) {
                 background: #2d2d2d;
                 color: #f8f8f2;
@@ -1104,6 +1117,15 @@ onUnmounted(() => {
                 border-radius: 8px;
                 overflow-x: auto;
                 margin: 12px 0;
+              }
+
+              // pre 内部的 code 继承 pre 样式
+              :deep(pre code) {
+                background: transparent;
+                color: inherit;
+                padding: 0;
+                border-radius: 0;
+                font-family: 'Courier New', monospace;
               }
 
               :deep(blockquote) {
