@@ -888,8 +888,12 @@ export const useChatStore = defineStore('chat', () => {
     const messageStatus = qa.messageStatus || qa.message_status || answerPayload.messageStatus || answerPayload.message_status || answerPayload.taskStatus || answerPayload.task_status || '';
     const taskId = qa.taskId || qa.task_id || answerPayload.taskId || answerPayload.task_id || '';
     const metadata = getAnswerMetadata(qa, answerPayload);
-    if (funcId === 'review' && metadata && messages.length > 0) {
-      (messages[messages.length - 1] as any).metadata = metadata;
+    // 将 metadata 回填到上一条用户消息（智能问答需恢复 uploadedFiles，合规审核需恢复 reviewContext 等）
+    if (metadata && messages.length > 0) {
+      (messages[messages.length - 1] as any).metadata = {
+        ...(messages[messages.length - 1] as any).metadata,
+        ...metadata,
+      };
     }
 
     const likeStatus = qa.likeStatus ?? qa.like_status ?? 0;

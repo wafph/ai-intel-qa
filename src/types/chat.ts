@@ -60,6 +60,15 @@ export interface ChatMessage {
     textSource?: string;
     complianceFileNameWithoutExt?: string;
     complianceDimensionText?: string;
+    /** 智能问答多文件上传列表，用于在用户消息气泡中渲染附件卡片。 */
+    uploadedFiles?: Array<{
+      uid: string;
+      name: string;
+      size: number;
+      fileType: string;
+      fileUrl: string;
+      uploadFileId?: string;
+    }>;
   };
   sources?: SourceInfo[]; // ✅ 新增来源信息字段
   match_score?: number; // ✅ 新增：消息级别的

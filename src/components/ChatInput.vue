@@ -1,6 +1,8 @@
 <!--
   通用输入框组件，支持发送、停止、换行和自适应高度。
-  本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+  - 合规审核模式：单文件上传，输入框只读。
+  - 智能问答/智能检索/辅助起草模式：多文件上传，输入框可编辑，文件依次追加，支持单选删除。
+  本文件属于规章制度智能体前端最新版交付代码。
 -->
 <template>
   <div
@@ -12,13 +14,18 @@
     }"
   >
     <div class="input-wrapper">
+      <!-- 文本域 + 已上传文件卡片容器 -->
       <div
         class="textarea-container"
-        :class="{ 'has-uploaded-file': isComplianceMode && uploadedFileName }"
+        :class="{
+          'has-uploaded-file': (isComplianceMode && uploadedFileName) || (isQAMode && uploadedFileList.length > 0),
+        }"
       >
+        <!-- ========== 合规审核模式：单文件卡片 ========== -->
         <div
           v-if="isComplianceMode && uploadedFileName"
           class="uploaded-file-card"
+          :class="{ processing: isComplianceFileProcessing }"
           :title="uploadedFileName"
         >
           <div class="file-icon">{{ fileIconText }}</div>
@@ -35,6 +42,38 @@
             @click.stop="handleRemoveUpload"
           >×</button>
         </div>
+
+        <!-- ========== 智能问答模式：多文件卡片列表 ========== -->
+        <div
+          v-if="isQAMode && uploadedFileList.length > 0"
+          class="qa-uploaded-file-list"
+        >
+          <div
+            v-for="fileItem in uploadedFileList"
+            :key="fileItem.uid"
+            class="uploaded-file-card qa-file-card"
+            :class="{
+              'processing': fileItem.status === 'uploading',
+              'is-uploading': fileItem.status === 'uploading',
+            }"
+            :title="fileItem.name"
+          >
+            <div class="file-icon">{{ getQAFileIconText(fileItem) }}</div>
+            <div class="file-info">
+              <div class="file-name">{{ fileItem.name }}</div>
+              <div v-if="getQAFileMeta(fileItem)" class="file-meta">{{ getQAFileMeta(fileItem) }}</div>
+            </div>
+            <button
+              v-if="!streaming && !isQAFileProcessing && fileItem.status !== 'uploading'"
+              class="remove-upload-btn"
+              type="button"
+              :title="`删除文件：${fileItem.name}`"
+              :aria-label="`删除文件：${fileItem.name}`"
+              @click.stop="handleRemoveQAFile(fileItem.uid)"
+            >×</button>
+          </div>
+        </div>
+
         <textarea
           ref="textareaRef"
           v-model="inputText"
@@ -50,16 +89,41 @@
         />
       </div>
 
+      <!-- ========== 底部工具栏：上传按钮 + 分隔符 + 合规审核额外插槽 + 发送/停止按钮 ========== -->
       <div class="input-footer">
         <div class="footer-tools">
+          <!-- 合规审核：单文件上传入口 -->
           <el-upload
             v-if="isComplianceMode"
             class="upload-action"
             :http-request="customUpload"
             :show-file-list="false"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.json"
             :disabled="streaming || isComplianceFileProcessing"
           >
             <button class="add-btn" type="button" aria-label="上传文件" title="上传文件">
+              <svg class="add-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+          </el-upload>
+
+          <!-- 智能问答 Tab：多文件上传入口（图标、格式、大小与合规审核保持一致） -->
+          <el-upload
+            v-else-if="isQAMode"
+            class="upload-action"
+            :http-request="customUploadQA"
+            :show-file-list="false"
+            :multiple="true"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.markdown,.csv,.json,.xml,.html,.htm,.log,.yml,.yaml,.png,.jpg,.jpeg,.gif,.bmp,.webp,.tif,.tiff"
+            :disabled="streaming || isQAFileProcessing"
+          >
+            <button
+              class="add-btn"
+              type="button"
+              aria-label="上传文件"
+              title="上传文件（支持多文件依次追加）"
+            >
               <svg class="add-icon" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 5v14M5 12h14" />
               </svg>
@@ -70,6 +134,7 @@
           <slot v-if="isComplianceMode"></slot>
         </div>
 
+        <!-- 发送/停止按钮区 -->
         <div class="action-buttons">
           <button
             v-if="streaming"
@@ -106,20 +171,63 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
+/** 智能问答上传文件项类型：用于渲染多文件卡片列表。 */
+export interface QAUploadedFile {
+  /** 唯一标识，用于删除定位 */
+  uid: string;
+  /** 文件名（用户展示） */
+  name: string;
+  /** 文件大小（字节） */
+  size: number;
+  /** 上传完成后后端返回的文件 URL */
+  fileUrl?: string;
+  /** 上传完成后后端返回的文件 ID */
+  uploadFileId?: string;
+  /** 上传后提取的原文文本（可选，用于后端关联） */
+  originalText?: string;
+  /** 文件扩展名（小写） */
+  fileType?: string;
+  /** 上传状态：正在上传 / 成功 / 失败 */
+  status?: 'uploading' | 'success' | 'error';
+  /** 原始 File 对象引用（可选） */
+  raw?: File;
+}
+
+/** 组件 Props 定义。 */
 interface Props {
+  /** 输入框占位符 */
   placeholder?: string;
+  /** 当前激活的 Tab 名称：仅 '智能问答' 开启多文件上传入口 */
+  activeTab?: string;
+  /** 是否整体禁用（非合规模式下禁用 textarea） */
   disabled?: boolean;
+  /** 是否为合规审核模式：true=单文件上传+textarea只读；false=多文件上传+textarea可写 */
   isComplianceMode?: boolean;
+  /** 是否正在流式输出 */
   streaming?: boolean;
+  /** 合规审核自定义上传回调（Element Plus http-request 参数） */
   customUpload?: (options: any) => Promise<void>;
+  /** 合规审核已上传文件名（单文件） */
   uploadedFileName?: string;
+  /** 合规审核已上传文件元信息文本：扩展名 | 大小 */
   uploadedFileMeta?: string;
+  /** 合规审核文件解析中状态 */
   isComplianceFileProcessing?: boolean;
+  /** 合规审核解析中文案 */
   complianceFileProcessingText?: string;
+
+  /** ---- 智能问答多文件上传相关 Props（仅 '智能问答' Tab 生效） ---- */
+  /** 多文件上传自定义回调（Element Plus http-request 参数），由父级完成上传并更新列表 */
+  customUploadQA?: (options: any) => Promise<void>;
+  /** 已上传文件列表，按选择顺序依次追加显示 */
+  uploadedFileList?: QAUploadedFile[];
+  /** 智能问答上传处理中状态（用于禁用按钮） */
+  isQAFileProcessing?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   placeholder: '请输入内容...',
+  activeTab: '',
   disabled: false,
   isComplianceMode: false,
   streaming: false,
@@ -128,26 +236,83 @@ const props = withDefaults(defineProps<Props>(), {
   uploadedFileMeta: '',
   isComplianceFileProcessing: false,
   complianceFileProcessingText: '',
+  customUploadQA: undefined,
+  uploadedFileList: () => [],
+  isQAFileProcessing: false,
 });
 
+/** 是否为智能问答 Tab：仅该 Tab 启用多文件上传入口与 file_url 参数。 */
+const isQAMode = computed(() => !props.isComplianceMode && props.activeTab === '智能问答');
+
+/** 组件事件定义。 */
 const emit = defineEmits<{
+  /** 用户点击发送按钮或回车：content 为输入框文本内容 */
   send: [content: string];
+  /** 用户点击停止按钮 */
   stop: [];
+  /** 合规审核模式：删除已上传的单个文件 */
   'remove-upload': [];
+  /** 智能问答模式：删除指定 uid 对应的已上传文件 */
+  'remove-qa-file': [uid: string];
 }>();
 
+// ---- 基础响应式状态 ----
+/** 当前输入框文本值 */
 const inputText = ref<string>('');
+/** textarea 元素引用 */
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
+/** 输入法（中文/日文等）组合输入中状态 */
 const isComposing = ref<boolean>(false);
+/** 输入框最大字符数，防止超大内容提交 */
 const MAX_CHAT_INPUT_LENGTH = 50000;
+
+// ---- 合规审核单文件显示辅助 ----
+/** 合规审核文件图标文字：取扩展名前 3 个大写字母。 */
 const fileIconText = computed(() => {
   const ext = (props.uploadedFileName || '').split('.').pop()?.toUpperCase();
   return ext ? ext.slice(0, 3) : 'W';
 });
-/** 封装当前模块内的业务逻辑：hasInputContent。 */
+
+// ---- 智能问答多文件显示辅助 ----
+
+/**
+ * 根据 QA 上传文件项生成图标文字。
+ * 与合规审核保持一致：取文件扩展名前 3 个大写字母；无法识别时显示通用 "FILE"。
+ * @param fileItem - QA 上传文件项
+ * @returns 图标文字（如 PDF、DOCX、TXT）
+ */
+const getQAFileIconText = (fileItem: QAUploadedFile): string => {
+  const ext = (fileItem.fileType || fileItem.name.split('.').pop() || '').toUpperCase();
+  return ext ? ext.slice(0, 4) : 'FILE';
+};
+
+/**
+ * 格式化 QA 文件元信息（扩展名 | 大小），与合规审核 uploadedFileMeta 格式保持一致。
+ * @param fileItem - QA 上传文件项
+ * @returns 如 "PDF | 1.23MB" 的格式化文本，大小未知时仅返回扩展名
+ */
+const getQAFileMeta = (fileItem: QAUploadedFile): string => {
+  const ext = (fileItem.fileType || fileItem.name.split('.').pop() || '').toUpperCase();
+  const size = fileItem.size;
+  let sizeText = '';
+  if (Number.isFinite(size) && size > 0) {
+    if (size < 1024) sizeText = `${size}B`;
+    else if (size < 1024 * 1024) sizeText = `${(size / 1024).toFixed(2)}KB`;
+    else sizeText = `${(size / 1024 / 1024).toFixed(2)}MB`;
+  }
+  return sizeText ? `${ext} | ${sizeText}` : ext;
+};
+
+// ---- 计算属性 ----
+
+/** 输入框是否有非空内容：用于发送按钮高亮与容器 class。 */
 const hasInputContent = computed(() => Boolean(inputText.value.trim()));
 
-/** 判断条件是否成立：isSendButtonDisabled。 */
+/** 发送按钮是否禁用。
+ *  - 流式中：始终可点（切换为停止按钮）。
+ *  - 合规审核：只要文件解析中则禁用。
+ *  - 智能问答 / 智能检索 / 辅助起草：必须文本框有内容才高亮，仅上传文件时按钮置灰。
+ */
 const isSendButtonDisabled = computed(() => {
   if (props.streaming) return false;
   if (props.disabled) return true;
@@ -155,33 +320,53 @@ const isSendButtonDisabled = computed(() => {
   return !hasInputContent.value;
 });
 
-/** 处理用户交互或组件事件：handleSend。 */
+// ---- 事件处理 ----
+
+/** 处理用户点击发送 / 回车键。
+ *  - 输入法组合中、整体禁用、流式中：直接忽略。
+ *  - 合规审核模式不需要内容校验（父级负责）。
+ *  - 智能问答 / 智能检索 / 辅助起草：必须文本框有内容才能发送，仅上传文件时不触发发送。
+ */
 const handleSend = () => {
   if (isComposing.value || props.disabled || props.streaming) {
     return;
   }
 
   const content = inputText.value.trim();
-  if (!content && !props.isComplianceMode) {
+  if (props.isComplianceMode) {
+    emit('send', content);
+    inputText.value = '';
+    autoResize();
     return;
   }
+
+  // 智能问答 / 智能检索 / 辅助起草：必须有文字
+  if (!content) return;
 
   emit('send', content);
   inputText.value = '';
   resetTextareaHeight();
 };
 
-/** 处理用户交互或组件事件：handleStop。 */
+/** 处理用户点击停止按钮，中断流式输出。 */
 const handleStop = () => {
   emit('stop');
 };
 
-/** 删除合规审核已上传文件。 */
+/** 删除合规审核模式下已上传的单文件。 */
 const handleRemoveUpload = () => {
   emit('remove-upload');
 };
 
-/** 处理用户交互或组件事件：handleNewLine。 */
+/**
+ * 删除智能问答模式下指定 uid 的已上传文件。
+ * @param uid - 文件唯一标识
+ */
+const handleRemoveQAFile = (uid: string) => {
+  emit('remove-qa-file', uid);
+};
+
+/** Shift+Enter 在可编辑模式下插入换行。 */
 const handleNewLine = () => {
   if (props.disabled || props.streaming || props.isComplianceMode) return;
   inputText.value += '\n';
@@ -190,7 +375,7 @@ const handleNewLine = () => {
   });
 };
 
-/** 处理用户交互或组件事件：handleInput。 */
+/** 输入框内容变化：自适应高度 + 超长截断。 */
 const handleInput = () => {
   autoResize();
 
@@ -199,7 +384,7 @@ const handleInput = () => {
   }
 };
 
-/** 自动调整输入框等 UI 状态：autoResize。 */
+/** textarea 高度自适应，上限 150px。 */
 const autoResize = () => {
   nextTick(() => {
     if (!textareaRef.value) return;
@@ -210,33 +395,35 @@ const autoResize = () => {
   });
 };
 
-/** 重置组件状态：resetTextareaHeight。 */
+/** 重置 textarea 高度为 auto（发送/清空后调用）。 */
 const resetTextareaHeight = () => {
   if (textareaRef.value) {
     textareaRef.value.style.height = 'auto';
   }
 };
 
-/** 封装当前模块内的业务逻辑：focusInput。 */
+/** 让输入框获得焦点。 */
 const focusInput = () => {
   textareaRef.value?.focus();
 };
 
-/** 清理输入、搜索或缓存状态：clearInput。 */
+/** 清空输入框文本内容（保留上传文件列表，父级单独管理）。 */
 const clearInput = () => {
   inputText.value = '';
   resetTextareaHeight();
 };
 
-/** 处理用户交互或组件事件：handleCompositionStart。 */
+/** 输入法组合开始（例如中文拼音输入过程中）：暂停 enter 发送。 */
 const handleCompositionStart = () => {
   isComposing.value = true;
 };
 
-/** 处理用户交互或组件事件：handleCompositionEnd。 */
+/** 输入法组合结束：恢复 enter 发送。 */
 const handleCompositionEnd = () => {
   isComposing.value = false;
 };
+
+// ---- 生命周期 ----
 
 onMounted(() => {
   if (textareaRef.value) {
@@ -253,6 +440,7 @@ onUnmounted(() => {
   }
 });
 
+// 解除禁用后自动重新聚焦，方便连续输入。
 watch(
   () => props.disabled,
   (newVal) => {
@@ -264,6 +452,7 @@ watch(
   },
 );
 
+/** 对外暴露方法：供父级（AppLayout）直接调用。 */
 defineExpose({
   focusInput,
   clearInput,
@@ -346,6 +535,20 @@ defineExpose({
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 6px rgba(245, 108, 108, 0.28);
+  /* 默认隐藏，hover 时显示；通过父卡片 :hover 控制 */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+/* 合规审核卡片 hover 时显示删除按钮 */
+.uploaded-file-card:hover .remove-upload-btn,
+/* QA 多文件卡片 hover 时显示删除按钮 */
+.qa-file-card:hover .remove-upload-btn,
+/* 拖拽中或处理中仍显示，便于用户发现 */
+.remove-upload-btn:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .remove-upload-btn:hover {
@@ -565,10 +768,47 @@ defineExpose({
   opacity: 1;
   transform: translateY(0);
 }
+
+/* ========== 智能问答多文件卡片列表样式 ========== */
+
+/** 多文件容器：横向排列 + 自动换行，支持任意数量文件依次展示。 */
+.qa-uploaded-file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+  align-items: flex-start;
+}
+
+/** QA 单文件卡片样式：整体与合规审核保持一致，仅宽度限制更宽松。 */
+.qa-file-card {
+  max-width: 220px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 30px 8px 12px;
+  border-radius: 7px;
+  background: #f4f2f2;
+  position: relative;
+  flex-shrink: 0;
+  transition: box-shadow 0.2s ease, background 0.2s ease;
+}
+
+/** QA 上传中状态：图标呼吸动画 + 背景变淡。 */
+.qa-file-card.is-uploading {
+  background: #eef3fb;
+
+  .file-icon {
+    animation: fileProcessingPulse 1.2s ease-in-out infinite;
+  }
+}
+
 </style>
 
 
 <style scoped>
+/** 合规审核处理中 + QA 上传中共用的图标呼吸动画。 */
 .uploaded-file-card.processing .file-icon {
   animation: fileProcessingPulse 1.2s ease-in-out infinite;
 }

@@ -44,7 +44,7 @@ export default defineConfig({
         secure: false,
       },
       '/api': {
-        target: 'http://10.210.101.209:8000', //token获取服务器地址
+        target: 'http://10.210.101.216:8000', //token获取服务器地址
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/api/, ''), // 移除前缀

@@ -29,7 +29,29 @@
             <div v-if="item.role === 'user'" class="message-user">
               <div class="message-header">
                 <div class="message-info">
+                  <!-- 上传附件列表：显示在问题文字上方，右对齐，卡片式展示 -->
+                  <div
+                    v-if="item.metadata?.uploadedFiles && item.metadata.uploadedFiles.length > 0"
+                    class="user-attachment-list"
+                  >
+                    <div
+                      v-for="file in item.metadata.uploadedFiles"
+                      :key="file.uid"
+                      class="user-attachment-card"
+                      :title="file.name"
+                    >
+                      <div class="attachment-icon">{{ getAttachmentIconText(file.fileType) }}</div>
+                      <div class="attachment-info">
+                        <div class="attachment-name">{{ file.name }}</div>
+                        <div class="attachment-meta">
+                          {{ file.fileType?.toUpperCase() }} | {{ formatAttachmentSize(file.size) }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- 用户输入的问题文字 -->
                   <pre
+                    v-if="item.content && item.content.trim()"
                     class="message-content user-message-content"
                     :class="{
                       'is-collapsed': isUserQuestionCollapsed(item),
@@ -479,6 +501,29 @@ const toggleUserQuestionFold = (id?: string) => {
   if (!key) return;
   expandedUserQuestionMap[key] = !expandedUserQuestionMap[key];
 };
+
+/**
+ * 根据文件扩展名返回附件图标文字（与 ChatInput 中的文件图标保持一致的短标签）。
+ */
+const getAttachmentIconText = (fileType?: string): string => {
+  const ext = (fileType || '').toLowerCase();
+  if (!ext) return 'FILE';
+  if (['doc', 'docx'].includes(ext)) return 'DOC';
+  if (['xls', 'xlsx'].includes(ext)) return 'XLS';
+  if (['ppt', 'pptx'].includes(ext)) return 'PPT';
+  if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tif', 'tiff'].includes(ext)) return 'IMG';
+  return ext.toUpperCase().slice(0, 4);
+};
+
+/**
+ * 格式化文件大小为人类可读字符串。
+ */
+const formatAttachmentSize = (size: number): string => {
+  if (!Number.isFinite(size) || size <= 0) return '';
+  if (size < 1024) return `${size}B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(2)}KB`;
+  return `${(size / 1024 / 1024).toFixed(2)}MB`;
+};
 const isAnswerSourcesExpanded = (id?: string) => {
   const key = String(id || '');
   return Boolean(key && expandedAnswerSourcesMap[key]);
@@ -756,7 +801,11 @@ const handleRestart = (index: number) => {
   }
 
   if (userMessage) {
-    emit('regenerate', userMessage.content);
+    // 传递用户输入文本 + 已上传附件列表（如果存在），支持重新执行文件上传流程
+    emit('regenerate', {
+      content: userMessage.content,
+      uploadedFiles: (userMessage as any).metadata?.uploadedFiles || [],
+    });
   }
 };
 
@@ -1145,6 +1194,68 @@ onUnmounted(() => {
               display: flex;
               flex-direction: column;
               align-items: flex-end; /* 内容右对齐 */
+
+              /* 用户消息中的附件列表：横向排列一行，超出容器宽度时自动换行 */
+              .user-attachment-list {
+                display: flex;
+                flex-wrap: wrap;
+                flex-direction: row;
+                justify-content: flex-end;
+                align-items: flex-start;
+                gap: 8px;
+                margin-bottom: 8px;
+                max-width: 100%;
+              }
+
+              .user-attachment-card {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 12px;
+                border-radius: 10px;
+                background: #f4f2f2;
+                min-width: 0;
+                flex-shrink: 1;
+                transition: box-shadow 0.2s ease;
+
+                &:hover {
+                  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+                }
+
+                .attachment-icon {
+                  width: 32px;
+                  height: 28px;
+                  border-radius: 4px;
+                  background: #d9ecff;
+                  color: #1f7af0;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  font-size: 11px;
+                  font-weight: 700;
+                  flex-shrink: 0;
+                }
+
+                .attachment-info {
+                  min-width: 0;
+
+                  .attachment-name {
+                    max-width: 180px;
+                    color: #222;
+                    font-size: 13px;
+                    line-height: 18px;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                  }
+
+                  .attachment-meta {
+                    color: #888;
+                    font-size: 12px;
+                    line-height: 16px;
+                  }
+                }
+              }
 
               .message-content {
                 background: #1c73eb; /* 用户消息背景色 */

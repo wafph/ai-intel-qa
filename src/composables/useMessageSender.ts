@@ -12,10 +12,25 @@ import { getFrontendFallbackErrorMessage, toUserSafeAgentErrorMessage } from '@/
 import type { ResumableStreamTask } from './useStreamTask';
 import type { ComplianceReviewParams } from './useComplianceReview';
 
+/** 重新生成时携带的已上传文件快照结构（与 ChatMessage.metadata.uploadedFiles 对齐）。 */
+export interface RegenerateUploadedFile {
+  uid: string;
+  name: string;
+  size: number;
+  fileType: string;
+  fileUrl: string;
+  uploadFileId?: string;
+}
+
 /** 重新生成消息时携带的载荷类型。 */
 export type RegeneratePayload =
   | string
-  | { content: string; complianceParams?: ComplianceReviewParams | null };
+  | {
+      content: string;
+      complianceParams?: ComplianceReviewParams | null;
+      /** 智能问答 Tab：重新生成时携带的已上传文件列表，恢复到输入区后随消息一起发送。 */
+      uploadedFiles?: RegenerateUploadedFile[];
+    };
 
 /** useMessageSender 的依赖注入参数。 */
 interface UseMessageSenderDeps {
@@ -36,6 +51,10 @@ interface UseMessageSenderDeps {
   streamTask: any;
   streamChunk: any;
   sessionManager: any;
+  /** 智能问答已上传文件列表（只读），用于在用户消息中携带文件信息。 */
+  qaUploadedFileList?: Ref<any[]>;
+  /** 智能问答清空文件列表回调，消息推送后调用。 */
+  clearQAUploadeFileList?: () => void;
 }
 
 export const useMessageSender = (deps: UseMessageSenderDeps) => {
@@ -44,6 +63,8 @@ export const useMessageSender = (deps: UseMessageSenderDeps) => {
     isStreaming, currentReasoning, currentAnswer, currentStreamingMessageId,
     inputText, scopesData, generateUUID, buildUnifiedAgentPayload, scrollToBottom,
     compliance, streamTask, streamChunk, sessionManager,
+    qaUploadedFileList,
+    clearQAUploadeFileList,
   } = deps;
 
   // 错误工具
@@ -127,49 +148,71 @@ export const useMessageSender = (deps: UseMessageSenderDeps) => {
 
     clearLocalActiveTasksForSession(currentConversationUuid.value || activeChatId.value, getWorkflowCodeByTab(activeTab.value));
     const qaId = generateUUID();
+
+    // ---- 仅智能问答 Tab：在发送时捕获已上传文件列表快照 ----
+    // 智能检索 / 辅助起草 不使用文件上传功能，因此跳过文件快照。
+    // 因为 clearQAUploadeFileList 会清空响应式列表，这里先快照一份用于 bizParams + metadata。
+    const isComplianceTab = activeTab.value === '合规审核';
+    const isQATab = activeTab.value === '智能问答';
+    const qaFilesSnapshot = isQATab && qaUploadedFileList?.value ? qaUploadedFileList.value.map((f) => ({
+      uid: f.uid,
+      name: f.name,
+      size: f.size,
+      fileType: f.fileType,
+      fileUrl: f.fileUrl,
+      uploadFileId: f.uploadFileId,
+    })) : [];
+    const hasQAFiles = qaFilesSnapshot.length > 0;
+
     const userMessage: ChatMessage = {
       id: `user_${qaId}`, role: 'user', content: userMessageContent,
       timestamp: new Date() as any,
-      metadata: activeTab.value === '合规审核' && lastComplianceParams.value ? buildComplianceMetadata(lastComplianceParams.value) : undefined,
+      // 合规审核：保留原有 compliance metadata；智能问答 Tab：若有文件则注入 uploadedFiles
+      metadata: isComplianceTab && lastComplianceParams.value
+        ? buildComplianceMetadata(lastComplianceParams.value)
+        : isQATab && hasQAFiles ? { uploadedFiles: qaFilesSnapshot } : undefined,
     };
     chat.messages.push(userMessage);
 
     if (chat.messages.length === 1) {
-      const newTitle = activeTab.value === '合规审核' && lastComplianceParams.value
+      const newTitle = isComplianceTab && lastComplianceParams.value
         ? buildComplianceSessionTitle(lastComplianceParams.value.fileName, lastComplianceParams.value.dimensions)
         : content.length > 20 ? content.substring(0, 20) + '...' : content;
       chat.title = newTitle;
-      applySessionTitle(chat.id, newTitle, activeTab.value === '合规审核' ? userMessageContent : content);
+      applySessionTitle(chat.id, newTitle, isComplianceTab ? userMessageContent : content);
     }
 
-    if (activeTab.value === '合规审核') await saveReviewContextSnapshot(qaId, lastComplianceParams.value);
+    if (isComplianceTab) await saveReviewContextSnapshot(qaId, lastComplianceParams.value);
 
-    // 清空输入
-    if (activeTab.value === '合规审核') {
+    // 清空输入 / QA 文件列表
+    if (isComplianceTab) {
       uploadedFileName.value = ''; uploadedFileUrl.value = ''; uploadedOriginalText.value = '';
       uploadedFileExtraMeta.value = {}; selectedDimensions.value = [];
       const cb = document.querySelector('.el-checkbox-group .el-checkbox:first-child input') as HTMLInputElement;
       if (cb) cb.checked = false;
     } else {
       inputText.value = '';
+      // 仅智能问答 Tab：消息入栈后清空上传文件卡片
+      if (isQATab && hasQAFiles && clearQAUploadeFileList) clearQAUploadeFileList();
     }
 
     const aiMessageId = qaId;
     chat.messages.push({
       id: aiMessageId, role: 'assistant', content: '', reasoning: '',
       timestamp: new Date() as any, streaming: true,
-      metadata: activeTab.value === '合规审核' && lastComplianceParams.value ? buildComplianceMetadata(lastComplianceParams.value) : undefined,
+      metadata: isComplianceTab && lastComplianceParams.value ? buildComplianceMetadata(lastComplianceParams.value) : (hasQAFiles ? { uploadedFiles: qaFilesSnapshot } : undefined),
     } as ChatMessage);
     chatStore.updateHistoryItem(activeChatId.value!, { preview: userMessageContent, time: Date.now() });
     resetStreamState();
     currentStreamingMessageId.value = aiMessageId;
-    await startStream(userMessageContent, aiMessageId);
-    if (activeTab.value === '合规审核') isComplianceSubmitting.value = false;
+    // 将快照注入 startStream，最终写入 bizParams 给后端 workflow
+    await startStream(userMessageContent, aiMessageId, qaFilesSnapshot);
+    if (isComplianceTab) isComplianceSubmitting.value = false;
     scrollToBottom();
   };
 
   /** 创建 V12.2 后台任务并订阅 taskId 事件流。 */
-  const startStream = async (queryText: string, messageId: string) => {
+  const startStream = async (queryText: string, messageId: string, qaUploadedFiles: any[] = []) => {
     isStreaming.value = true;
     currentReasoning.value = '';
     currentAnswer.value = '';
@@ -193,9 +236,30 @@ export const useMessageSender = (deps: UseMessageSenderDeps) => {
           reviewContext: params ? buildReviewContext(params) : undefined,
         };
       } else if (activeTab.value === '辅助起草') {
-        bizParams = { query: queryText, ancestorScope: scopesData.value.ancestorScope || [], descendantScope: scopesData.value.descendantScope || [] };
+        // 辅助起草：不上传文件，不注入 file_url
+        bizParams = {
+          query: queryText,
+          ancestorScope: scopesData.value.ancestorScope || [],
+          descendantScope: scopesData.value.descendantScope || [],
+        };
+      } else if (activeTab.value === '智能问答') {
+        // 智能问答：从已上传文件中提取 URL 字符串数组，注入 biz_params.inputs.file_url
+        const fileUrlList = qaUploadedFiles.map((f: any) => f.fileUrl).filter((u: string) => Boolean(u));
+        bizParams = {
+          query: queryText,
+          ancestorScope: scopesData.value.ancestorScope || [],
+          descendantScope: scopesData.value.descendantScope || [],
+          user: scopesData.value.user || '1',
+          file_url: fileUrlList.length ? fileUrlList : undefined,
+        };
       } else {
-        bizParams = { query: queryText, ancestorScope: scopesData.value.ancestorScope || [], descendantScope: scopesData.value.descendantScope || [], user: scopesData.value.user || '1' };
+        // 智能检索：不上传文件，不注入 file_url
+        bizParams = {
+          query: queryText,
+          ancestorScope: scopesData.value.ancestorScope || [],
+          descendantScope: scopesData.value.descendantScope || [],
+          user: scopesData.value.user || '1',
+        };
       }
 
       const workflowCode = getWorkflowCodeByTab(activeTab.value);
@@ -330,6 +394,19 @@ export const useMessageSender = (deps: UseMessageSenderDeps) => {
       if (params) { lastComplianceParams.value = params; await handleComplianceReview(); }
       else ElMessage.error('没有找到审核参数，无法重新审核');
     } else {
+      // 智能问答 Tab：重新生成时恢复已上传文件列表，使其重新显示在输入区并随消息一起发送
+      if (activeTab.value === '智能问答' && typeof payload !== 'string' && payload.uploadedFiles?.length) {
+        qaUploadedFileList!.value = payload.uploadedFiles.map((f) => ({
+          uid: f.uid,
+          name: f.name,
+          size: f.size,
+          fileType: f.fileType,
+          fileUrl: f.fileUrl,
+          uploadFileId: f.uploadFileId,
+          status: 'success' as const,
+          originalText: '',
+        }));
+      }
       await handleSendMessage(content);
     }
   };

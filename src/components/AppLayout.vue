@@ -71,6 +71,7 @@
           :class="{ 'sources-panel-visible': isSourcesPanelVisible }"
           :style="inputContainerStyle"
         >
+          <!-- 合规审核：文件处理中顶部指示器（spinner + 文案） -->
           <transition name="compliance-processing-fade">
             <div
               v-if="activeTab === '合规审核' && isComplianceFileProcessing"
@@ -80,9 +81,21 @@
               <span>{{ complianceFileProcessingText || '文件正在解析中，请稍候...' }}</span>
             </div>
           </transition>
+          <!-- 智能问答：文件处理中顶部指示器（与合规审核样式一致，spinner + 阶段文案） -->
+          <transition name="compliance-processing-fade">
+            <div
+              v-if="activeTab === '智能问答' && isQAFileProcessing"
+              class="compliance-processing-indicator"
+            >
+              <span class="compliance-processing-spinner" aria-hidden="true"></span>
+              <span>{{ qaFileProcessingText || '文件正在上传解析中，请稍候...' }}</span>
+            </div>
+          </transition>
+          <!-- ChatInput：输入框 + 发送按钮；合规审核为单文件上传，智能问答 Tab 支持多文件依次追加 -->
           <ChatInput
             ref="chatInputRef"
             :placeholder="inputPlaceholder"
+            :active-tab="activeTab"
             :disabled="isSendDisabled"
             :is-compliance-mode="activeTab === '合规审核'"
             :streaming="isStreaming"
@@ -91,9 +104,13 @@
             :uploaded-file-meta="uploadedFileMeta"
             :is-compliance-file-processing="isComplianceFileProcessing"
             :compliance-file-processing-text="complianceFileProcessingText"
+            :custom-upload-q-a="customUploadQA"
+            :uploaded-file-list="qaUploadedFileList"
+            :is-q-a-file-processing="isQAFileProcessing"
             @send="handleSendMessage"
             @stop="stopStream"
             @remove-upload="handleRemoveUploadedFile"
+            @remove-qa-file="handleRemoveQAFile"
           >
             <ComplianceReviewExtras
               v-if="activeTab === '合规审核'"
@@ -166,6 +183,12 @@ const {
   isComplianceFileProcessing,
   complianceFileProcessingText,
   userStore,
+  // ---- 智能问答多文件上传新增解构 ----
+  customUploadQA,
+  qaUploadedFileList,
+  isQAFileProcessing,
+  qaFileProcessingText,
+  handleRemoveQAFile,
 } = useAppShell();
 
 /** 判断是否应渲染路由视图：shouldRenderContentView。 */

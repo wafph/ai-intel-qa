@@ -559,13 +559,42 @@ export const useComplianceReview = (deps: UseComplianceReviewDeps) => {
   };
 
   /**
+   * 合规审核允许的文件扩展名白名单（PDF + Office 类）。
+   * 不在列表中的类型会被前端直接拦截，给出"不支持该文件类型上传"提示。
+   */
+  const COMPLIANCE_SUPPORTED_EXTENSIONS = [
+    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+    'txt', 'md', 'csv', 'json',
+  ];
+
+  /**
+   * 校验合规审核文件扩展名是否在白名单内。
+   * @param file - 待上传文件
+   * @returns true 表示允许上传
+   */
+  const isComplianceSupportedFile = (file: File): boolean => {
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    return COMPLIANCE_SUPPORTED_EXTENSIONS.includes(ext);
+  };
+
+  /**
    * ChatInput 自定义上传回调。处理文件上传成功/失败状态。
+   * 特点：
+   *  - 上传前先校验文件类型，不支持则直接 ElMessage 报错且不插入卡片。
+   *  - PDF 走预处理流程（检测原文定位能力 + mineru 解析），其他文件直接上传到 AgentArts。
+   *
    * @param options - Element Plus 上传回调参数
    */
   const customUpload = async (options: any) => {
     const { file, onSuccess, onError } = options;
     if (isComplianceFileProcessing.value) {
       onError(new Error('当前已有文件正在处理，请稍候'));
+      return;
+    }
+
+    // 校验文件类型：不支持则直接报 ElMessage 且不调用 onError（避免组件二次报错）
+    if (!isComplianceSupportedFile(file)) {
+      ElMessage.warning({ message: '不支持该文件类型上传', offset: 72 });
       return;
     }
 
@@ -756,6 +785,7 @@ export const useComplianceReview = (deps: UseComplianceReviewDeps) => {
     // 计算属性
     uploadedFileMeta,
     // 工具函数
+    formatFileSize,
     getActualReviewDimensions,
     getReviewQuery,
     stripFileExtension,
@@ -770,6 +800,7 @@ export const useComplianceReview = (deps: UseComplianceReviewDeps) => {
     refreshComplianceParamsFileUrl,
     getComplianceParamsFromSession,
     // 文件上传
+    uploadFileToAgentArts,
     customUpload,
     handleRemoveUploadedFile,
     handleSelectAll,
