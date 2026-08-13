@@ -511,7 +511,6 @@ const getAttachmentIconText = (fileType?: string): string => {
   if (['doc', 'docx'].includes(ext)) return 'DOC';
   if (['xls', 'xlsx'].includes(ext)) return 'XLS';
   if (['ppt', 'pptx'].includes(ext)) return 'PPT';
-  if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tif', 'tiff'].includes(ext)) return 'IMG';
   return ext.toUpperCase().slice(0, 4);
 };
 

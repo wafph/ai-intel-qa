@@ -563,8 +563,7 @@ export const useComplianceReview = (deps: UseComplianceReviewDeps) => {
    * 不在列表中的类型会被前端直接拦截，给出"不支持该文件类型上传"提示。
    */
   const COMPLIANCE_SUPPORTED_EXTENSIONS = [
-    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
-    'txt', 'md', 'csv', 'json',
+    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 
   ];
 
   /**

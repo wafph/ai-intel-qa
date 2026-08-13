@@ -98,7 +98,7 @@
             class="upload-action"
             :http-request="customUpload"
             :show-file-list="false"
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.json"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
             :disabled="streaming || isComplianceFileProcessing"
           >
             <button class="add-btn" type="button" aria-label="上传文件" title="上传文件">
@@ -115,7 +115,7 @@
             :http-request="customUploadQA"
             :show-file-list="false"
             :multiple="true"
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.markdown,.csv,.json,.xml,.html,.htm,.log,.yml,.yaml,.png,.jpg,.jpeg,.gif,.bmp,.webp,.tif,.tiff"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
             :disabled="streaming || isQAFileProcessing"
           >
             <button

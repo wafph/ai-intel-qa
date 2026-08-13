@@ -125,9 +125,7 @@ export const useAppShell = () => {
    * 不在列表中的类型会被前端直接拦截，给出"不支持该文件类型上传"提示。
    */
   const QA_SUPPORTED_EXTENSIONS = [
-    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
-    'txt', 'md', 'markdown', 'csv', 'json', 'xml', 'html', 'htm', 'log', 'yml', 'yaml',
-    'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tif', 'tiff',
+    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv',
   ];
 
   /**
