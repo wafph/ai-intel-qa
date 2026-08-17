@@ -3,7 +3,7 @@
   本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
 -->
 <template>
-  <div class="intelligent-qa" :class="{ 'with-original-panel': activeOriginalMessage }">
+  <div class="intelligent-qa" :class="{ 'with-original-panel': activeOriginalMessage }" ref="intelligentQaRef">
     <div
       class="qa-header"
       v-if="!loading && (!chatData?.messages || chatData.messages.length === 0)"
@@ -14,6 +14,7 @@
 
     <div
       class="conversation-history"
+      ref="conversationHistoryRef"
       v-if="chatData?.messages && chatData?.messages?.length > 0"
     >
       <div
@@ -267,6 +268,9 @@ let typingInterval: NodeJS.Timeout | null = null;
 let currentTypingIndex = 0;
 const loading = ref(false);
 const isTyping = ref(false);
+// 滚动容器引用
+const intelligentQaRef = ref<HTMLElement | null>(null);
+const conversationHistoryRef = ref<HTMLElement | null>(null);
 const emit = defineEmits(['regenerate', 'sources-panel-toggle']);
 
 const expandedUserQuestionMap = reactive<Record<string, boolean>>({});
@@ -1235,34 +1239,22 @@ const closeOriginalPanel = () => {
   restoreOriginalMessageAnchor(messageId || undefined);
 };
 
-/** 封装当前模块内的业务逻辑：scrollToBottom。 */
+/** 滚动到底部：with-original-panel 模式滚动 conversation-history，普通模式滚动父级 dynamic-content。 */
 const scrollToBottom = () => {
   nextTick(() => {
-    /** 封装当前模块内的业务逻辑：scrollContainers。 */
-    const scrollContainers = () => {
-      const containers = [
-        document.querySelector('.dynamic-content'),
-        document.querySelector('.conversation-history'),
-        document.querySelector('.intelligent-qa'),
-      ];
-
-      for (const container of containers) {
-        if (!container) continue;
-        try {
-          container.scrollTop = container.scrollHeight;
-        } catch {}
-      }
-
-      window.scrollTo({
-        top: document.documentElement.scrollHeight,
-        behavior: 'auto',
-      });
-    };
-
-    requestAnimationFrame(() => {
-      scrollContainers();
-      requestAnimationFrame(scrollContainers);
-    });
+    // with-original-panel 模式：conversation-history 是滚动容器
+    if (
+      conversationHistoryRef.value &&
+      conversationHistoryRef.value.scrollHeight > conversationHistoryRef.value.clientHeight
+    ) {
+      conversationHistoryRef.value.scrollTop = conversationHistoryRef.value.scrollHeight;
+      return;
+    }
+    // 普通模式：父级 .dynamic-content 是滚动容器
+    const dynamicContent = intelligentQaRef.value?.parentElement;
+    if (dynamicContent) {
+      dynamicContent.scrollTop = dynamicContent.scrollHeight;
+    }
   });
 };
 

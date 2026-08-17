@@ -16,7 +16,7 @@
     <!-- 主容器：左右分栏布局 -->
     <div class="qa-container">
       <!-- 左侧对话区域 -->
-      <div class="qa-body">
+      <div class="qa-body" ref="qaBodyRef">
         <!-- 起草内容 -->
         <div
           class="conversation-history"
@@ -326,6 +326,8 @@ let typingInterval: NodeJS.Timeout | null = null;
 let currentTypingIndex = 0;
 const loading = ref(false);
 const isTyping = ref(false);
+// 滚动容器引用
+const qaBodyRef = ref<HTMLElement | null>(null);
 
 // 推荐范文面板状态
 const showSourcesPanel = ref(false);
@@ -666,33 +668,9 @@ const handleSourceTitleClick = async (source: any, event: Event) => {
 // 滚动到底部函数
 const scrollToBottom = () => {
   nextTick(() => {
-    // 方法1：尝试查找正确的滚动容器
-    const containers = [
-      document.querySelector('.qa-body'),
-      document.querySelector('.conversation-history'),
-      document.querySelector('.dynamic-content'),
-      document.querySelector('.auxiliary-draft'),
-    ];
-
-    for (const container of containers) {
-      if (container) {
-        try {
-          const isScrollable = container.scrollHeight > container.clientHeight;
-          if (isScrollable || container === containers[0]) {
-            container.scrollTop = container.scrollHeight;
-            return;
-          }
-        } catch (error) {
-          console.error('滚动失败:', error);
-        }
-      }
+    if (qaBodyRef.value) {
+      qaBodyRef.value.scrollTop = qaBodyRef.value.scrollHeight;
     }
-
-    // 方法2：如果上述方法都失败，使用全局滚动
-    window.scrollTo({
-      top: document.documentElement.scrollHeight,
-      behavior: 'smooth',
-    });
   });
 };
 
@@ -727,6 +705,7 @@ watch(
         stopTypingEffect();
       }
     }
+    scrollToBottom();
   },
   { immediate: true },
 );
