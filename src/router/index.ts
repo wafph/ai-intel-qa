@@ -71,9 +71,10 @@ const router = createRouter({
 router.beforeEach((to) => {
   if (to.meta.public) return true;
   if (to.meta.requiresAuth && !isAuthenticatedByStorage()) {
+    // 不再携带 redirect 参数：登录成功后统一进入第一个菜单 /intelligent-qa，
+    // 避免被带回登录前访问的菜单路由
     return {
       path: '/login',
-      query: { redirect: to.fullPath },
     };
   }
   return true;

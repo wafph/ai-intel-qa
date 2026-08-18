@@ -356,7 +356,9 @@ export const useAppShell = () => {
   const handleLogout = async () => {
     detachStreamSubscription();
     await userStore.logout();
-    router.replace({ path: '/login', query: { redirect: route.fullPath } });
+    // 退出登录统一跳纯净登录页：不再携带 redirect 参数，
+    // 避免再次登录时被带回退出前的菜单路由（统一从第一个菜单进入）
+    router.replace({ path: '/login' });
   };
 
   const handleTabChange = async (tab: string) => {

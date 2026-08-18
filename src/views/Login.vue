@@ -132,14 +132,13 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRouter } from 'vue-router';
 import type { FormInstance, FormRules } from 'element-plus';
 import { ElMessage } from 'element-plus';
 import { useUserStore } from '@/stores/user';
 import { FRONTEND_AUTH_MODE } from '@/services/config';
 
 const router = useRouter();
-const route = useRoute();
 const userStore = useUserStore();
 const formRef = ref<FormInstance>();
 const mode = ref<'login' | 'register'>('login');
@@ -188,11 +187,10 @@ const switchMode = (nextMode: 'login' | 'register') => {
   formRef.value?.clearValidate();
 };
 
-/** 封装当前模块内的业务逻辑：afterLoginRedirect。 */
+/** 登录成功后的跳转：统一进入第一个菜单（智能问答），忽略 URL 上的 redirect 参数。 */
 const afterLoginRedirect = () => {
-  const redirect =
-    typeof route.query.redirect === 'string' ? route.query.redirect : '/intelligent-qa';
-  router.replace(redirect);
+  // 产品约定：无论登录前处于哪个菜单，登录后统一从第一个路由 /intelligent-qa 进入
+  router.replace('/intelligent-qa');
 };
 
 /** 处理用户交互或组件事件：handleLogin。 */
