@@ -87,12 +87,17 @@ export const useAppShell = () => {
     if (!agentToken) throw new Error('未找到 agent_token，请先登录或通过平台授权进入');
     return { request_id: generateUUID(), session_id: currentConversationUuid.value, timestamp: Date.now(), agent_token: agentToken, intent_tag: workflowCode, context: { activeTab: activeTab.value, routePath: route.path }, biz_params: { inputs: bizParams } };
   };
+  // 滚动到底部：若用户已手动上滑（不在底部附近），则不强制滚动，尊重用户查看历史的操作
   const scrollToBottom = () => {
     nextTick(() => {
       const scroll = () => {
-        for (const sel of ['.dynamic-content', '.conversation-history', '.intelligent-qa']) {
-          const el = document.querySelector(sel);
-          if (el) try { el.scrollTop = el.scrollHeight; } catch {}
+        for (const sel of ['.dynamic-content', '.conversation-history', '.intelligent-qa', '.qa-body']) {
+          const el = document.querySelector(sel) as HTMLElement | null;
+          if (!el) continue;
+          // 用户已上滑（距离底部超过 50px），不强制拉回底部
+          const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+          if (distanceFromBottom > 50) continue;
+          try { el.scrollTop = el.scrollHeight; } catch {}
         }
         window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'auto' });
       };

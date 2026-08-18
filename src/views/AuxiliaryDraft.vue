@@ -188,6 +188,15 @@
         </div>
       </div>
 
+      <!-- 回到底部浮动按钮 -->
+      <transition name="scroll-bottom-fade">
+        <div v-if="showScrollButton" class="scroll-bottom-wrapper" @click="goToBottom">
+          <div class="scroll-bottom-btn">
+            <el-icon><ArrowDown /></el-icon>
+          </div>
+        </div>
+      </transition>
+
       <!-- 右侧固定推荐范文面板（点击显示推荐范文时显示） -->
       <div
         v-if="showSourcesPanel"
@@ -284,6 +293,7 @@ import {
 import { getSourceDirectUrl, getSourceFileId, getSourceTitle } from '@/services/sourceUtils';
 import { copyTextToClipboard, shouldCollapseUserQuestion } from '@/utils/messageCollapse';
 import { copyPlainText } from '@/utils/clipboard';
+import { useScrollToBottom } from '@/composables/useScrollToBottom';
 const emit = defineEmits(['regenerate', 'sources-panel-toggle']);
 
 interface Props {
@@ -328,6 +338,10 @@ const loading = ref(false);
 const isTyping = ref(false);
 // 滚动容器引用
 const qaBodyRef = ref<HTMLElement | null>(null);
+// 回到底部按钮的状态和滚动控制
+const { showScrollButton, scrollToBottom, goToBottom, resetAutoFollow } = useScrollToBottom({
+  getContainer: () => qaBodyRef.value,
+});
 
 // 推荐范文面板状态
 const showSourcesPanel = ref(false);
@@ -665,15 +679,6 @@ const handleSourceTitleClick = async (source: any, event: Event) => {
   }
 };
 
-// 滚动到底部函数
-const scrollToBottom = () => {
-  nextTick(() => {
-    if (qaBodyRef.value) {
-      qaBodyRef.value.scrollTop = qaBodyRef.value.scrollHeight;
-    }
-  });
-};
-
 /** 处理用户交互或组件事件：handleRestart。 */
 const handleRestart = (index: number) => {
   if (!props.chatData || !props.chatData.messages) return;
@@ -731,13 +736,12 @@ watch(
   },
 );
 
-// 监听聊天数据变化
+// 监听聊天数据变化：新消息添加时重置自动跟随并滚到底部
 watch(
   () => props.chatData?.messages?.length,
   () => {
-    nextTick(() => {
-      scrollToBottom();
-    });
+    resetAutoFollow();
+    nextTick(() => scrollToBottom());
   },
 );
 
@@ -783,6 +787,49 @@ onUnmounted(() => {
     flex: 1;
     position: relative;
     overflow: hidden;
+  }
+
+  // 回到底部按钮样式
+  .scroll-bottom-wrapper {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    cursor: pointer;
+  }
+
+  .scroll-bottom-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+    }
+
+    .el-icon {
+      font-size: 18px;
+      color: #606266;
+    }
+  }
+
+  .scroll-bottom-fade-enter-active,
+  .scroll-bottom-fade-leave-active {
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+
+  .scroll-bottom-fade-enter-from,
+  .scroll-bottom-fade-leave-to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
   }
 
   .qa-body {

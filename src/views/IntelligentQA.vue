@@ -316,6 +316,15 @@
         </div>
       </div>
 
+      <!-- 回到底部浮动按钮：放在 qa-container 内而非 qa-body 内，避免随内容滚动消失 -->
+      <transition name="scroll-bottom-fade">
+        <div v-if="showScrollButton" class="scroll-bottom-wrapper" @click="goToBottom">
+          <div class="scroll-bottom-btn">
+            <el-icon><ArrowDown /></el-icon>
+          </div>
+        </div>
+      </transition>
+
       <!-- 右侧固定参考来源面板（点击查看来源时显示） -->
       <div
         v-if="showSourcesPanel"
@@ -474,6 +483,7 @@ import {
 import { copyTextToClipboard, shouldCollapseUserQuestion } from '@/utils/messageCollapse';
 import { copyPlainText } from '@/utils/clipboard';
 import { renderQAMarkdown } from '@/utils/markdown';
+import { useScrollToBottom } from '@/composables/useScrollToBottom';
 const chatStore = useChatStore();
 
 const displayAnswer = ref<string>('');
@@ -483,6 +493,10 @@ const loading = ref(false);
 const isTyping = ref(false);
 const emit = defineEmits(['regenerate', 'sources-panel-toggle']);
 const qaBodyRef = ref<HTMLElement | null>(null);
+// 回到底部按钮的状态和滚动控制
+const { showScrollButton, scrollToBottom, goToBottom, resetAutoFollow } = useScrollToBottom({
+  getContainer: () => qaBodyRef.value,
+});
 
 // 参考来源面板状态
 const showSourcesPanel = ref(false);
@@ -1034,15 +1048,6 @@ const formatTime = (date: Date | number | string) => {
   });
 };
 
-// 滚动到底部
-const scrollToBottom = () => {
-  nextTick(() => {
-    if (qaBodyRef.value) {
-      qaBodyRef.value.scrollTop = qaBodyRef.value.scrollHeight;
-    }
-  });
-};
-
 // 移除重复的推理过程
 const removeDuplicateReasoning = (reasoningText: string) => {
   if (!reasoningText) return '';
@@ -1096,10 +1101,13 @@ watch(
   },
 );
 
-// 监听聊天数据变化（仅监听消息数量，避免 deep 遍历）
+// 监听聊天数据变化：新消息添加时重置自动跟随并滚到底部
 watch(
   () => props.chatData?.messages?.length,
-  () => nextTick(() => scrollToBottom()),
+  () => {
+    resetAutoFollow();
+    nextTick(() => scrollToBottom());
+  },
 );
 
 // 生命周期
@@ -1144,6 +1152,55 @@ onUnmounted(() => {
     flex: 1;
     position: relative;
     overflow: hidden;
+  }
+
+  // 回到底部按钮容器：absolute 定位，不随 qa-body 内容滚动
+  .scroll-bottom-wrapper {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    cursor: pointer;
+  }
+
+  // 回到底部按钮：圆形阴影按钮
+  .scroll-bottom-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+      transform 0.2s ease,
+      box-shadow 0.2s ease;
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+    }
+
+    .el-icon {
+      font-size: 18px;
+      color: #606266;
+    }
+  }
+
+  // 按钮显示/隐藏过渡动画
+  .scroll-bottom-fade-enter-active,
+  .scroll-bottom-fade-leave-active {
+    transition:
+      opacity 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .scroll-bottom-fade-enter-from,
+  .scroll-bottom-fade-leave-to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
   }
 
   .qa-body {

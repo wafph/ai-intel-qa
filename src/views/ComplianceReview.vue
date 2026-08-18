@@ -3,7 +3,9 @@
   本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
 -->
 <template>
-  <div class="intelligent-qa" :class="{ 'with-original-panel': activeOriginalMessage }" ref="intelligentQaRef">
+  <!-- 外层容器：不滚动，提供 position: relative 给按钮做 absolute 定位（对齐其他模块结构） -->
+  <div class="cr-wrapper">
+    <div class="intelligent-qa" :class="{ 'with-original-panel': activeOriginalMessage }" ref="intelligentQaRef">
     <div
       class="qa-header"
       v-if="!loading && (!chatData?.messages || chatData.messages.length === 0)"
@@ -174,6 +176,15 @@
       </div>
     </div>
 
+    <!-- 回到底部浮动按钮 -->
+    <transition name="scroll-bottom-fade">
+      <div v-if="showScrollButton" class="scroll-bottom-wrapper" @click="goToBottom">
+        <div class="scroll-bottom-btn">
+          <el-icon><ArrowDown /></el-icon>
+        </div>
+      </div>
+    </transition>
+
     <Transition name="original-panel-slide">
       <aside
         v-if="activeOriginalMessage"
@@ -240,6 +251,16 @@
       ></div>
       </aside>
     </Transition>
+    </div>
+
+    <!-- 回到底部浮动按钮：放在 cr-wrapper 内而非 intelligent-qa 内，不随滚动容器内容滚动 -->
+    <transition name="scroll-bottom-fade">
+      <div v-if="showScrollButton" class="scroll-bottom-wrapper" @click="goToBottom">
+        <div class="scroll-bottom-btn">
+          <el-icon><ArrowDown /></el-icon>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -255,8 +276,10 @@ import {
   Download,
   FolderChecked,
   Refresh,
+  ArrowDown,
 } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { useScrollToBottom } from '@/composables/useScrollToBottom';
 import { API } from '@/api/api';
 import { isSuccessStatus, request } from '@/services/http';
 import { fetchReviewPdfContext } from '@/services/reviewPdfPrepare';
@@ -271,6 +294,7 @@ const isTyping = ref(false);
 // 滚动容器引用
 const intelligentQaRef = ref<HTMLElement | null>(null);
 const conversationHistoryRef = ref<HTMLElement | null>(null);
+// 回到底部按钮的状态和滚动控制（延后初始化到 activeOriginalMessage 声明之后）
 const emit = defineEmits(['regenerate', 'sources-panel-toggle']);
 
 const expandedUserQuestionMap = reactive<Record<string, boolean>>({});
@@ -663,6 +687,20 @@ const activeOriginalMessage = computed(() => {
         message.id === activeOriginalMessageId.value && message.role === 'assistant',
     ) || null
   );
+});
+
+// 动态获取滚动容器：with-original-panel 模式用 conversation-history，普通模式用 intelligent-qa 自身
+const getScrollContainer = () => {
+  if (activeOriginalMessage.value && conversationHistoryRef.value) {
+    return conversationHistoryRef.value;
+  }
+  return intelligentQaRef.value || null;
+};
+// 回到底部按钮的状态和滚动控制
+const { showScrollButton, scrollToBottom, goToBottom, resetAutoFollow } = useScrollToBottom({
+  getContainer: getScrollContainer,
+  // 传入布局开关，确保 with-original-panel 切换时能重新绑定滚动事件
+  getLayoutKey: () => !!activeOriginalMessage.value,
 });
 
 /** 封装当前模块内的业务逻辑：activeOriginalMetadata。 */
@@ -1239,25 +1277,6 @@ const closeOriginalPanel = () => {
   restoreOriginalMessageAnchor(messageId || undefined);
 };
 
-/** 滚动到底部：with-original-panel 模式滚动 conversation-history，普通模式滚动父级 dynamic-content。 */
-const scrollToBottom = () => {
-  nextTick(() => {
-    // with-original-panel 模式：conversation-history 是滚动容器
-    if (
-      conversationHistoryRef.value &&
-      conversationHistoryRef.value.scrollHeight > conversationHistoryRef.value.clientHeight
-    ) {
-      conversationHistoryRef.value.scrollTop = conversationHistoryRef.value.scrollHeight;
-      return;
-    }
-    // 普通模式：父级 .dynamic-content 是滚动容器
-    const dynamicContent = intelligentQaRef.value?.parentElement;
-    if (dynamicContent) {
-      dynamicContent.scrollTop = dynamicContent.scrollHeight;
-    }
-  });
-};
-
 watch(
   () => [activeOriginalMessageId.value, activePdfContextId.value],
   async () => {
@@ -1334,8 +1353,9 @@ watch(
 );
 
 watch(
-  () => props.chatData,
+  () => props.chatData?.messages?.length,
   () => {
+    resetAutoFollow();
     if (activeOriginalMessageId.value) {
       const messages = props.chatData?.messages || [];
       const activeIndex = messages.findIndex((message) => message.id === activeOriginalMessageId.value);
@@ -1343,11 +1363,8 @@ watch(
         closeOriginalPanel();
       }
     }
-    nextTick(() => {
-      scrollToBottom();
-    });
+    nextTick(() => scrollToBottom());
   },
-  { deep: true },
 );
 
 onMounted(() => {
@@ -1361,6 +1378,61 @@ onUnmounted(() => {
 </script>
 
 <style lang="less" scoped>
+// 外层容器：不滚动，提供 position: relative 给按钮做 absolute 定位（对齐其他模块的 qa-container）
+.cr-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+// 回到底部按钮样式：和其他模块完全一致（absolute + bottom:16px + left:50%）
+.scroll-bottom-wrapper {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  cursor: pointer;
+}
+
+.scroll-bottom-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  }
+
+  .el-icon {
+    font-size: 18px;
+    color: #606266;
+  }
+}
+
+.scroll-bottom-fade-enter-active,
+.scroll-bottom-fade-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.scroll-bottom-fade-enter-from,
+.scroll-bottom-fade-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(10px);
+}
+
 .intelligent-qa {
   display: flex;
   flex-direction: column;
@@ -1368,9 +1440,11 @@ onUnmounted(() => {
   min-height: 0;
   padding: 0;
   background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
-  position: relative;
   overflow-x: hidden;
+  overflow-y: auto;
   align-items: center;
+  flex: 1;
+  width: 100%;
 
   &.with-original-panel {
     display: grid;

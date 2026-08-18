@@ -15,7 +15,7 @@
 
     <!-- 主体区域 -->
     <div class="qa-container">
-      <div class="qa-body">
+      <div class="qa-body" ref="qaBodyRef">
         <div class="conversation-history">
           <div
             v-for="(item, index) in chatData?.messages || []"
@@ -223,6 +223,15 @@
           </div>
         </div>
       </div>
+
+      <!-- 回到底部浮动按钮 -->
+      <transition name="scroll-bottom-fade">
+        <div v-if="showScrollButton" class="scroll-bottom-wrapper" @click="goToBottom">
+          <div class="scroll-bottom-btn">
+            <el-icon><ArrowDown /></el-icon>
+          </div>
+        </div>
+      </transition>
     </div>
 
   </div>
@@ -232,10 +241,11 @@
 import { ref, reactive, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { renderMarkdown } from '@/utils/markdown';
 import { ElIcon, ElMessage } from 'element-plus';
-import { CaretBottom, CaretTop, CopyDocument, Refresh } from '@element-plus/icons-vue';
+import { CaretBottom, CaretTop, CopyDocument, Refresh, ArrowDown } from '@element-plus/icons-vue';
 import { fetchWatermarkDocument, isPdfDocument, downloadDocumentBlob, openDocumentUrl } from '@/services/documentDownload';
 import { getSourceDirectUrl, getSourceFileId, getSourceTitle } from '@/services/sourceUtils';
 import { copyTextToClipboard, shouldCollapseUserQuestion } from '@/utils/messageCollapse';
+import { useScrollToBottom } from '@/composables/useScrollToBottom';
 
 // 状态变量
 const displayAnswer = ref<string>('');
@@ -245,6 +255,11 @@ let currentTypingIndex = 0;
 const loading = ref(false);
 const isTyping = ref(false);
 const emit = defineEmits(['regenerate']);
+const qaBodyRef = ref<HTMLElement | null>(null);
+// 回到底部按钮的状态和滚动控制
+const { showScrollButton, scrollToBottom, goToBottom, resetAutoFollow } = useScrollToBottom({
+  getContainer: () => qaBodyRef.value,
+});
 // 分页状态管理
 const paginationStates = reactive<
   Record<string, { currentPage: number; pageSize: number }>
@@ -535,19 +550,6 @@ const handleRestart = (index: number) => {
   }
 };
 
-/** 封装当前模块内的业务逻辑：scrollToBottom。 */
-const scrollToBottom = () => {
-  nextTick(() => {
-    const container =
-      document.querySelector('.qa-body') ||
-      document.querySelector('.dynamic-content') ||
-      document.querySelector('.conversation-history');
-    if (container) {
-      container.scrollTop = container.scrollHeight;
-    }
-  });
-};
-
 // 监听回复内容变化
 watch(
   () => props.currentAnswer,
@@ -597,15 +599,13 @@ watch(
   },
 );
 
-// 监听聊天数据变化
+// 监听聊天数据变化：新消息添加时重置自动跟随并滚到底部
 watch(
-  () => props.chatData,
+  () => props.chatData?.messages?.length,
   () => {
-    nextTick(() => {
-      scrollToBottom();
-    });
+    resetAutoFollow();
+    nextTick(() => scrollToBottom());
   },
-  { deep: true },
 );
 
 // 生命周期
@@ -635,6 +635,50 @@ onUnmounted(() => {
   width: 100%;
   min-height: 0;
   overflow: hidden;
+  position: relative;
+}
+
+// 回到底部按钮样式
+.scroll-bottom-wrapper {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  cursor: pointer;
+}
+
+.scroll-bottom-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  }
+
+  .el-icon {
+    font-size: 18px;
+    color: #606266;
+  }
+}
+
+.scroll-bottom-fade-enter-active,
+.scroll-bottom-fade-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.scroll-bottom-fade-enter-from,
+.scroll-bottom-fade-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(10px);
 }
 
 .qa-body {
