@@ -167,7 +167,7 @@ export const useAppShell = () => {
       '';
 
     // 2. mineru25-pro 解析 PDF 文本（展示解析进度文案）
-    qaFileProcessingText.value = `正在解析 PDF（${file.name}）文件内容，请稍候...`;
+    qaFileProcessingText.value = `文件正在解析中，请稍候...`;
     const prepareResult = await prepareReviewPdf(file, {
       sessionId,
       userId,
@@ -184,7 +184,7 @@ export const useAppShell = () => {
     }
 
     // 3. 将解析文本转为 txt 文件，复用 AgentArts 上传
-    qaFileProcessingText.value = `正在上传解析后的 PDF（${file.name}）文本...`;
+    qaFileProcessingText.value = `正在上传解析后的文本...`;
     const parsedTxtFile = buildTxtFileFromPdfParsedText(parsedText, file.name);
     const uploadResult = await uploadFileToAgentArts(parsedTxtFile, {
       originalText: parsedText,
@@ -238,8 +238,8 @@ export const useAppShell = () => {
     qaUploadPendingCount += 1;
     isQAFileProcessing.value = true;
     qaFileProcessingText.value = isPdfFile(rawFile)
-      ? `正在解析 PDF（${rawFile.name}）文件内容，请稍候...`
-      : `正在上传文件（${rawFile.name}），请稍候...`;
+      ? `文件正在解析中，请稍候...`
+      : `文字正在上传中，请稍候...`;
     const uid = genQAFileUid();
     const pendingItem: QAUploadedFile = {
       uid,
@@ -266,7 +266,7 @@ export const useAppShell = () => {
         successResult = pdfResult;
       } else {
         // 非 PDF 文件：直接上传，前端轻量提取可读文本用于后端参考
-        qaFileProcessingText.value = `正在上传文件（${rawFile.name}）...`;
+        qaFileProcessingText.value = `文件正在上传中...`;
         const text = (await extractReadableFileText(rawFile)) || '';
         const result = await uploadFileToAgentArts(rawFile, { originalText: text });
         fileUrl = result.fileUrl || '';
@@ -294,7 +294,7 @@ export const useAppShell = () => {
         qaUploadedFileList.value.splice(idx, 1);
       }
       ElMessage.warning({
-        message: `文件「${rawFile.name}」上传失败`,
+        message: `文件上传失败`,
         offset: 72,
       });
       onError?.(error);

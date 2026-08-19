@@ -88,7 +88,7 @@
               class="compliance-processing-indicator"
             >
               <span class="compliance-processing-spinner" aria-hidden="true"></span>
-              <span>{{ qaFileProcessingText || '文件正在上传解析中，请稍候...' }}</span>
+              <span>{{ qaFileProcessingText || '文件正在解析中，请稍候...' }}</span>
             </div>
           </transition>
           <!-- ChatInput：输入框 + 发送按钮；合规审核为单文件上传，智能问答 Tab 支持多文件依次追加 -->
