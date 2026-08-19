@@ -318,7 +318,8 @@
 
       <!-- 回到底部浮动按钮：放在 qa-container 内而非 qa-body 内，避免随内容滚动消失 -->
       <transition name="scroll-bottom-fade">
-        <div v-if="showScrollButton" class="scroll-bottom-wrapper" @click="goToBottom">
+        <!-- 流式输出中附加 is-streaming 类：按钮外圈显示旋转 loading 圆环；非流式时保持静态 -->
+        <div v-if="showScrollButton" class="scroll-bottom-wrapper" :class="{ 'is-streaming': streaming }" @click="goToBottom">
           <div class="scroll-bottom-btn">
             <el-icon><ArrowDown /></el-icon>
           </div>
@@ -1164,12 +1165,13 @@ onUnmounted(() => {
     cursor: pointer;
   }
 
-  // 回到底部按钮：圆形阴影按钮
+  // 回到底部按钮：圆形阴影按钮（32px 略小巧，与外圈 loading 环比例协调）
   .scroll-bottom-btn {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
-    background: #fff;
+    // 统一按钮底色为米白 #fbf9f5
+    background: #fbf9f5;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
     display: flex;
     align-items: center;
@@ -1184,8 +1186,33 @@ onUnmounted(() => {
     }
 
     .el-icon {
-      font-size: 18px;
+      font-size: 16px;
       color: #606266;
+    }
+  }
+
+  // 流式输出中：按钮外圈显示旋转圆弧（loading 动态效果，颜色与"生成中"指示点一致）；
+  // 非流式输出时不渲染该环，按钮保持静态圆形样式
+  .scroll-bottom-wrapper.is-streaming .scroll-bottom-btn {
+    position: relative;
+
+    &::before {
+      content: '';
+      position: absolute;
+      // 仅外扩 2px（恰等于环边框宽度），使 loading 圆环贴近按钮圆形边缘
+      inset: -2px;
+      border-radius: 50%;
+      border: 2px solid rgba(64, 158, 255, 0.25);
+      border-top-color: #409eff;
+      animation: scroll-bottom-spin 0.8s linear infinite;
+      // 圆环仅作视觉提示，不拦截按钮点击
+      pointer-events: none;
+    }
+  }
+
+  @keyframes scroll-bottom-spin {
+    to {
+      transform: rotate(360deg);
     }
   }
 
