@@ -31,6 +31,7 @@
       @clear-search="handleClearHistorySearch"
       @select-search-result="handleSelectSearchResult"
       @toggle-collapse="toggleSidebar"
+      @open-feedback="feedbackDialogVisible = true"
       @logout="handleLogout"
     />
 
@@ -121,6 +122,11 @@
         </div>
       </div>
     </div>
+    <FeedbackDialog
+      v-model="feedbackDialogVisible"
+      :active-tab="activeTab"
+      :session-id="activeChatId"
+    />
   </div>
   </el-config-provider>
 </template>
@@ -132,10 +138,12 @@ import HeaderMenu from './HeaderMenu.vue';
 import HistoryPanel from './HistoryPanel.vue';
 import ChatInput from './ChatInput.vue';
 import ComplianceReviewExtras from './ComplianceReviewExtras.vue';
+import FeedbackDialog from './FeedbackDialog.vue';
 import { useAppShell } from '@/composables/useAppShell';
 
 const locale = zhCn;
 const chatInputRef = ref<InstanceType<typeof ChatInput> | null>(null);
+const feedbackDialogVisible = ref(false);
 
 const {
   activeChatId,

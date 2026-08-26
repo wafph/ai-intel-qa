@@ -84,6 +84,10 @@ export const API = {
     favoriteDetail: (functionId: string, sessionId: string) =>
       `${API_BASE_URL}/v1/chat/favorites/detail?functionId=${encodeURIComponent(functionId)}&sessionId=${encodeURIComponent(sessionId)}`,
   },
+  feedback: {
+    // 普通用户沿用当前登录凭证提交问题反馈；管理查询仍由独立管理端负责。
+    submit: `${API_BASE_URL}/v1/feedback`,
+  },
   reviewPdf: {
     detect: `${REVIEW_PDF_PREPARE_API_BASE_URL}/detect`,
     prepare: `${REVIEW_PDF_PREPARE_API_BASE_URL}/prepare`,

@@ -269,6 +269,10 @@
       </div>
 
       <div v-if="showUserMenu" class="user-menu">
+        <div class="menu-item" @click="handleOpenFeedback">
+          <el-icon><ChatDotRound /></el-icon>
+          <span>问题反馈</span>
+        </div>
         <div class="menu-item" @click="goToMyCollections">
           <el-icon><StarFilled /></el-icon>
           <span>我的收藏</span>
@@ -288,7 +292,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessageBox, ElMessage } from 'element-plus';
 import type { InputInstance } from 'element-plus';
-import { Expand, Fold, StarFilled } from '@element-plus/icons-vue';
+import { ChatDotRound, Expand, Fold, StarFilled } from '@element-plus/icons-vue';
 import { sanitizeHtml } from '@/utils/markdown';
 
 interface Props {
@@ -318,6 +322,7 @@ const emit = defineEmits<{
   'search-history': [keyword: string];
   'clear-search': [];
   'select-search-result': [result: any];
+  'open-feedback': [];
   logout: []; // 新增：退出登录放到左侧历史面板底部
 }>();
 
@@ -723,6 +728,12 @@ const goToMyCollections = () => {
 const handleLogout = () => {
   showUserMenu.value = false;
   emit('logout');
+};
+
+/** 打开全局问题反馈弹窗，入口位于“我的收藏”上方。 */
+const handleOpenFeedback = () => {
+  showUserMenu.value = false;
+  emit('open-feedback');
 };
 
 /** 处理用户交互或组件事件：handleClickOutsideUserMenu。 */

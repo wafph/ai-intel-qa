@@ -1,14 +1,12 @@
 # 构建说明
 
-本包为前端源码升级包。由于当前沙箱环境中 npm install 被 SIGTERM 终止，未重新生成 dist。
+本交付包已根据当前源码执行 TypeScript 检查和 Vite 生产构建，`dist/` 为本次问题反馈升级对应的静态发布文件，可以直接部署到 Nginx 静态目录。
 
-部署前请在有 npm 网络/缓存的构建环境执行：
+如果后续继续修改源码，请重新执行：
 
 ```bash
 npm install
 npm run build
 ```
 
-构建完成后，将 dist 目录发布到 Nginx 静态目录。
-
-本次源码升级内容见：docs/v12_2_6_frontend_review_error_pdf_layout_fix.md
+构建完成后，将新的 `dist/` 内容发布到 Nginx 静态目录。本次升级说明见 `docs/USER_FEEDBACK_FRONTEND.md`。

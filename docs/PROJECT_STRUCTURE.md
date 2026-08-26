@@ -44,6 +44,14 @@
 - 收藏、置顶、标题编辑等会话操作。
 - 合规审核过程提示的历史回显兜底清洗。
 
+### `src/components/FeedbackDialog.vue`
+
+用户问题反馈弹窗，负责所属模块、问题描述、截图和联系方式的输入校验。入口位于左侧用户菜单中的“我的收藏”上方，不影响现有点踩反馈。
+
+### `src/services/userFeedback.ts`
+
+将问题反馈字段和截图组装为 `multipart/form-data`，复用当前用户登录凭证提交到 `/v1/feedback`。
+
 ### `src/services/documentDownload.ts`
 
 文档水印预览/下载服务，按原始逻辑：

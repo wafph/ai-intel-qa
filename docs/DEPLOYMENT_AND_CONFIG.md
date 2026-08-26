@@ -99,6 +99,16 @@ location ^~ /v1/agentarts/ {
     proxy_send_timeout 7200s;
     add_header X-Accel-Buffering no always;
 }
+
+# 用户问题反馈接口：普通用户沿用智能体当前登录凭证提交到 8000。
+location = /v1/feedback {
+    proxy_pass http://1.94.244.72:8000;
+    proxy_http_version 1.1;
+    proxy_connect_timeout 60s;
+    proxy_read_timeout 120s;
+    proxy_send_timeout 120s;
+    client_max_body_size 32m;
+}
 ```
 
 ## 5. 部署验证
