@@ -193,3 +193,40 @@
 @keyframes complianceProcessingSpin {
   to { transform: rotate(360deg); }
 }
+
+// 页面右侧固定的问题反馈入口（悬浮按钮）：
+// 高层级盖过页面内容（回到底部按钮 100、来源面板 10 等），但低于 el-dialog 遮罩（2000+），
+// 保证弹框打开时按钮被遮罩覆盖、符合模态交互
+.global-feedback-entry {
+  position: fixed;
+  right: 20px;
+  bottom: 208px;
+  z-index: 1000;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  color: #1c73eb;
+  box-shadow: 0 4px 16px rgba(28, 115, 235, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+
+  .el-icon {
+    font-size: 20px;
+  }
+
+  &:hover {
+    transform: translateY(-2px);
+    background: #1c73eb;
+    color: #fff;
+    box-shadow: 0 6px 20px rgba(28, 115, 235, 0.28);
+  }
+}

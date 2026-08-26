@@ -127,6 +127,18 @@
       :active-tab="activeTab"
       :session-id="activeChatId"
     />
+
+    <!-- 页面右侧固定的问题反馈入口：高层级悬浮按钮，点击打开反馈弹框（与侧边栏文字入口共用同一弹框） -->
+    <el-tooltip content="问题反馈" placement="left" :show-after="200">
+      <button
+        type="button"
+        class="global-feedback-entry"
+        aria-label="问题反馈"
+        @click="feedbackDialogVisible = true"
+      >
+        <el-icon><ChatDotSquare /></el-icon>
+      </button>
+    </el-tooltip>
   </div>
   </el-config-provider>
 </template>
@@ -134,6 +146,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
+import { ChatDotSquare } from '@element-plus/icons-vue';
 import HeaderMenu from './HeaderMenu.vue';
 import HistoryPanel from './HistoryPanel.vue';
 import ChatInput from './ChatInput.vue';

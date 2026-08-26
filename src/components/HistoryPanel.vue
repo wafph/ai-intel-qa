@@ -269,10 +269,10 @@
       </div>
 
       <div v-if="showUserMenu" class="user-menu">
-        <div class="menu-item" @click="handleOpenFeedback">
+        <!-- <div class="menu-item" @click="handleOpenFeedback">
           <el-icon><ChatDotRound /></el-icon>
           <span>问题反馈</span>
-        </div>
+        </div> -->
         <div class="menu-item" @click="goToMyCollections">
           <el-icon><StarFilled /></el-icon>
           <span>我的收藏</span>

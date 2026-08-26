@@ -20,7 +20,12 @@
       class="feedback-form"
     >
       <el-form-item label="所属模块" prop="functionId">
-        <el-select v-model="form.functionId" placeholder="请选择所属模块">
+        <!-- popper-class 用于给下拉选项单独补充左间距（弹层挂载在 body，scoped 样式无法直接命中） -->
+        <el-select
+          v-model="form.functionId"
+          placeholder="请选择所属模块"
+          popper-class="feedback-select-popper"
+        >
           <el-option
             v-for="option in moduleOptions"
             :key="option.value"
@@ -59,7 +64,7 @@
         >
           <el-icon><Plus /></el-icon>
         </el-upload>
-        <p class="upload-tip">支持 JPG、PNG、WebP，最多 5 张，单张不超过 10MB，总计不超过 30MB</p>
+        <p class="upload-tip">支持 JPG、PNG、WebP，最多 5 张，总计不超过 30MB</p>
       </el-form-item>
 
       <div class="feedback-contact-row">
@@ -269,7 +274,7 @@ const submitFeedback = async () => {
   if (!formRef.value) return;
   const valid = await formRef.value.validate().catch(() => false);
   if (!valid) return;
-
+debugger
   submitting.value = true;
   try {
     await submitUserFeedback({
@@ -390,7 +395,13 @@ onUnmounted(revokeOwnedPreviewUrl);
   :deep(.el-button--primary) {
     background: #1c73eb;
     border-color: #1c73eb;
+    padding: 0 20px;
   }
+}
+
+// 所属模块下拉弹层：选项文字与下拉框左边缘保持合适距离（弹层挂载在 body，需 :global 命中）
+:global(.feedback-select-popper .el-select-dropdown__item) {
+  padding-left: 13px;
 }
 
 :global(.user-feedback-dialog) {
