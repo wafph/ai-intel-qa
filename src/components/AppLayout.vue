@@ -128,13 +128,15 @@
       :session-id="activeChatId"
     />
 
-    <!-- 页面右侧固定的问题反馈入口：高层级悬浮按钮，点击打开反馈弹框（与侧边栏文字入口共用同一弹框） -->
-    <el-tooltip content="问题反馈" placement="left" :show-after="200">
+    <!-- 页面右侧固定的问题反馈入口：高层级悬浮按钮，点击打开反馈弹框（与侧边栏文字入口共用同一弹框）。
+         首次进入时挂载 is-animated 播放引导动画（波纹扩散 + 轻微摇晃）吸引注意，用户点击过一次后动画永久停止 -->
+    <el-tooltip content="问题反馈" placement="top" :show-after="200">
       <button
         type="button"
         class="global-feedback-entry"
+        :class="{ 'is-animated': feedbackEntryAnimated }"
         aria-label="问题反馈"
-        @click="feedbackDialogVisible = true"
+        @click="handleFeedbackEntryClick"
       >
         <el-icon><ChatDotSquare /></el-icon>
       </button>
@@ -157,6 +159,31 @@ import { useAppShell } from '@/composables/useAppShell';
 const locale = zhCn;
 const chatInputRef = ref<InstanceType<typeof ChatInput> | null>(null);
 const feedbackDialogVisible = ref(false);
+
+// 右侧固定反馈入口的引导动画开关：首次进入时播放“波纹扩散 + 轻微摇晃”吸引注意；
+// 用户点击过一次后动画永久停止（localStorage 持久化标记，避免已发现入口的用户被反复打扰）
+const FEEDBACK_ENTRY_SEEN_KEY = 'global-feedback-entry-seen';
+/** 读取“已点击过反馈入口”的持久化标记；存储不可用时按未点击处理（继续播放动画，不影响功能）。 */
+const readFeedbackEntrySeen = () => {
+  try {
+    return localStorage.getItem(FEEDBACK_ENTRY_SEEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+const feedbackEntryAnimated = ref(!readFeedbackEntrySeen());
+
+/** 点击右侧固定反馈入口：打开反馈弹框，并永久关闭引导动画。 */
+const handleFeedbackEntryClick = () => {
+  feedbackDialogVisible.value = true;
+  if (!feedbackEntryAnimated.value) return;
+  feedbackEntryAnimated.value = false;
+  try {
+    localStorage.setItem(FEEDBACK_ENTRY_SEEN_KEY, '1');
+  } catch {
+    // 存储不可用时静默降级：仅本次会话内停止动画
+  }
+};
 
 const {
   activeChatId,
