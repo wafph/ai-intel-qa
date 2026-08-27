@@ -200,10 +200,10 @@
 .global-feedback-entry {
   position: fixed;
   right: 50px;
-  bottom: 208px;
+  bottom: 40%;
   z-index: 1000;
-  width: 55px;
-  height: 55px;
+  width: 52px;
+  height: 52px;
   padding: 0;
   border: none;
   border-radius: 50%;
@@ -231,9 +231,8 @@
   }
 }
 
-// 反馈入口引导动画：双环波纹扩散（声呐效果）+ 低频轻微摇晃，用于首次吸引注意；
-// 仅在未点击过入口时挂载 .is-animated，点击后移除该类即全部停止（见 AppLayout.vue）
-.global-feedback-entry.is-animated {
+// 反馈入口引导动画：双环波纹扩散（声呐效果）+ 低频轻微摇晃，永久播放持续吸引注意
+.global-feedback-entry {
   animation: feedbackEntryWiggle 4s ease-in-out infinite;
 
   &:hover {
