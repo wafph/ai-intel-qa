@@ -299,11 +299,11 @@ debugger
         return files;
       }, []),
     });
-    ElMessage.success({ message: '反馈提交成功，感谢您的反馈', offset: 72 });
+    ElMessage.success({ message: '提交成功，感谢您的反馈', offset: 72 });
     emit('update:modelValue', false);
   } catch (error) {
     ElMessage.error({
-      message: error instanceof Error ? error.message : '反馈提交失败，请稍后重试',
+      message: error instanceof Error ? error.message : '提交失败，请稍后重试',
       offset: 72,
     });
   } finally {

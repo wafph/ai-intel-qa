@@ -54,13 +54,13 @@ export const submitUserFeedback = async (submission: UserFeedbackSubmission) => 
   });
 
   if (!isSuccessStatus(response.status)) {
-    const error = await parseAxiosResponseError(response, '反馈提交失败，请稍后重试');
+    const error = await parseAxiosResponseError(response, '提交失败，请稍后重试');
     throw new Error(error.message);
   }
 
   const result = response.data;
   if (!isApiSuccessCode(result?.code)) {
-    throw new Error(getApiMessage(result, '反馈提交失败，请稍后重试'));
+    throw new Error(getApiMessage(result, '提交失败，请稍后重试'));
   }
   return getApiData(result);
 };
