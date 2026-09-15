@@ -22,6 +22,8 @@ export interface UseScrollToBottomReturn {
   showScrollButton: ComputedRef<boolean>;
   // 滚动到底部（仅在 auto-follow 开启时生效）
   scrollToBottom: () => void;
+  // 强制滚动到底部（无视 auto-follow 状态）
+  forceScrollToBottom: () => void;
   // 点击按钮滚到底部（恢复 auto-follow 并平滑滚动）
   goToBottom: () => void;
   // 重置自动跟随为 true（新消息添加时调用）
@@ -38,6 +40,8 @@ export const useScrollToBottom = (
 
   // 当前绑定的滚动容器元素（用于跟踪变化）
   let currentContainer: HTMLElement | null = null;
+  // 上一次 scrollTop，用于区分“用户主动上滑”与“程序滚动/内容增长导致的被动偏移”
+  let lastScrollTop = 0;
 
   // 是否正处于"回到底部"按钮触发的平滑滚动中：
   // 平滑滚动途经的中间位置会触发 scroll 事件且不在底部，若被误判为"用户上滑"，
@@ -68,13 +72,19 @@ export const useScrollToBottom = (
     return el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
   };
 
-  // 滚动事件处理：用户手动上滑时暂停自动跟随，滑回底部时恢复
+  // 滚动事件处理：仅当用户主动向上滚动（scrollTop 减小）时才暂停自动跟随；
+  // 程序滚动到底部（scrollTop 增大）或内容增长导致的被动偏移不会误关闭跟随。
   const handleScroll = () => {
+    const el = getContainer();
+    if (!el) return;
+    const currentTop = el.scrollTop;
+    const delta = currentTop - lastScrollTop;
+    lastScrollTop = currentTop;
     if (isNearBottom()) {
       isAutoFollow.value = true;
       // 到达底部说明"回到底部"的平滑滚动已结束，清除标记
       isGoingToBottom = false;
-    } else if (!isGoingToBottom) {
+    } else if (delta < 0 && !isGoingToBottom) {
       // "回到底部"平滑滚动途中不暂停自动跟随，避免按钮闪烁；
       // 只有用户主动上滑离开底部时才暂停自动跟随并显示按钮
       isAutoFollow.value = false;
@@ -89,6 +99,8 @@ export const useScrollToBottom = (
     }
     if (el) {
       el.addEventListener('scroll', handleScroll, { passive: true });
+      // 切换容器时以上一次位置为基准，避免首帧 delta 误判为用户上滑
+      lastScrollTop = el.scrollTop;
     }
     currentContainer = el;
   };
@@ -103,6 +115,18 @@ export const useScrollToBottom = (
       if (el) {
         el.scrollTop = el.scrollHeight;
       }
+    });
+  };
+
+  // 强制滚动到底部：无视 auto-follow 状态，用于“重新审核”等必须立即定位到最新的场景。
+  const forceScrollToBottom = () => {
+    nextTick(() => {
+      requestAnimationFrame(() => {
+        const el = getContainer();
+        if (!el) return;
+        isAutoFollow.value = true;
+        el.scrollTop = el.scrollHeight;
+      });
     });
   };
 
@@ -157,6 +181,7 @@ export const useScrollToBottom = (
     isAutoFollow,
     showScrollButton,
     scrollToBottom,
+    forceScrollToBottom,
     goToBottom,
     resetAutoFollow,
   };

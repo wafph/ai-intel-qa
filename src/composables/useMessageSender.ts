@@ -336,7 +336,9 @@ export const useMessageSender = (deps: UseMessageSenderDeps) => {
     try {
       lastComplianceParams.value = await refreshComplianceParamsFileUrl(lastComplianceParams.value);
       const displayDimensions = getActualReviewDimensions(lastComplianceParams.value.dimensions);
-      const userMessageContent = buildComplianceQuestionContent(lastComplianceParams.value.fileName, displayDimensions);
+      // 与首次发送 handleSendMessage 保持一致：直接使用原始文件名（带后缀），不调用 stripFileExtension，
+      // 避免重新审核气泡中的文件名缺少 .docx/.pdf 等扩展名。
+      const userMessageContent = `${lastComplianceParams.value.fileName}\n审核维度：${buildDimensionText(displayDimensions)}`;
       if (!activeChatId.value) await createChatForMessage();
       const chat = chatStore.getChatSession(activeChatId.value!);
       if (!chat) return;

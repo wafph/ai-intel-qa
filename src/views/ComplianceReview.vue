@@ -548,6 +548,8 @@ const handleRestart = (index: number) => {
         userMessage.metadata?.complianceParams ||
         null,
     });
+    // 点击重新审核时，先把滚动条强制拉到底部（新消息会随后追加）
+    forceScrollToBottom();
   }
 };
 
@@ -699,7 +701,7 @@ const getScrollContainer = () => {
   return intelligentQaRef.value || null;
 };
 // 回到底部按钮的状态和滚动控制
-const { showScrollButton, scrollToBottom, goToBottom, resetAutoFollow } = useScrollToBottom({
+const { showScrollButton, isAutoFollow, scrollToBottom, forceScrollToBottom, goToBottom, resetAutoFollow } = useScrollToBottom({
   getContainer: getScrollContainer,
   // 传入布局开关，确保 with-original-panel 切换时能重新绑定滚动事件
   getLayoutKey: () => !!activeOriginalMessage.value,
@@ -1351,6 +1353,9 @@ watch(
     }
     displayAnswer.value = '';
     stopTypingEffect();
+    // 流式消息存在（含重新审核开始时）就强制滚到底部，
+    // 保证“生成中”提示始终停留在可视区底部。
+    forceScrollToBottom();
   },
 );
 
@@ -1365,16 +1370,43 @@ watch(
         closeOriginalPanel();
       }
     }
-    nextTick(() => scrollToBottom());
+    // 消息条数变化（含重新审核新增消息）时强制滚动到底部，确保最新消息可见
+    forceScrollToBottom();
   },
 );
 
+// 流式输出期间，消息内容高度一有变化（思考过程块插入、正文逐段渲染等）就立即把滚动条贴到底部，
+// 保证“生成中”提示始终停留在可视区内；用户主动上滑时（isAutoFollow=false）不跟随。
+let streamResizeObserver: ResizeObserver | null = null;
+
+const observeStreamContent = () => {
+  const target = conversationHistoryRef.value;
+  if (!streamResizeObserver) {
+    if (typeof ResizeObserver === 'undefined') return;
+    streamResizeObserver = new ResizeObserver(() => {
+      if (props.streaming && isAutoFollow.value) {
+        const el = getScrollContainer();
+        if (el) el.scrollTop = el.scrollHeight;
+      }
+    });
+  }
+  if (target) streamResizeObserver.observe(target);
+};
+
 onMounted(() => {
   scrollToBottom();
+  observeStreamContent();
+});
+
+watch(conversationHistoryRef, (el, oldEl) => {
+  if (streamResizeObserver && oldEl) streamResizeObserver.unobserve(oldEl);
+  if (streamResizeObserver && el) streamResizeObserver.observe(el);
 });
 
 onUnmounted(() => {
   stopTypingEffect();
+  streamResizeObserver?.disconnect();
+  streamResizeObserver = null;
   emit('sources-panel-toggle', false);
 });
 </script>
@@ -1492,7 +1524,7 @@ onUnmounted(() => {
     .conversation-history {
       width: 100%;
       max-width: none;
-      margin: 0;
+      margin-bottom: 20px;
       padding: 0 0 20px;
       overflow-y: auto;
       min-height: 0;
@@ -1731,7 +1763,7 @@ onUnmounted(() => {
     flex: 1;
     padding-top: 20px;
     overflow: visible;
-    margin-bottom: 20px;
+    margin: 0 auto;
     display: flex;
     flex-direction: column;
     gap: 20px;
@@ -1799,6 +1831,11 @@ onUnmounted(() => {
 
             .pad {
               padding: 20px 40px 68px;
+              background: #ffffff;
+              border-radius: 22px;
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+              border: 1px solid #e9ecef;
+              text-align: left;
             }
 
             > div > div[style*='margin-left: 15px'] {
@@ -1881,10 +1918,13 @@ onUnmounted(() => {
 
             .answer-streaming {
               background: @white;
-              border-radius: 8px;
+              border-radius: 22px;
               padding: 20px 40px;
               animation: fadeIn 0.5s ease;
               margin-top: 8px;
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+              border: 1px solid #e9ecef;
+              text-align: left;
             }
 
             .typing-container {
