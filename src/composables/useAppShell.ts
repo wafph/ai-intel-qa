@@ -371,6 +371,8 @@ export const useAppShell = () => {
     chatStore.setCurrentActiveTab(tab);
     resetCurrentChat();
     isSourcesPanelVisible.value = false;
+    // 切换菜单时清空历史搜索框和搜索结果，避免残留上一个菜单的搜索关键词与结果
+    handleClearHistorySearch();
     if (tab !== '合规审核') lastComplianceParams.value = null;
     const routeMap: Record<string, string> = { '智能问答': '/intelligent-qa', '智能检索': '/intelligent-retrieval', '辅助起草': '/auxiliary-draft', '合规审核': '/compliance-review' };
     const targetRoute = routeMap[tab];
