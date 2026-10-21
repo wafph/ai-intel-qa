@@ -45,6 +45,13 @@ const routes = [
     meta: { public: true },
   },
   {
+    // 外部嵌套起草页：主系统 iframe 嵌入使用，不套 AppLayout、不强制本地登录态（走 agentAccess 授权）
+    path: '/external-draft',
+    name: 'ExternalDraft',
+    component: () => import('@/views/ExternalDraft.vue'),
+    meta: { public: true },
+  },
+  {
     path: '/my-collections',
     name: 'MyCollections',
     component: () => import('@/views/MyCollections.vue'),

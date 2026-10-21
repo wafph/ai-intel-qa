@@ -62,13 +62,13 @@ export default defineConfig({
         secure: false,
       },
       '/watermark-api': {
-        target: 'http://10.210.101.209:8005', // 统一文件服务：水印下载
+        target: 'http://10.210.101.209:8000', // 统一文件服务：水印下载
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/watermark-api/, '/v1/files'), // /watermark-api/watermark/download -> /v1/files/watermark/download
       },
       '/markdown-word-api': {
-        target: 'http://10.210.101.209:8005', // 统一文件服务：Markdown 转 Word
+        target: 'http://10.210.101.209:8000', // 统一文件服务：Markdown 转 Word
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/markdown-word-api/, '/v1/markdown-word'), // /markdown-word-api/convert -> /v1/markdown-word/convert

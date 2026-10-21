@@ -32,6 +32,8 @@ declare module 'vue' {
     ElSkeletonItem: typeof import('element-plus/es')['ElSkeletonItem']
     ElTooltip: typeof import('element-plus/es')['ElTooltip']
     ElUpload: typeof import('element-plus/es')['ElUpload']
+    ExternalDraftForm: typeof import('./src/components/ExternalDraftForm.vue')['default']
+    ExternalDraftResult: typeof import('./src/components/ExternalDraftResult.vue')['default']
     FeedbackDialog: typeof import('./src/components/FeedbackDialog.vue')['default']
     HeaderMenu: typeof import('./src/components/HeaderMenu.vue')['default']
     HistoryPanel: typeof import('./src/components/HistoryPanel.vue')['default']
