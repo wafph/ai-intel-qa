@@ -1,9 +1,14 @@
 # 规章制度智能体前端工程交付版
 
-本工程是湖北交投规章制度智能体前端最新版交付代码，基于 `QA-new0522-v12-2-2-refresh-switch-frontend-fix14-structured-result-recovery` 升级。业务逻辑保持最后联调通过版本不变，本次仅将文档水印下载与 Markdown 转 Word 服务地址切换到 8005 统一文件服务。
+本版基于原版 regulatory-ai-assistant-1021-origin 做前端最小升级，配套后端 `regulation_ai_backend_v1.0.0_202610211516.zip`。问答与审核统一请求自建后端上传，问答支持 URL 过期后重传；平台切换只修改后端 AGENT_PROVIDER 并重启，前端不再先获取 IAM Token。原页面布局及其他功能保留。
+
+应用版本 1.0.0；发布目录 `regulatory-ai-assistant_v1.0.0_202610211601`。包内包含源码、环境配置、锁文件、测试、文档和本次构建的 dist。
+
+完整对接见 [统一上传及问答 URL 刷新](docs/AGENT_UPLOAD_BACKEND_INTEGRATION.md)，变更见 [UPGRADE_NOTES.md](UPGRADE_NOTES.md)。
 
 ## 核心能力
 
+- 后端统一问答/审核上传，用户凭证鉴权；问答提交、追问和重新生成前刷新附件 URL。
 - 四类智能体功能：智能问答、智能检索、辅助起草、合规审核。
 - 用户问题反馈：从左侧用户菜单提交问题描述、截图和联系方式，由独立管理端统一处理。
 - V12.2 任务化流式接口：创建任务、订阅 taskId、刷新/切换后恢复输出。
@@ -16,13 +21,14 @@
 ## 快速启动
 
 ```bash
-npm install
+npm ci --no-audit --no-fund
 npm run dev
 ```
 
 ## 生产构建
 
 ```bash
+npm test
 npm run build
 ```
 
@@ -37,8 +43,8 @@ VITE_API_BASE_URL=
 VITE_AUTH_MODE=platform
 VITE_SM2_PUBLIC_KEY=请替换为真实完整公钥
 VITE_AGENT_SESSION_EXPIRE_MINUTES=720
-VITE_WATERMARK_API_BASE_URL=http://1.94.244.72:8005/v1/files
-VITE_CONVERT_API_BASE_URL=http://1.94.244.72:8005/v1/markdown-word
+VITE_WATERMARK_API_BASE_URL=/v1/files
+VITE_CONVERT_API_BASE_URL=/v1/markdown-word
 ```
 
 `VITE_WATERMARK_API_BASE_URL` 与 `VITE_CONVERT_API_BASE_URL` 配置的是接口路由前缀，代码会自动追加固定路由：
@@ -48,17 +54,19 @@ ${VITE_WATERMARK_API_BASE_URL}/watermark/download
 ${VITE_CONVERT_API_BASE_URL}/convert
 ```
 
-当前默认生产请求为：
+当前生产请求走同源路径，沿用现场 Nginx 文件工具代理：
 
 ```text
-http://1.94.244.72:8005/v1/files/watermark/download
-http://1.94.244.72:8005/v1/markdown-word/convert
+/v1/files/watermark/download
+/v1/markdown-word/convert
 ```
 
-后期更换服务器时，只需要在 `.env.production` 中替换协议、IP、端口或前缀。若希望走前端 Nginx 同源转发，可设置为 `/v1/files` 与 `/v1/markdown-word`，并在 Nginx 中转发到 8005。
+后期更换服务器时，只需要在 `.env.production` 中替换协议、IP、端口或前缀。若希望走前端 Nginx 同源转发，可设置为 `/v1/files` 与 `/v1/markdown-word`，并沿用现场文件工具反代目标。
 
 ## 文档入口
 
+- `docs/AGENT_UPLOAD_BACKEND_INTEGRATION.md`：统一上传、URL 刷新和平台切换。
+- `docs/RELEASE_ACCEPTANCE.md`：本次验收与现场联调边界。
 - `docs/PROJECT_STRUCTURE.md`：工程目录和核心文件职责。
 - `docs/DEPLOYMENT_AND_CONFIG.md`：部署、环境变量、Nginx 和验证命令。
 - `docs/CALL_FLOW.md`：四个功能和任务恢复调用流程。

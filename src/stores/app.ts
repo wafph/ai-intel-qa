@@ -1,7 +1,7 @@
 /**
  * Pinia 应用状态仓库，维护当前功能页、全局加载与布局状态。
  *
- * 本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+ * IAM 手动方法保留供比对；初始化与上传主流程不再请求 IAM Token。
  */
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
@@ -88,10 +88,8 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  fetchTokenFromBackend().catch((err) => {
-    // 保留原有自动获取 AgentArts X-Subject-Token 的逻辑；失败时只记录错误，不阻断登录页面或业务页面渲染。
-    error.value = err?.message || '获取 X-Subject-Token 失败';
-  });
+  // 旧手动取 IAM Token 的方法保留，但不再在页面初始化或上传主流程中调用。
+  // 上传凭证由后端内部取得，AgentOS 模式不请求 IAM。
   /** 封装当前模块内的业务逻辑：addHistory。 */
   const addHistory = (query: string) => {
     const today = new Date().toLocaleDateString('zh-CN', {

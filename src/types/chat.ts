@@ -68,6 +68,9 @@ export interface ChatMessage {
       fileType: string;
       fileUrl: string;
       uploadFileId?: string;
+      /** 后端问答源文件引用与 UTC Unix 秒到期时间；随附件历史保存。 */
+      upload_ref?: string;
+      expires_at?: number | null;
     }>;
   };
   sources?: SourceInfo[]; // ✅ 新增来源信息字段

@@ -183,6 +183,9 @@ export interface QAUploadedFile {
   fileUrl?: string;
   /** 上传完成后后端返回的文件 ID */
   uploadFileId?: string;
+  /** 后端问答源文件引用与 UTC Unix 秒到期时间；随附件历史保存。 */
+  upload_ref?: string;
+  expires_at?: number | null;
   /** 上传后提取的原文文本（可选，用于后端关联） */
   originalText?: string;
   /** 文件扩展名（小写） */

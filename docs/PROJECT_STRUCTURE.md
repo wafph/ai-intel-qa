@@ -79,3 +79,16 @@ POST /v1/markdown-word/convert -> 获取 download_url -> GET download_url -> Blo
 ```
 
 该工具只过滤独立成行的过程提示，不按 `\n\n` 截断正文。
+
+## 本次上传升级涉及文件
+
+- src/services/agentUpload.ts：后端统一上传、问答刷新、安全错误、附件快照。
+- src/composables/useComplianceReview.ts：沿用函数名，主上传转后端；旧直传函数未调用。
+- src/composables/useAppShell.ts：问答显式 qa 上传，保留引用，发送期间处理状态。
+- src/composables/useMessageSender.ts：提交前刷新、历史预保存、追问及重新生成快照和本地任务 metadata。
+- src/types/chat.ts、src/components/ChatInput.vue：引用/到期字段类型。
+- src/stores/app.ts：停用 IAM 初始化调用，保留旧手动方法。
+- tests/agent-upload.test.mjs：离线契约与真实组合函数测试。
+- dist/：本次生产静态资源。
+
+详细接口见 [AGENT_UPLOAD_BACKEND_INTEGRATION.md](AGENT_UPLOAD_BACKEND_INTEGRATION.md)。

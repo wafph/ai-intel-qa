@@ -1,7 +1,7 @@
 /**
  * Vite 构建配置，包含 Vue 插件、自动导入、组件自动注册和开发代理。
  *
- * 本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+ * 业务及统一上传代理指向自建后端；旧外部上传代理保留且不由主流程使用。
  */
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
@@ -39,7 +39,7 @@ export default defineConfig({
     open: true,
     proxy: {
       '/v1': {
-        target: 'https://837c7c7abe7f41bf93569b82d7140a7a.studio.agentarts.cn-north-4.huaweiapaas.com', // 软通后端服务器地址
+        target: 'http://10.210.101.216:8000', // 业务与统一上传均转发到自建后端
         changeOrigin: true,
         secure: false,
       },
@@ -49,6 +49,7 @@ export default defineConfig({
         secure: false,
         rewrite: (path) => path.replace(/^\/api/, ''), // 移除前缀
       },
+      // 旧直传代理保留供比对，当前上传主流程不请求此路径。
       '/review-upload-api': {
         target: 'https://10.210.101.211:31113', // 智能审核上传接口，通过代理绕开浏览器 HTTPS 自签名证书校验
         changeOrigin: true,
@@ -62,13 +63,13 @@ export default defineConfig({
         secure: false,
       },
       '/watermark-api': {
-        target: 'http://10.210.101.209:8005', // 统一文件服务：水印下载
+        target: 'http://10.210.101.209:8000', // 统一文件服务：水印下载
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/watermark-api/, '/v1/files'), // /watermark-api/watermark/download -> /v1/files/watermark/download
       },
       '/markdown-word-api': {
-        target: 'http://10.210.101.209:8005', // 统一文件服务：Markdown 转 Word
+        target: 'http://10.210.101.209:8000', // 统一文件服务：Markdown 转 Word
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/markdown-word-api/, '/v1/markdown-word'), // /markdown-word-api/convert -> /v1/markdown-word/convert

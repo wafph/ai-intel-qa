@@ -25,6 +25,9 @@ URL agentToken / postMessage SET_AGENTTOKEN
 
 ```text
 IntelligentQA.vue
+  -> 上传附件时 POST /v1/agentarts/workflows/qa/upload-file
+  -> 提交前 POST /v1/agentarts/workflows/qa/refresh-file-url
+  -> 原历史接口先保存 answer.metadata.uploadedFiles
   -> useAppShell.sendMessage
   -> POST /v1/agentarts/workflows/qa/tasks
   -> 返回 taskId / qaId / sessionId
@@ -96,7 +99,7 @@ exportDocument.ts
 
 ```text
 ComplianceReview.vue
-  -> 上传文件到 AgentArts 上传接口
+  -> POST /v1/agentarts/workflows/review/upload-file（用户 Bearer，由后端管理平台凭证）
   -> 前端解析原文快照 originalText
   -> POST /v1/chat/review-context 保存审核上下文
   -> POST /v1/agentarts/workflows/review/tasks
@@ -160,3 +163,9 @@ done/completed
 ```text
 POST /v1/agentarts/tasks/{taskId}/stop
 ```
+
+## 8. 问答 URL 过期和平台切换
+
+普通问答/追问先刷新 upload_ref；后端决定复用或重传，前端用新 URL 数组发起原任务。重新生成明确使用原轮附件并 force 刷新。引用通过现有 metadata 历史和本地任务快照恢复；新选附件优先于最近历史附件。异常时保留待发内容，不重复执行整轮任务。
+
+旧 IAM 自动获取已停用，原实现保留供比对。完整流程见 [AGENT_UPLOAD_BACKEND_INTEGRATION.md](AGENT_UPLOAD_BACKEND_INTEGRATION.md)。

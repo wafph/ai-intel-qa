@@ -1,7 +1,7 @@
 /**
  * 统一 API 地址、工作流编码和功能页映射定义。
  *
- * 本文件属于规章制度智能体前端最新版交付代码，整理时仅补充说明与注释，不改变业务逻辑。
+ * 统一上传与问答刷新固定走业务后端，旧外部上传地址仅供保留实现查阅。
  */
 import {
   API_BASE_URL,
@@ -15,9 +15,12 @@ import {
 
 export const API = {
   agent: {
-    // 审核文件上传保持原有 AgentArts 上传逻辑：上传成功后将返回 url 作为 file_url 传给 review 工作流。
-    // 上传接口地址和 workspace_id 已改为配置化，后期切换环境只需修改 .env 配置。
-    uploadFile: `${AGENT_UPLOAD_API_BASE_URL}?workspace_id=${encodeURIComponent(AGENT_UPLOAD_WORKSPACE_ID)}`,
+    // 旧直传地址仅供保留的未调用实现查阅；主流程使用下方统一后端接口。
+    legacyUploadFile: `${AGENT_UPLOAD_API_BASE_URL}?workspace_id=${encodeURIComponent(AGENT_UPLOAD_WORKSPACE_ID)}`,
+    // 固定后端路径，无需在前端配置 AgentArts/AgentOS、workspace 或上传凭证。
+    uploadFile: (workflowCode: 'qa' | 'review') =>
+      `${API_BASE_URL}/v1/agentarts/workflows/${workflowCode}/upload-file`,
+    refreshQAFileUrl: `${API_BASE_URL}/v1/agentarts/workflows/qa/refresh-file-url`,
     // V12 后端统一智能体流式代理接口。
     workflowStream: (workflowCode: string) =>
       `${API_BASE_URL}/v1/agentarts/workflows/${workflowCode}/stream`,

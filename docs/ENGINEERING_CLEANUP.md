@@ -1,28 +1,7 @@
-# 工程整理说明
+# 本次交付范围与原工程保留说明
 
-本次升级基于 `fix14-structured-result-recovery` 版本，不改业务交互逻辑，仅将水印下载与 Markdown 转 Word 接口地址切换到 8005 统一文件服务，并同步配置与文档。
+本版在原版 regulatory-ai-assistant-1021-origin 上增量接入后端统一上传和问答 URL 刷新，不执行旧业务代码或历史文档删减。原 npm/pnpm 锁文件保留，npm 锁文件仅补齐已有声明缺失项，没有升级原锁定版本。
 
-## 清理内容
+交付含 src、原静态资源、环境配置、锁文件、脚本、文档、新测试及新 dist，不包含 node_modules、运行日志或测试缓存。原外部上传函数、IAM 手动方法及旧代理保留，主流程不调用；旧环境值以注释停用。
 
-- 移除历史升级过程说明文件 `V12_*.md`。
-- 移除冗余 `pnpm-lock.yaml`，保留当前构建使用的 `package-lock.json`。
-- 不打包 `node_modules/`、`dist/`、临时文件和缓存文件。
-
-## 保留内容
-
-- `src/` 最新源码。
-- `.env.development`、`.env.production`。
-- `package.json`、`package-lock.json`。
-- `README.md` 和 `docs/` 交接文档。
-- Vite、TypeScript 配置文件。
-
-## 构建验证
-
-整理过程中已执行：
-
-```bash
-npm install --no-audit --no-fund
-npm run build
-```
-
-构建通过。第三方依赖 PURE 注释和 chunk size warning 不影响运行。
+所有改动和验证见 [AGENT_UPLOAD_BACKEND_INTEGRATION.md](AGENT_UPLOAD_BACKEND_INTEGRATION.md)、[RELEASE_ACCEPTANCE.md](RELEASE_ACCEPTANCE.md)。历史版本说明仍保留，其上传目标描述以当前接入文档为准。

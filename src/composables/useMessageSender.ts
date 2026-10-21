@@ -2,12 +2,13 @@
  * 消息发送组合函数。
  *
  * 负责消息发送、流式任务创建与订阅、重新生成、合规审核提交流程。
- * 从 useAppShell 中拆分而来，保持业务逻辑完全不变。
+ * 本次增加问答附件提交前刷新和引用保存，沿用原任务创建及流式订阅流程。
  */
 import { type Ref, type ComputedRef } from 'vue';
 import { ElLoading, ElMessage } from 'element-plus';
 import { getWorkflowCodeByTab } from '@/api/api';
 import type { ChatMessage } from '@/types/chat';
+import { AgentUploadError, latestQAUploadedFiles, refreshQAUploadedFiles, snapshotQAFile, updateQAUploadedFileMetadata } from '@/services/agentUpload';
 import { getFrontendFallbackErrorMessage, toUserSafeAgentErrorMessage } from '@/services/errorSanitizer';
 import type { ResumableStreamTask } from './useStreamTask';
 import type { ComplianceReviewParams } from './useComplianceReview';
@@ -20,6 +21,8 @@ export interface RegenerateUploadedFile {
   fileType: string;
   fileUrl: string;
   uploadFileId?: string;
+  upload_ref?: string;
+  expires_at?: number | null;
 }
 
 /** 重新生成消息时携带的载荷类型。 */
@@ -53,6 +56,8 @@ interface UseMessageSenderDeps {
   sessionManager: any;
   /** 智能问答已上传文件列表（只读），用于在用户消息中携带文件信息。 */
   qaUploadedFileList?: Ref<any[]>;
+  isQAFileProcessing?: Ref<boolean>;
+  qaFileProcessingText?: Ref<string>;
   /** 智能问答清空文件列表回调，消息推送后调用。 */
   clearQAUploadeFileList?: () => void;
 }
@@ -63,9 +68,11 @@ export const useMessageSender = (deps: UseMessageSenderDeps) => {
     isStreaming, currentReasoning, currentAnswer, currentStreamingMessageId,
     inputText, scopesData, generateUUID, buildUnifiedAgentPayload, scrollToBottom,
     compliance, streamTask, streamChunk, sessionManager,
-    qaUploadedFileList,
+    qaUploadedFileList, isQAFileProcessing, qaFileProcessingText,
     clearQAUploadeFileList,
   } = deps;
+
+  let isPreparingQAFiles = false;
 
   // 错误工具
   const getSafeAgentErrorMessage = () => getFrontendFallbackErrorMessage();
@@ -105,8 +112,11 @@ export const useMessageSender = (deps: UseMessageSenderDeps) => {
   };
 
   /** 发送消息（智能问答 / 智能检索 / 辅助起草 / 合规审核入口）。 */
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (content: string, qaFilesOverride?: RegenerateUploadedFile[], forceRefreshQA = false) => {
     await waitForPendingStopSync();
+    if (isPreparingQAFiles) { ElMessage.warning('文件链接正在更新，请稍候'); return; }
+    if (activeTab.value === '智能问答' && isQAFileProcessing?.value) { ElMessage.warning('文件正在处理中，请稍候'); return; }
+
     if (activeTab.value === '合规审核') {
       if (isComplianceSubmitting.value || isStreaming.value) { ElMessage.warning('审核任务正在处理中，请勿重复点击'); return; }
       if (!uploadedFileUrl.value || selectedDimensions.value.length === 0) return;
@@ -138,6 +148,38 @@ export const useMessageSender = (deps: UseMessageSenderDeps) => {
       userMessageContent = content.trim();
     }
 
+    // 在新增消息、清空输入或创建任务之前刷新；失败时保留用户输入和新选附件。
+    let qaFilesSnapshot: RegenerateUploadedFile[] = [];
+    if (activeTab.value === '智能问答') {
+      const selected = qaUploadedFileList?.value || [];
+      const session = chatStore.getChatSession(activeChatId.value);
+      const files = qaFilesOverride ?? (selected.length ? selected.map(snapshotQAFile) : latestQAUploadedFiles(session?.messages || []));
+      if (files.length) {
+        const originalSessionId = activeChatId.value;
+        const originalConversationId = currentConversationUuid.value;
+        isPreparingQAFiles = true;
+        if (isQAFileProcessing) isQAFileProcessing.value = true;
+        if (qaFileProcessingText) qaFileProcessingText.value = '正在更新文件链接，请稍候...';
+        try {
+          qaFilesSnapshot = await refreshQAUploadedFiles(files, forceRefreshQA);
+          // 更新期间切换了会话/功能，不向新的页面误发原问题。
+          if (activeTab.value !== '智能问答' || activeChatId.value !== originalSessionId || currentConversationUuid.value !== originalConversationId) return;
+          updateQAUploadedFileMetadata(session?.messages || [], qaFilesSnapshot);
+          if (selected.length && qaUploadedFileList) {
+            const byUid = new Map(qaFilesSnapshot.map((file) => [file.uid, file]));
+            qaUploadedFileList.value = qaUploadedFileList.value.map((file) => ({ ...file, ...byUid.get(file.uid) }));
+          }
+        } catch (error) {
+          ElMessage.warning(error instanceof AgentUploadError ? error.message : '文件链接更新失败，请稍后重试');
+          return;
+        } finally {
+          isPreparingQAFiles = false;
+          if (isQAFileProcessing) isQAFileProcessing.value = false;
+          if (qaFileProcessingText) qaFileProcessingText.value = '';
+        }
+      }
+    }
+
     if (!activeChatId.value) await createChatForMessage();
     const chat = chatStore.getChatSession(activeChatId.value!);
     if (!chat) { if (activeTab.value === '合规审核') isComplianceSubmitting.value = false; return; }
@@ -149,19 +191,9 @@ export const useMessageSender = (deps: UseMessageSenderDeps) => {
     clearLocalActiveTasksForSession(currentConversationUuid.value || activeChatId.value, getWorkflowCodeByTab(activeTab.value));
     const qaId = generateUUID();
 
-    // ---- 仅智能问答 Tab：在发送时捕获已上传文件列表快照 ----
-    // 智能检索 / 辅助起草 不使用文件上传功能，因此跳过文件快照。
-    // 因为 clearQAUploadeFileList 会清空响应式列表，这里先快照一份用于 bizParams + metadata。
+    // 刷新后的问答附件快照同时用于本轮输入与用户/回答 metadata。
     const isComplianceTab = activeTab.value === '合规审核';
     const isQATab = activeTab.value === '智能问答';
-    const qaFilesSnapshot = isQATab && qaUploadedFileList?.value ? qaUploadedFileList.value.map((f) => ({
-      uid: f.uid,
-      name: f.name,
-      size: f.size,
-      fileType: f.fileType,
-      fileUrl: f.fileUrl,
-      uploadFileId: f.uploadFileId,
-    })) : [];
     const hasQAFiles = qaFilesSnapshot.length > 0;
 
     const userMessage: ChatMessage = {
@@ -263,6 +295,26 @@ export const useMessageSender = (deps: UseMessageSenderDeps) => {
       }
 
       const workflowCode = getWorkflowCodeByTab(activeTab.value);
+      const taskSessionId = currentConversationUuid.value || activeChatId.value;
+      if (workflowCode === 'qa' && qaUploadedFiles.length) {
+        const session = chatStore.getChatSession(activeChatId.value);
+        const userMessage = session?.messages.find((message: any) => message.id === `user_${messageId}`);
+        const assistantMessage = session?.messages.find((message: any) => message.id === messageId);
+        if (!userMessage || !assistantMessage) throw new Error('问答附件信息不存在，请重试');
+        // 使用现有 answer.metadata 落库，避免浏览器在任务完成前关闭导致 upload_ref 丢失。
+        const saved = await chatStore.saveConversationToServer(
+          currentConversationUuid.value || activeChatId.value, messageId, userMessage, assistantMessage, 0, 0, 'qa',
+        );
+        if (!saved.success) throw new Error('问答附件信息保存失败，请稍后重试');
+        // 保存期间用户切换页面或点击停止时，不再为原问题创建任务。
+        if (activeTab.value !== '智能问答' || (currentConversationUuid.value || activeChatId.value) !== taskSessionId ||
+            !isStreaming.value || currentStreamingMessageId.value !== messageId) {
+          assistantMessage.streaming = false;
+          assistantMessage.taskStatus = 'stopped';
+          assistantMessage.content = '本次问答尚未提交，请重新生成';
+          return;
+        }
+      }
       const taskData = await createWorkflowTask(workflowCode, bizParams, messageId, buildUnifiedAgentPayload);
       if (activeTab.value === '合规审核') {
         const serverTitle = taskData.sessionTitle || taskData.session_title || taskData.title;
@@ -285,7 +337,7 @@ export const useMessageSender = (deps: UseMessageSenderDeps) => {
           ? buildComplianceSessionTitle(lastComplianceParams.value.fileName, lastComplianceParams.value.dimensions) : chat?.title,
         userContent: userMessageForTask?.content || queryText,
         answerContent: '', reasoningContent: '',
-        metadata: activeTab.value === '合规审核' && lastComplianceParams.value ? buildComplianceMetadata(lastComplianceParams.value) : undefined,
+        metadata: activeTab.value === '合规审核' && lastComplianceParams.value ? buildComplianceMetadata(lastComplianceParams.value) : (qaUploadedFiles.length ? { uploadedFiles: qaUploadedFiles } : undefined),
       };
 
       if (isMessageLocallyStopped(messageId)) {
@@ -385,6 +437,7 @@ export const useMessageSender = (deps: UseMessageSenderDeps) => {
 
   /** 重新生成消息。 */
   const handleRegenerate = async (payload: RegeneratePayload) => {
+    if (isPreparingQAFiles) { ElMessage.warning('文件链接正在更新，请稍候'); return; }
     if (activeTab.value === '合规审核' && isComplianceRegenerating.value) { ElMessage.warning('正在准备重新审核，请稍候'); return; }
     if (isStreaming.value) await stopStream();
     else await waitForPendingStopSync();
@@ -396,20 +449,14 @@ export const useMessageSender = (deps: UseMessageSenderDeps) => {
       if (params) { lastComplianceParams.value = params; await handleComplianceReview(); }
       else ElMessage.error('没有找到审核参数，无法重新审核');
     } else {
-      // 智能问答 Tab：重新生成时恢复已上传文件列表，使其重新显示在输入区并随消息一起发送
-      if (activeTab.value === '智能问答' && typeof payload !== 'string' && payload.uploadedFiles?.length) {
-        qaUploadedFileList!.value = payload.uploadedFiles.map((f) => ({
-          uid: f.uid,
-          name: f.name,
-          size: f.size,
-          fileType: f.fileType,
-          fileUrl: f.fileUrl,
-          uploadFileId: f.uploadFileId,
-          status: 'success' as const,
-          originalText: '',
-        }));
+      if (activeTab.value === '智能问答' && typeof payload !== 'string') {
+        // 明确使用被重新生成那一轮的附件，包括空数组；不混用当前输入或后续轮次附件。
+        const files = (payload.uploadedFiles || []).map(snapshotQAFile);
+        if (qaUploadedFileList) qaUploadedFileList.value = files.map((file) => ({ ...file, status: 'success' as const, originalText: '' }));
+        await handleSendMessage(content, files, true);
+      } else {
+        await handleSendMessage(content);
       }
-      await handleSendMessage(content);
     }
   };
 

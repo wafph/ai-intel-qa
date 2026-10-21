@@ -6,15 +6,15 @@
 
 ## PDF 上传链路
 
-非 PDF 文件继续走原有 AgentArts 上传接口。
+非 PDF 文件经自建后端 review/upload-file 上传；问答使用 qa/upload-file。
 
 PDF 文件走新链路：
 
 1. 前端调用 `VITE_REVIEW_PDF_PREPARE_API_BASE_URL/prepare`。
-2. PDF 预处理服务保存原始 PDF，调用 mineru25-pro 返回 `parsed_text`。
+2. PDF 预处理服务保存原始 PDF，按后端现有策略解析并返回 `parsed_text`（标准 PDF 为 PyMuPDF，非标/扫描按后端配置）。
 3. 前端把 `parsed_text` 组装成 `.txt File`。
-4. 前端继续调用原 AgentArts 上传接口，获取 `file_url`。
-5. 前端调用 `bind-review-file` 将 AgentArts 返回的 `file_url` 绑定回 `context_id`。
+4. 前端调用后端 review/upload-file，获取顶层 url；后端自行管理平台上传凭证。
+5. 前端调用 `bind-review-file` 将后端返回的 URL 绑定回 `context_id`。
 6. 审核工作流仍继续使用原来的 `file_url` 入参。
 
 ## 原文定位
@@ -91,3 +91,7 @@ VITE_REVIEW_PDF_PREPARE_API_BASE_URL=/review-pdf-api/v1/review/pdf
 "pdfjs-dist": "^4.10.38"
 ```
 
+
+## 本次统一上传接入
+
+PDF 检测、解析、TXT 生成与定位行为保留，仅替换上传目标。问答 PDF 解析后的 TXT 上传到 qa，返回 upload_ref 并保存到附件历史；后续 URL 重传由后端使用缓存 TXT 完成，不再运行 PDF 解析。审核使用 review，保持原审核重传和绑定策略。详见 [AGENT_UPLOAD_BACKEND_INTEGRATION.md](AGENT_UPLOAD_BACKEND_INTEGRATION.md)。

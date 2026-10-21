@@ -41,3 +41,9 @@
 /** 处理用户发送消息并创建可恢复任务。 */
 const handleSend = async () => {}
 ```
+
+## 统一上传维护边界
+
+上传及刷新统一使用 agentUpload.ts 和 api.ts 中固定后端路由，不恢复 sharedDataToken/IAM 自动获取。后端 AGENT_PROVIDER 是唯一平台开关。问答引用沿用 answer.metadata.uploadedFiles，保存/恢复和重新生成都必须保留 upload_ref/expires_at；任务创建前的历史预保存不能删，否则浏览器提前关闭会失去引用。
+
+追问默认继承最近附件；重新生成使用该轮明确快照。旧函数、旧环境值和旧代理保留且停用，不能因看到旧字符串就恢复主流程调用。改动后运行 npm test 和 npm run build。接口及错误处理见 [AGENT_UPLOAD_BACKEND_INTEGRATION.md](AGENT_UPLOAD_BACKEND_INTEGRATION.md)。

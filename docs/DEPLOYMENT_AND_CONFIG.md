@@ -3,7 +3,7 @@
 ## 1. 本地开发
 
 ```bash
-npm install
+npm ci --no-audit --no-fund
 npm run dev
 ```
 
@@ -12,7 +12,7 @@ npm run dev
 ## 2. 生产构建
 
 ```bash
-npm install
+npm ci --no-audit --no-fund
 npm run build
 ```
 
@@ -31,8 +31,8 @@ VITE_API_BASE_URL=
 VITE_AUTH_MODE=platform
 VITE_SM2_PUBLIC_KEY=请替换为真实完整公钥
 VITE_AGENT_SESSION_EXPIRE_MINUTES=720
-VITE_WATERMARK_API_BASE_URL=http://1.94.244.72:8005/v1/files
-VITE_CONVERT_API_BASE_URL=http://1.94.244.72:8005/v1/markdown-word
+VITE_WATERMARK_API_BASE_URL=/v1/files
+VITE_CONVERT_API_BASE_URL=/v1/markdown-word
 ```
 
 说明：
@@ -43,19 +43,19 @@ VITE_CONVERT_API_BASE_URL=http://1.94.244.72:8005/v1/markdown-word
 | `VITE_AUTH_MODE` | `platform` 表示走中台/agentToken 权限模式。 |
 | `VITE_SM2_PUBLIC_KEY` | 登录密码 SM2 加密公钥。 |
 | `VITE_AGENT_SESSION_EXPIRE_MINUTES` | agentToken 前端会话有效期。 |
-| `VITE_WATERMARK_API_BASE_URL` | 水印下载服务路由前缀。生产默认 `http://1.94.244.72:8005/v1/files`，最终请求 `/watermark/download`。留空时默认同源 `/v1/files`。 |
-| `VITE_CONVERT_API_BASE_URL` | Markdown 转 Word 服务路由前缀。生产默认 `http://1.94.244.72:8005/v1/markdown-word`，最终请求 `/convert`。留空时默认同源 `/v1/markdown-word`。 |
+| `VITE_WATERMARK_API_BASE_URL` | 水印下载服务路由前缀。生产当前 `/v1/files`，沿用现场文件工具代理，最终请求 `/watermark/download`。留空时默认同源 `/v1/files`。 |
+| `VITE_CONVERT_API_BASE_URL` | Markdown 转 Word 服务路由前缀。生产当前 `/v1/markdown-word`，沿用现场文件工具代理，最终请求 `/convert`。留空时默认同源 `/v1/markdown-word`。 |
 
 ## 4. Nginx 关键代理
 
-当前 `.env.production` 默认直接请求 8005 文件服务。如果生产环境存在浏览器跨域限制，或者希望统一走前端站点同源域名，可将：
+当前 `.env.production` 已使用同源文件工具路径，原代理目标按现场保留：
 
 ```env
 VITE_WATERMARK_API_BASE_URL=/v1/files
 VITE_CONVERT_API_BASE_URL=/v1/markdown-word
 ```
 
-并在前端 Nginx 增加以下代理。这样浏览器请求仍是当前站点同源路径，Nginx 再转发到 8005：
+下列为原文件工具代理示例，已有同名 location 时应调整原段，不重复添加。统一上传的 /v1/agentarts/ 也在下方，目标应为本次配套后端：
 
 ```nginx
 location ^~ /v1/files/ {
@@ -90,6 +90,8 @@ location ^~ /v1/chat/ {
 }
 
 location ^~ /v1/agentarts/ {
+    # 问答/审核上传和问答 URL 刷新也走此段；大小含 multipart 开销。
+    client_max_body_size 512m;
     proxy_pass http://1.94.244.72:8000;
     proxy_http_version 1.1;
     proxy_buffering off;
@@ -126,3 +128,11 @@ curl -i -X POST http://1.94.244.72:8005/v1/markdown-word/convert \
 ```
 
 `file_id=test` 可能返回业务错误，但不应返回 405、CORS 或前端 404 页面。若生产改为同源 Nginx 代理，则验证地址可改为 `http://前端域名/v1/files/watermark/download` 与 `http://前端域名/v1/markdown-word/convert`。
+
+## 6. 统一上传和后端平台切换
+
+先部署配套后端 regulation_ai_backend_v1.0.0_202610211516，再发布本次 dist。确认现有 /v1/agentarts/ 转发到该版本，覆盖 qa/review 上传与 qa/refresh-file-url。外层网关若仍限制 100m，则上传上限以网关为准。
+
+开发 VITE_API_BASE_URL=/api；Vite 的 /api 和 /v1 已统一转发自建后端。生产留空使用同源。原外部上传与开发 IAM 配置已注释停用。后续只改后端 AGENT_PROVIDER 并重启，无需重编前端。问答重传依赖后端 AGENT_UPLOAD_STORAGE_ROOT 持久化原件。
+
+验证 npm test、npm run build，再按 [AGENT_UPLOAD_BACKEND_INTEGRATION.md](AGENT_UPLOAD_BACKEND_INTEGRATION.md) 检查浏览器没有 IAM 初始化及外部直传请求，并测试到期重传、页面刷新恢复和后端平台切换。

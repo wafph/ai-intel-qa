@@ -2,13 +2,14 @@
  * 合规审核组合函数。
  *
  * 集中管理合规审核相关的状态、文件上传、参数归一化、维度选择和审核上下文构建。
- * 从 useAppShell 中拆分而来，保持业务逻辑完全不变。
+ * 本次上传改由后端管理平台凭证，原 PDF 解析、审核参数和绑定流程保留。
  */
 import { ref, computed, type Ref } from 'vue';
 import type { ChatSession } from '@/types/chat';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { authRequest, request, isSuccessStatus } from '@/services/http';
 import { API } from '@/api/api';
+import { uploadWorkflowFile, getUploadFileId, type UploadWorkflowCode } from '@/services/agentUpload';
 import {
   bindReviewPdfFile,
   buildTxtFileFromPdfParsedText,
@@ -42,8 +43,10 @@ export type ComplianceReviewParams = {
   textSource?: string;
 };
 
-/** AgentArts 文件上传结果。 */
+/** 后端统一文件上传结果，兼容原审核字段。 */
 export type ComplianceUploadResult = {
+  upload_ref?: string;
+  expires_at?: number | null;
   rawResult?: any;
   fileName: string;
   fileUrl: string;
@@ -72,7 +75,7 @@ const COMPLIANCE_PROCESSING_DISPLAY_TEXT = '文件正在解析中，请稍候...
 
 /** useComplianceReview 的依赖注入参数。 */
 interface UseComplianceReviewDeps {
-  /** App store，用于获取 sharedDataToken */
+  /** App store，仅保留旧直传实现依赖；主上传流程不再使用 sharedDataToken */
   appStore: any;
   /** User store，用于获取 user_id */
   userStore: any;
@@ -396,7 +399,8 @@ export const useComplianceReview = (deps: UseComplianceReviewDeps) => {
    * @param options - 可选参数，含 originalText 和 statusText
    * @returns 上传结果
    */
-  const uploadFileToAgentArts = async (
+  // 旧外部直传保留供维护比对；不由上传/重传主流程调用。
+  const uploadFileToAgentArtsLegacy = async (
     file: File,
     options: { originalText?: string; statusText?: string } = {},
   ): Promise<ComplianceUploadResult> => {
@@ -415,7 +419,7 @@ export const useComplianceReview = (deps: UseComplianceReviewDeps) => {
 
     complianceFileProcessingText.value = COMPLIANCE_PROCESSING_DISPLAY_TEXT;
     const response = await request({
-      url: API.agent.uploadFile,
+      url: API.agent.legacyUploadFile,
       method: 'POST',
       headers: {
         'X-Auth-Token': token,
@@ -436,6 +440,21 @@ export const useComplianceReview = (deps: UseComplianceReviewDeps) => {
       fileType: file.name.split('.').pop()?.toLowerCase() || file.type || '',
       fileSize: file.size,
       uploadFileId: result?.file_id || result?.fileId || result?.id || result?.data?.file_id || result?.data?.fileId || '',
+    };
+  };
+
+  /** 保留调用方函数名；实际上传统一由后端完成，默认审核，问答必须显式指定 qa。 */
+  const uploadFileToAgentArts = async (
+    file: File,
+    options: { originalText?: string; statusText?: string; workflowCode?: UploadWorkflowCode } = {},
+  ): Promise<ComplianceUploadResult> => {
+    const localOriginalText = options.originalText !== undefined ? options.originalText : await extractReadableFileText(file);
+    const result = await uploadWorkflowFile(file, options.workflowCode || 'review');
+    return {
+      rawResult: result, fileName: file.name, fileUrl: result.url,
+      originalText: getTextFromUploadResult(result) || localOriginalText,
+      fileType: file.name.split('.').pop()?.toLowerCase() || file.type || '', fileSize: file.size,
+      uploadFileId: getUploadFileId(result), upload_ref: result.upload_ref, expires_at: result.expires_at ?? null,
     };
   };
 
@@ -547,7 +566,7 @@ export const useComplianceReview = (deps: UseComplianceReviewDeps) => {
   };
 
   /**
-   * 上传合规审核文件。PDF 走预处理流程，其他文件直接上传到 AgentArts。
+   * 上传合规审核文件。PDF 走预处理流程，其他文件经后端统一上传。
    * @param file - 用户选择的文件
    * @returns 上传结果
    */
@@ -580,7 +599,7 @@ export const useComplianceReview = (deps: UseComplianceReviewDeps) => {
    * ChatInput 自定义上传回调。处理文件上传成功/失败状态。
    * 特点：
    *  - 上传前先校验文件类型，不支持则直接 ElMessage 报错且不插入卡片。
-   *  - PDF 走预处理流程（检测原文定位能力 + mineru 解析），其他文件直接上传到 AgentArts。
+   *  - PDF 走预处理流程（检测原文定位能力 + mineru 解析），其他文件经后端统一上传。
    *
    * @param options - Element Plus 上传回调参数
    */
@@ -800,6 +819,7 @@ export const useComplianceReview = (deps: UseComplianceReviewDeps) => {
     getComplianceParamsFromSession,
     // 文件上传
     uploadFileToAgentArts,
+    uploadFileToAgentArtsLegacy, // 仅保留，不在业务页面调用
     customUpload,
     handleRemoveUploadedFile,
     handleSelectAll,

@@ -4,7 +4,7 @@
  * 组合 useComplianceReview、useStreamTask、useStreamChunk、
  * useSessionManager、useMessageSender 五个子 composable，
  * 管理基础状态、计算属性、Tab 切换、搜索和生命周期。
- * 新增：智能问答/智能检索/辅助起草 模式下的多文件上传管理（依次追加 + 单选删除）。
+ * 智能问答多文件经后端 qa 上传，保留可重传引用；检索和起草沿用无附件输入。
  */
 import { ref, computed, onMounted, nextTick, onUnmounted, watch } from 'vue';
 import type { CSSProperties } from 'vue';
@@ -187,13 +187,14 @@ export const useAppShell = () => {
     qaFileProcessingText.value = `正在上传解析后的文本...`;
     const parsedTxtFile = buildTxtFileFromPdfParsedText(parsedText, file.name);
     const uploadResult = await uploadFileToAgentArts(parsedTxtFile, {
-      originalText: parsedText,
+      originalText: parsedText, workflowCode: 'qa',
     });
 
     return {
       fileName: file.name,
       fileUrl: uploadResult.fileUrl,
       uploadFileId: uploadResult.uploadFileId,
+      upload_ref: uploadResult.upload_ref, expires_at: uploadResult.expires_at,
       originalText: parsedText,
       fileType: 'pdf',
       fileSize: file.size,
@@ -268,7 +269,7 @@ export const useAppShell = () => {
         // 非 PDF 文件：直接上传，前端轻量提取可读文本用于后端参考
         qaFileProcessingText.value = `文件正在上传中...`;
         const text = (await extractReadableFileText(rawFile)) || '';
-        const result = await uploadFileToAgentArts(rawFile, { originalText: text });
+        const result = await uploadFileToAgentArts(rawFile, { originalText: text, workflowCode: 'qa' });
         fileUrl = result.fileUrl || '';
         uploadFileId = result.uploadFileId || '';
         parsedOriginalText = result.originalText || text;
@@ -282,6 +283,7 @@ export const useAppShell = () => {
           ...qaUploadedFileList.value[idx],
           fileUrl,
           uploadFileId,
+          upload_ref: successResult?.upload_ref, expires_at: successResult?.expires_at ?? null,
           originalText: parsedOriginalText,
           status: 'success',
         };
@@ -321,7 +323,7 @@ export const useAppShell = () => {
     }
     const target = qaUploadedFileList.value.find((it) => it.uid === uid);
     if (!target) return;
-    if (target.status === 'uploading') {
+    if (target.status === 'uploading' || isQAFileProcessing.value) {
       ElMessage.warning('文件正在上传中，请稍候再删除');
       return;
     }
@@ -343,7 +345,7 @@ export const useAppShell = () => {
     currentAnswer, currentStreamingMessageId, inputText, scopesData, generateUUID,
     buildUnifiedAgentPayload, scrollToBottom, compliance, streamTask, streamChunk, sessionManager,
     // 智能问答多文件上传：消息发送时读取文件列表、发送后清空
-    qaUploadedFileList,
+    qaUploadedFileList, isQAFileProcessing, qaFileProcessingText,
     clearQAUploadeFileList,
   });
 
@@ -453,7 +455,7 @@ export const useAppShell = () => {
   const isSendDisabled = computed(() => {
     if (activeTab.value === '合规审核')
       return isComplianceFileProcessing.value || isComplianceSubmitting.value || isStreaming.value || !uploadedFileUrl.value || selectedDimensions.value.length === 0;
-    return isStreaming.value;
+    return isStreaming.value || (activeTab.value === '智能问答' && isQAFileProcessing.value);
   });
   const inputContainerStyle = computed<CSSProperties>(() => {
     if (isSourcesPanelVisible.value) {
