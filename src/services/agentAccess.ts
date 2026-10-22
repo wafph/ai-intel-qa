@@ -6,7 +6,7 @@
 import router from '@/router';
 import { API } from '@/api/api';
 import { parseAxiosResponseError, toFriendlyError } from './error';
-import { saveAgentSession, saveNotFoundError, type FriendlyErrorInfo } from './authStorage';
+import { saveAgentSession, saveNotFoundError, markExternalEntry, type FriendlyErrorInfo } from './authStorage';
 import { isSuccessStatus, request } from './http';
 import { getApiData, getApiMessage, isApiSuccessCode } from './response';
 
@@ -24,12 +24,40 @@ const ALLOWED_PARENT_ORIGINS = (import.meta.env.VITE_ALLOWED_PARENT_ORIGINS || '
   .map((s: string) => s.trim())
   .filter(Boolean);
 
+/** 从 hash 路由片段中取查询参数（兼容 #/path?token=xxx 的写法）。 */
+const getHashParams = () => {
+  const hash = window.location.hash || '';
+  const index = hash.indexOf('?');
+  return index >= 0 ? new URLSearchParams(hash.slice(index + 1)) : null;
+};
+
+/**
+ * 是否为外部嵌入页路径（/external-draft）。
+ * 精确匹配末段路径，兼容部署在子目录（如 /ai-agent/external-draft）的情况；
+ * 不使用 includes，避免 /external-draft-xxx 或含同名片段的路由误命中。
+ */
+export const isExternalDraftPage = () =>
+  window.location.pathname.replace(/\/+$/, '').endsWith('/external-draft');
+
 /** 获取并归一化业务数据：getAgentTokenFromUrl。 */
 const getAgentTokenFromUrl = () => {
   const params = new URLSearchParams(window.location.search);
   // 第三方 URL 入参只保留标准写法：/intelligent-qa?agentToken=xxxx。
-  // 历史兼容参数 agent_token/token 不再启用，避免普通业务 token 与 agentToken 混淆。
-  return params.get('agentToken');
+  // 历史兼容参数 agent_token 不再启用，避免普通业务 token 与 agentToken 混淆。
+  const agentToken = params.get('agentToken');
+  if (agentToken) return agentToken;
+
+  // 外部嵌入页（/external-draft）额外兼容主系统的 token 参数：
+  // 新接入的主系统统一以 ?token=xxx 传递授权凭证，不再使用 agentToken 命名；
+  // search 与 hash 两种位置都兼容（主系统 hash 路由习惯：/external-draft#/?token=xxx）。
+  // 仅限外部嵌入页生效，不影响现有业务页的 agentToken 解析规则；
+  // 同时标记本次会话为外部接入，由路由守卫把访问范围锁定在外部起草页。
+  if (isExternalDraftPage()) {
+    const externalToken = params.get('token') || getHashParams()?.get('token') || null;
+    if (externalToken) markExternalEntry();
+    return externalToken;
+  }
+  return null;
 };
 
 /** 封装当前模块内的业务逻辑：waitAgentTokenFromParent。 */
@@ -144,8 +172,15 @@ const requestPermissionByAgentToken = async (agentToken: string) => {
   return normalizePermissionPayload(result, agentToken);
 };
 
-/** 封装当前模块内的业务逻辑：initAgentAccess。 */
-export const initAgentAccess = async (agentToken: string) => {
+/**
+ * 初始化 agentToken 鉴权：校验通过后写入会话。
+ * 外部嵌入页（/external-draft）传入 stayOnFailure 时，失败后不跳内部访问异常页，
+ * 由页面自身展示后端返回的真实拒绝原因，便于主系统侧联调排查。
+ */
+export const initAgentAccess = async (
+  agentToken: string,
+  options: { stayOnFailure?: boolean } = {},
+) => {
   window.__AGENT_TOKEN__ = agentToken;
 
   try {
@@ -159,7 +194,7 @@ export const initAgentAccess = async (agentToken: string) => {
       : toFriendlyError(error, 'agentToken 校验异常');
     saveNotFoundError(errorInfo);
     window.__SCOPES_DATA__ = DEFAULT_SCOPES;
-    await router.replace('/not-found');
+    if (!options.stayOnFailure) await router.replace('/not-found');
     return { ok: false, error: errorInfo };
   }
 };

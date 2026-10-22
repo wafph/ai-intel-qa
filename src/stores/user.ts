@@ -15,7 +15,12 @@ import {
   saveAgentSession,
   type AuthMode,
 } from '@/services/authStorage';
-import { initAgentAccess, resolveIncomingAgentToken, setDefaultScopes } from '@/services/agentAccess';
+import {
+  initAgentAccess,
+  isExternalDraftPage,
+  resolveIncomingAgentToken,
+  setDefaultScopes,
+} from '@/services/agentAccess';
 import { FRONTEND_AUTH_MODE } from '@/services/config';
 import { encryptPasswordBySm2 } from '@/services/crypto';
 import { getApiData, getApiMessage, isApiSuccessCode } from '@/services/response';
@@ -126,7 +131,11 @@ export const useUserStore = defineStore('user', () => {
     const agentToken = await resolveIncomingAgentToken();
 
     if (agentToken) {
-      const result = await initAgentAccess(agentToken);
+      // 仅外部嵌入页（/external-draft）在校验失败时停留在本页展示原因，
+      // 其他业务路由保持原有行为（跳内部访问异常页）。
+      const result = await initAgentAccess(agentToken, {
+        stayOnFailure: isExternalDraftPage(),
+      });
       if (result.ok) {
         const session = getAuthSession();
         authMode.value = 'agent';

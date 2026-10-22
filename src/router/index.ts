@@ -4,7 +4,12 @@
  */
 import { createRouter, createWebHistory } from 'vue-router';
 import AppLayout from '@/components/AppLayout.vue';
-import { isAuthenticatedByStorage } from '@/services/authStorage';
+import {
+  isAuthenticatedByStorage,
+  isExternalEntrySession,
+  markExternalEntry,
+  clearExternalEntry,
+} from '@/services/authStorage';
 
 const routes = [
   {
@@ -45,6 +50,13 @@ const routes = [
     meta: { public: true },
   },
   {
+    // 外部嵌套起草页：主系统 iframe 嵌入使用，不套 AppLayout、不强制本地登录态（走 agentAccess 授权）
+    path: '/external-draft',
+    name: 'ExternalDraft',
+    component: () => import('@/views/ExternalDraft.vue'),
+    meta: { public: true },
+  },
+  {
     path: '/my-collections',
     name: 'MyCollections',
     component: () => import('@/views/MyCollections.vue'),
@@ -67,8 +79,33 @@ const router = createRouter({
   routes,
 });
 
-// 路由守卫：没有 agentToken 外部授权，也没有本地登录 token 时，直接访问业务页面需要进入登录页。
+/** 是否为外部系统 iframe 嵌入场景（顶层窗口直接访问不算嵌入）。 */
+const isEmbeddedInParent = () => {
+  try {
+    return window.parent !== window;
+  } catch {
+    // 跨域访问 window.parent 属性可能抛错，保守按嵌入场景处理
+    return true;
+  }
+};
+
+// 路由守卫：外部主系统 iframe 嵌入时只允许停留在外部起草页；顶层窗口不限制；其余页面在无授权时进入登录页。
 router.beforeEach((to) => {
+  const embedded = isEmbeddedInParent();
+  const isExternalRoute = to.path === '/external-draft' || to.path === '/not-found';
+
+  // iframe 内进入过外部起草页即认定为外部接入会话（URL 无 token、token 改由 postMessage 传入时同样生效）
+  if (embedded && to.path === '/external-draft' && !isExternalEntrySession()) {
+    markExternalEntry();
+  }
+
+  if (isExternalEntrySession() && !isExternalRoute) {
+    // 嵌入场景：只允许访问外部起草页，避免外部用户越权进入内部业务路由；
+    // 顶层窗口（本地开发、自有浏览器直接访问）不做限制，并清除标记避免后续访问被持续锁定
+    if (embedded) return { path: '/external-draft' };
+    clearExternalEntry();
+  }
+
   if (to.meta.public) return true;
   if (to.meta.requiresAuth && !isAuthenticatedByStorage()) {
     // 不再携带 redirect 参数：登录成功后统一进入第一个菜单 /intelligent-qa，

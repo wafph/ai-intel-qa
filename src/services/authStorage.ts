@@ -20,6 +20,22 @@ const AUTH_STORAGE_KEY = 'ai_intel_auth_session';
 const AGENT_SCOPES_KEY = 'ai_intel_agent_scopes';
 const NOT_FOUND_ERROR_KEY = 'ai_intel_not_found_error';
 
+/** 外部接入标记键：标记本次会话由主系统 iframe 以 token 参数进入，只允许停留在外部起草页。 */
+export const EXTERNAL_ENTRY_KEY = 'ai_intel_external_entry';
+
+/** 标记本次会话为外部 token 接入（sessionStorage 随标签页隔离，不影响其它标签页）。 */
+export const markExternalEntry = () => {
+  sessionStorage.setItem(EXTERNAL_ENTRY_KEY, '1');
+};
+
+/** 判断当前会话是否为外部 token 接入。 */
+export const isExternalEntrySession = () => sessionStorage.getItem(EXTERNAL_ENTRY_KEY) === '1';
+
+/** 清除外部接入标记。 */
+export const clearExternalEntry = () => {
+  sessionStorage.removeItem(EXTERNAL_ENTRY_KEY);
+};
+
 /** 封装当前模块内的业务逻辑：safeParse。 */
 const safeParse = <T>(value: string | null): T | null => {
   if (!value) return null;
@@ -44,6 +60,7 @@ export const saveAuthSession = (session: StoredAuthSession) => {
 export const clearAuthSession = () => {
   localStorage.removeItem(AUTH_STORAGE_KEY);
   localStorage.removeItem(AGENT_SCOPES_KEY);
+  clearExternalEntry();
 };
 
 /** 判断条件是否成立：isSessionExpired。 */
