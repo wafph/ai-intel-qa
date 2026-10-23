@@ -177,3 +177,10 @@ location / {
 ```
 
 第三方 iframe 与前端保持浏览器允许的协议和嵌入策略；若有 sandbox，应允许页面脚本、必要源访问和下载。主系统草稿接口由第三方提供，暂缺时使用 examples 父页面模拟，与自建后台路由无关。完整联调见 [EXTERNAL_DRAFT_INTEGRATION.md](EXTERNAL_DRAFT_INTEGRATION.md)。
+
+
+## 8. 本次合同草稿保存
+
+默认 api 模式必须合入 [合同专用 location](../deploy/contract-draft-save.location.conf)，只新增精确 /contract-draft-api/saveZDSingle，不改现有 /v1/、/download/、PDF、SSE 或 SPA 段。Vite 已新增对应显式目标 10.100.10.19:18100 和路径 rewrite，原业务目标仍为 117:8000。
+
+新增 VITE_EXTERNAL_DRAFT_SAVE_API、VITE_EXTERNAL_DRAFT_SAVE_MODE、VITE_EXTERNAL_DRAFT_SAVE_SUCCESS_CODES、VITE_EXTERNAL_DRAFT_PUBLIC_FILE_ORIGIN 均为构建时配置。PUBLIC_FILE_ORIGIN 留空沿用后台完整下载 URL；需要更换合同可达源时只填协议+主机+端口并重新构建，保留 /download/ 路径和签名参数。应用密钥暂时写在 contractDraft.ts，不是服务端保密配置。详见 [CONTRACT_DRAFT_SAVE.md](CONTRACT_DRAFT_SAVE.md)。

@@ -1,6 +1,6 @@
 # 外部起草页面集成与第三方草稿入库
 
-本版 regulatory-ai-assistant_v1.0.0_202610221813 基于 regulatory-ai-assistant_v1.0.0_202610221623 最小升级附件获取和界面流程，后端仍为 regulation_ai_backend_v1.0.0_202610221019。自建后端地址为 10.210.101.117，端口沿用原 8000，可在开发配置修改。没有修改后端代码、权限规则或平台切换逻辑。
+本版 regulatory-ai-assistant_v1.0.0_202610221921 基于 regulatory-ai-assistant_v1.0.0_202610221813 仅升级真实合同保存、消息弹窗及新增页局部样式，后端仍为 regulation_ai_backend_v1.0.0_202610221019。自建后端地址为 10.210.101.117，端口沿用原 8000，可在开发配置修改。没有修改后端代码、权限规则或平台切换逻辑。
 
 ## 1. 两种入口
 
@@ -96,7 +96,7 @@ JSON: { "agent_token": "主系统用户token" }
 { "markdown": "本轮最终正文", "qa_id": "本轮qaId" }
 ```
 
-DOCX 文件由现有自建文件服务生成并保存，接口不改。转换返回后立即 GET download_url，检查 HTTP 状态、非空文件与 ZIP 文件头，通过后才显示完成提示、后台原名附件卡片、保存到草稿箱按钮和下方的重新起草按钮。原命名为“标题_年月日时分秒毫秒.docx”，前端使用 file_name，不生成另一个时间戳。
+DOCX 文件由现有自建文件服务生成并保存，接口不改。转换返回后立即 GET download_url，检查 HTTP 状态、非空文件与 ZIP 文件头，通过后才显示完成提示、后台原名附件卡片和下方的操作区；保存与重新起草宽屏并排、窄屏换行。原命名为“标题_年月日时分秒毫秒.docx”，前端使用 file_name，不生成另一个时间戳。
 
 文件 Blob 按 qaId 缓存在当前页面内存。点击附件才触发浏览器下载，点击保存到草稿箱复用该文件；文件读取失败保留转换结果，重试只 GET，不重复转换。未点击保存不发草稿消息。页面离开/授权切换清空缓存并取消旧请求，迟到文件不写回新会话。
 
@@ -104,9 +104,15 @@ DOCX 文件由现有自建文件服务生成并保存，接口不改。转换返
 
 开发时文件读取走 /external-file-download，转发到 vite.config.ts 中显式配置的文件服务 target；给父平台的 downloadUrl 仍是文件服务公共地址，不把 localhost 开发代理链接当公共下载地址。生产沿用文件服务返回地址，配置正确的 Host/转发头及 /download/ 路由。
 
-## 5. 第三方草稿入库协议
+## 5. 真实合同草稿保存（默认 api）
 
-生成 DOCX 与第三方草稿入库是两步：文件已生成不等于第三方草稿记录已保存。真实草稿接口暂未提供，因此本项目没有新增、猜测或调用自建后端的草稿接口。
+VITE_EXTERNAL_DRAFT_SAVE_MODE=api 时，新页面点击保存后直接 POST 同源 /contract-draft-api/saveZDSingle，经 Vite/Nginx 转发到 10.100.10.19:18100/exchangeAuthCenter/exchangeContractInfo/saveZDSingle。appkey/secretkey 按本次要求在前端适配文件临时写死；data.token 使用跳转传入的当前同一 token，data.wordPath 使用本轮原始 DOCX 下载 URL，data.zdName 使用去掉扩展名及自动时间戳的制度名。具体请求和部署见 [CONTRACT_DRAFT_SAVE.md](CONTRACT_DRAFT_SAVE.md)。
+
+接口 message 只消息弹窗，页面不展示该文本；业务 201 按失败、成功不强制草稿编号。原附件缓存、命名和下载保留，api 模式不依赖父页面 SAVE_DRAFT_RESULT。每次保存仍由 qaId 对应记录管理，并保留离开/换授权后旧请求隔离。
+
+## 5.1 原父页面草稿协议（仅 parent 兼容模式）
+
+生成 DOCX 与第三方草稿入库是两步：文件已生成不等于第三方草稿记录已保存。本段保留前版 parent 消息/模拟方式；当前真实接口使用上一节 api 方式。自建后端未增加草稿接口。
 
 点击保存时，子页向绑定父源发送原 SAVE_DRAFT_TO_BOX 消息并增加关联 ID：
 
@@ -149,14 +155,14 @@ iframe.contentWindow.postMessage({
 
 父页面校验 event.source===iframe.contentWindow 与 event.origin===agentFrontendOrigin 后再处理消息。实际入库鉴权属于第三方平台自己的登录/接口协议，不使用自建后台替代它。
 
-## 6. 现阶段模拟联调
+## 6. 原父页面模拟联调（需显式配置 parent）
 
 ```bash
 npm ci --include=dev --no-audit --no-fund
 npm run dev
 ```
 
-打开 http://localhost:5100/examples/external-draft-host.html：
+先把 .env.development 的 VITE_EXTERNAL_DRAFT_SAVE_MODE 设为 parent，重启开发服务，再打开 http://localhost:5100/examples/external-draft-host.html。默认 api 模式点击保存调用真实合同接口，父页面的模拟开关不控制它。parent 模式步骤：
 
 1. 输入实际前端地址及现有后端认可的用户 token；选择 URL 或 READY 消息授权。
 2. 点击进入，输入要求并起草。自建后端授权、平台生成及文件转换均为真实调用。

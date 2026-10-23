@@ -245,7 +245,7 @@ watch(
             :deep(p) {
               margin: 10px 0;
             }
-            :deep(ul, ol) {
+            :deep(ul), :deep(ol) {
               margin: 10px 0;
               padding-left: 26px;
             }
@@ -260,22 +260,29 @@ watch(
               background: #fff;
             }
             :deep(table) {
+              display: block;
+              max-width: 100%;
+              overflow-x: auto;
               border-collapse: collapse;
               margin: 10px 0;
               width: 100%;
               font-size: 15px;
             }
-            :deep(td, th) {
+            :deep(td), :deep(th) {
               border: 1px solid #dcdfe6;
               padding: 8px 12px;
               text-align: left;
             }
+            :deep(th) { background: #edf1f7; font-weight: 600; }
+            :deep(code) { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
             :deep(pre) {
               margin: 10px 0;
               padding: 14px;
               background: #fff;
               border-radius: 6px;
               overflow-x: auto;
+              max-width: 100%;
+              white-space: pre;
             }
             :deep(img) {
               max-width: 100%;

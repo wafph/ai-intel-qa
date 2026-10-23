@@ -40,6 +40,13 @@ export default defineConfig({
     host: '0.0.0.0',
     open: true,
     proxy: {
+      '/contract-draft-api': {
+        // 合同中台专用代理；只去掉此前缀，不经过自建 117 业务后端。
+        target: 'http://10.100.10.19:18100',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/contract-draft-api/, '/exchangeAuthCenter/exchangeContractInfo'),
+        proxyTimeout: 30000,
+      },
       '/v1': {
         target: 'http://10.210.101.117:8000', // 业务与统一上传均转发到自建后端
         changeOrigin: true,

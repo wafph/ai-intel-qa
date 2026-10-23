@@ -1,4 +1,6 @@
-# 新增起草页附件获取与界面修复
+# 新增起草页附件获取与界面修复（1813 版历史）
+
+当前版本继承本文的文件获取及响应式修复；草稿保存、message 展示和按钮排列以 [CONTRACT_DRAFT_SAVE.md](CONTRACT_DRAFT_SAVE.md) 为准。本次真实接口已提供，不再默认父页面模拟。
 
 版本：regulatory-ai-assistant_v1.0.0_202610221813；基线：regulatory-ai-assistant_v1.0.0_202610221623；配套后端保持 regulation_ai_backend_v1.0.0_202610221019。
 

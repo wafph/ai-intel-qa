@@ -17,13 +17,13 @@
         <span class="edr-attachment-icon">W</span>
         <span class="edr-attachment-name">{{ record.attachment.fileName }}</span>
       </button>
-      <p v-if="record.boxError" class="edr-error">{{ record.boxError }}</p>
-      <!-- 与确认的流程图一致：附件、保存按钮、重新起草依次纵向排列。 -->
+      <!-- 合同接口 message 仅弹窗；按钮区只呈现保存状态。 -->
       <div class="edr-actions">
         <button type="button" class="edr-save-box" :disabled="record.sentToBox || record.sending" @click="emit('saveToBox')">
-          {{ record.sending ? '正在等待保存结果…' : record.sentToBox ? (record.simulated ? '已模拟保存到草稿箱' : '已保存到草稿箱') : '保存到草稿箱' }}
+          <span v-if="record.sending" class="edr-spinner" aria-hidden="true"></span>
+          {{ record.sending ? '保存中…' : record.sentToBox ? (record.simulated ? '已模拟保存到草稿箱' : '已保存到草稿箱') : '保存到草稿箱' }}
         </button>
-        <button v-if="showBack" type="button" class="edr-back" @click="emit('back')">重新起草</button>
+        <button v-if="showBack" type="button" class="edr-back" :disabled="actionsBusy || record.sending" @click="emit('back')">重新起草</button>
       </div>
     </template>
     <p v-else-if="record.status === 'error'" class="edr-error">
@@ -44,11 +44,14 @@ interface Props {
   record?: DraftDocxRecord | null;
   /** 是否展示"重新起草"快捷按钮（仅最后一轮）。 */
   showBack?: boolean;
+  /** 当前轮次仍在输出/准备附件时，禁止再次起草。 */
+  actionsBusy?: boolean;
 }
 
 withDefaults(defineProps<Props>(), {
   record: null,
   showBack: false,
+  actionsBusy: false,
 });
 
 const emit = defineEmits<{
@@ -121,45 +124,58 @@ const emit = defineEmits<{
     }
   }
 
-  /* 保存为主要操作，重新起草在下方展示；窄 iframe 内按钮不溢出。 */
+  /* 统一按钮高度，宽屏并排，窄 iframe 自适应换行。 */
   .edr-actions {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 12px;
     margin-top: 14px;
   }
 
-  .edr-save-box {
-    padding: 10px 0;
-    width: 220px;
+  .edr-save-box, .edr-back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 42px;
     max-width: 100%;
+    padding: 10px 22px;
+    border-radius: 8px;
+    font-size: 15px;
+    line-height: 20px;
+    transition: background-color .15s, border-color .15s, box-shadow .15s;
+    &:focus-visible { outline: 2px solid #3b8cff; outline-offset: 3px; }
+    &:disabled { cursor: not-allowed; }
+  }
+
+  .edr-save-box {
+    min-width: min(180px, 100%);
     border: 1px solid transparent;
-    border-radius: 6px;
     background: #3b8cff;
     color: #fff;
-    font-size: 15px;
     cursor: pointer;
+    box-shadow: 0 2px 5px rgba(59, 140, 255, .16);
+    &:hover:not(:disabled) { background: #2878ed; }
 
     &:disabled {
       background: #a0cfff;
-      cursor: not-allowed;
+      box-shadow: none;
     }
   }
 
   .edr-back {
-    padding: 10px 22px;
     border: 1px solid #dcdfe6;
-    border-radius: 6px;
     background: #fff;
     color: #606266;
-    font-size: 15px;
     cursor: pointer;
 
-    &:hover {
+    &:hover:not(:disabled) {
       color: #3b8cff;
       border-color: #3b8cff;
+      background: #f5f9ff;
     }
+    &:disabled { color: #a8abb2; background: #f5f7fa; }
   }
 
   .edr-error {

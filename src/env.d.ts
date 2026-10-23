@@ -1,6 +1,10 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
+  readonly VITE_EXTERNAL_DRAFT_SAVE_MODE?: string;
+  readonly VITE_EXTERNAL_DRAFT_SAVE_API?: string;
+  readonly VITE_EXTERNAL_DRAFT_SAVE_SUCCESS_CODES?: string;
+  readonly VITE_EXTERNAL_DRAFT_PUBLIC_FILE_ORIGIN?: string;
   readonly VITE_ALLOWED_PARENT_ORIGINS?: string;
   readonly VITE_EXTERNAL_DRAFT_ACK_TIMEOUT_MS?: string;
   readonly VITE_EXTERNAL_DOWNLOAD_PROXY?: string;

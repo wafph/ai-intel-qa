@@ -48,6 +48,7 @@
           <ExternalDraftResult
             :record="recordOf(index)"
             :show-back="index === turns.length - 1"
+            :actions-busy="busy"
             @download-attachment="downloadByIndex(index)"
             @save-to-box="saveToBoxByIndex(index)"
             @retry="retrySaveDocx(index)"
@@ -129,7 +130,7 @@ const handleStop = () => { void stop(); };
 const downloadByIndex = (index: number) => { const turn = turns.value[index]; if (turn) void downloadAttachment(turn.qaId); };
 const saveToBoxByIndex = (index: number) => { const turn = turns.value[index]; if (turn) void saveToDraftBox(turn.qaId, turn.answer); };
 const retrySaveDocx = (index: number) => { const turn = turns.value[index]; if (turn) void saveDraftDocx(turn.qaId, turn.answer, turn); };
-const redraftTurn = (index: number) => { const turn = turns.value[index]; if (turn && !busy.value) composerRef.value?.fillAndSend(turn.question); };
+const redraftTurn = (index: number) => { const turn = turns.value[index]; if (turn && !busy.value && !getRecord(turn.qaId)?.sending) composerRef.value?.fillAndSend(turn.question); };
 watch(() => access.revision, handleNewSession, { flush: 'sync' });
 watch(() => route.fullPath, () => { void initializeExternalDraftAccess(); }, { immediate: true });
 onUnmounted(() => { pageVersion++; detach(); resetFiles(); disposeExternalDraftAccess(); });

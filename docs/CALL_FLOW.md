@@ -176,6 +176,6 @@ POST /v1/agentarts/tasks/{taskId}/stop
 
 ## 9. 外部起草独立入口
 
-普通登录后继续原菜单。第三方 iframe 进入 /external-draft → externalDraftAccess 校验用户 token → 同一 session_id 下每轮新 qaId 创建 draft task → SSE 最终结果确认 → 该轮 qaId 转 DOCX → 自动 GET download_url 并校验、缓存文件 → 按后台原名展示附件 → 用户点击保存到草稿箱 → SAVE_DRAFT_TO_BOX 发给父系统 → 第三方自己的草稿接口或模拟存储 → SAVE_DRAFT_RESULT 回执 → 显示已保存。
+普通登录后继续原菜单。第三方 iframe 进入 /external-draft → externalDraftAccess 校验用户 token → 同一 session_id 下每轮新 qaId 创建 draft task → SSE 最终结果确认 → 该轮 qaId 转 DOCX → 自动 GET download_url 并校验、缓存文件 → 按后台原名展示附件 → 用户点击保存到草稿箱 → api 模式使用当前 token+本轮 DOCX 下载 URL 请求合同专用代理 → 合同 saveZDSingle → message 仅弹窗并更新保存状态。parent 模式仍按原 SAVE_DRAFT_TO_BOX/SAVE_DRAFT_RESULT 协议处理。
 
 每轮另有后端 taskId 和请求 request_id；保存消息有独立 requestId，不能以 session_id 代替 qaId。新增页不复用内部登录存储，外部失败不触发原登录循环；后台仍保留既有 draft 历史。详见 [EXTERNAL_DRAFT_INTEGRATION.md](EXTERNAL_DRAFT_INTEGRATION.md)。

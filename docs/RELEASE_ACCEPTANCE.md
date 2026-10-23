@@ -1,31 +1,32 @@
 # 本次前端交付验收
 
-版本 `regulatory-ai-assistant_v1.0.0_202610221813`，应用版本仍为 1.0.0；基线 regulatory-ai-assistant_v1.0.0_202610221623。配套后端保持 regulation_ai_backend_v1.0.0_202610221019，地址 10.210.101.117:8000。
+版本 `regulatory-ai-assistant_v1.0.0_202610221921`；基线 regulatory-ai-assistant_v1.0.0_202610221813。应用版本保持 1.0.0，配套后端仍为 regulation_ai_backend_v1.0.0_202610221019。
 
-## 范围
+## 本次限定范围
 
-新增起草页的附件自动获取、文件状态刷新、附件与按钮纵向布局、隐藏新建会话/合同长度/强弱势；Vite 恢复显式 IP。其余业务和第三方协议沿用基线。真实草稿接口暂未提供，保留既有父页面模拟，不新增自建后端接口。
+默认真实合同草稿保存、DOCX 下载 URL 参数、同一跳转 token、前端临时应用凭据、message 仅弹窗、操作按钮局部美化、Markdown 列表/表头及溢出样式。原父页面模式保留，其他业务与依赖不变。
 
-## 已执行验证
+## 已执行检查
 
-| 检查 | 结果 |
+| 项目 | 结果 |
 |---|---|
-| Node.js / npm / Vite | 24.19.0 / 11.9.0 / 8.1.0 |
-| npm test | 90 项通过，0 失败：上传/问答 34，原任务流 18，外部起草 37，真实本机 Vite 代理 1 |
-| 本次新增回归 | 10 项：含真实结果/输入组件更新、转换与 GET 顺序、原名、错误/超时重试、Blob 缓存、轮次隔离及草稿回执 |
+| npm test | 101 项通过、0 失败：上传/问答 34、原任务流 18、外部起草 47、真实本机 Vite 代理 1、Markdown scoped 编译 1 |
+| 本次新增验证 | 合同参数/token/URL/名称、201 失败、成功 data=null、未知码/HTTP 失败、message 仅弹窗、缓存重试、并发禁用、超时、旧响应隔离；ol/th 编译规则 |
 | npm run build | 标准 vue-tsc -b 严格类型检查及 Vite 生产构建通过 |
-| 依赖、锁文件、tsconfig | 沿用基线，没有新增依赖或降低类型检查 |
-| 文件命名 | 沿用后台 file_name；真实组件显示带原毫秒时间戳的中文名称 |
-| 文件就绪与重试 | GET 校验有效文件后显示完成；GET 失败重试不再 POST 转换；点击下载/草稿保存复用缓存 |
-| ID 契约 | 同会话 sessionId 保持、每轮 qaId/taskId 独立；文件以 qa_id=qaId 关联 |
-| 第三方保存 | 用户点击后才发送，等待匹配回执；模拟明确标记，失败可重试且保留附件 |
-| 静态产物 | 已重新生成 dist；examples 联调样例继续不进入生产 dist |
-| 发布完整性 | 打包阶段校验 ZIP CRC、FILE_MANIFEST.sha256、HTML 引用资源及基线保留范围 |
+| 依赖/锁文件/tsconfig | 沿用基线，无新增依赖，无降低检查 |
+| 身份隔离 | 内部登录和独立外部授权不混用；合同 token 与本次跳转校验后的凭证一致，sessionId/qaId/taskId 不变 |
+| JSON 转发 | Vite 对本机 HTTP 替身验证完整报文与 /exchangeAuthCenter/exchangeContractInfo/saveZDSingle 路径 |
+| 结果展示 | 真实 Vue 组件检查成功/失败消息不进入页面 DOM，只进入消息弹窗；附件与按钮正常保留 |
+| Markdown | 原共享渲染器保持，实际 scoped 编译检查 ul/ol/td/th、表格/代码块溢出规则 |
+| 发布范围 | 基线逐文件比较、原核心源码字节保留、原 .env 生效值保留并新增合同项 |
+| 打包完整性 | 发布阶段校验 ZIP CRC、SHA256 清单及 dist 首页资源引用 |
 
-保留原依赖的 PURE 注释及大 chunk 构建提醒，未扩大拆包或依赖升级范围。最终基线逐文件对比和校验记录位于 release_manifest.json。
+原依赖仍有 PURE 注释和大 chunk 构建提醒，未扩大依赖升级范围。appkey/secretkey 按用户最后要求临时进入前端构建产物，未写死用户 JWT；message 不在页面可视化。
 
-## 现场验证边界
+## 现场边界
 
-测试使用实际服务/组合函数和 Vue 编译器、运行时，将真实 .vue 组件挂载到内存渲染器验证更新；HTTP/SSE 和父窗口使用替身，真实 Vite 代理目标仅替换为本机 HTTP 服务。没有连接现场 117、真实智能体平台、第三方草稿接口，也未进行现场浏览器视觉验收。不能据此宣称这些外部条件已通过。
+HTTP/SSE/合同响应使用替身，真实 .vue 通过现有 Vue 编译器和运行时的内存渲染器检查。未向现场合同服务写入草稿，未验证其下游 500 已修复，未在现场浏览器进行视觉验收。环境没有 Nginx 二进制，专用 location 需在现场合入现有 server 后执行 nginx -t；该检查未冒充已执行。
 
-部署时整体发布新 dist，沿用现场已可用的鉴权、流式、转换、/download/ 和 iframe 配置。父页面暂缺真实草稿接口时按 [EXTERNAL_DRAFT_INTEGRATION.md](EXTERNAL_DRAFT_INTEGRATION.md) 继续模拟联调。后端代码、镜像、数据库和 Nginx 未修改。
+生产必须部署新 dist 并新增 [合同代理 location](../deploy/contract-draft-save.location.conf)，原业务/SSE/文件/PDF/SPA 路由不变。合同平台所在网络须能 GET wordPath 原始 DOCX；浏览器获取成功不等于合同服务可达。用户未提供成功响应，暂兼容 200/0/0000，可按真实约定配置；已知 201 永远按失败处理。
+
+后端、镜像、数据库、平台开关不变。详细部署和接口说明见 [CONTRACT_DRAFT_SAVE.md](CONTRACT_DRAFT_SAVE.md)。

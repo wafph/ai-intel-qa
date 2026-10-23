@@ -111,3 +111,13 @@ POST /v1/markdown-word/convert -> 获取 download_url -> GET download_url -> Blo
 前一节关于“新增 ExternalDraft 不修改”的说明属于 1512 版范围；本次已获得授权按上述范围升级，原四项业务页和主业务组合函数仍保留。
 
 本次附件修复增加 tests/helpers/external-component-renderer.mjs，以真实 Vue 编译器及组件更新验证结果区和简化输入表单；没有新增运行或测试依赖。详见 [EXTERNAL_DRAFT_ATTACHMENT_FIX.md](EXTERNAL_DRAFT_ATTACHMENT_FIX.md)。
+
+
+## 当前合同保存增量
+
+- src/services/contractDraft.ts：真实保存、用户 token/下载地址/制度名和响应适配；临时应用凭据。
+- deploy/contract-draft-save.location.conf：合入现有 server 的独立合同代理，不是完整 Nginx 配置。
+- tests/external-markdown.test.mjs：真实 scoped 样式编译，验证 ol/th 规则不丢失。
+- docs/CONTRACT_DRAFT_SAVE.md：本次参数、消息弹窗、配置和现场验证。
+
+前述原父页面消息模式保留为 parent，默认 api 使用新合同接口；原四项功能不变。

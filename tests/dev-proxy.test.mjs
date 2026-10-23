@@ -31,6 +31,7 @@ test('显式 IP 开发代理及 qa/review/PDF/文件工具路径正确',async()=
       ['/review-pdf-api/v1/review/pdf/detect','/v1/review/pdf/detect'],
       ['/markdown-word-api/convert','/v1/markdown-word/convert'],
       ['/external-file-download/download/a.docx?x=1','/download/a.docx?x=1'],
+      ['/contract-draft-api/saveZDSingle','/exchangeAuthCenter/exchangeContractInfo/saveZDSingle'],
     ]){
       const response=await fetch(base+input,{headers:{Authorization:'Bearer offline-user'}});const body=await response.json();
       assert.equal(body.path,expected);assert.equal(body.authorization,'Bearer offline-user');
@@ -38,6 +39,9 @@ test('显式 IP 开发代理及 qa/review/PDF/文件工具路径正确',async()=
     const form=new FormData();form.append('file',new Blob(['test upload']), 'a.txt');
     const response=await fetch(base+'/api/v1/agentarts/workflows/qa/upload-file',{method:'POST',headers:{Authorization:'Bearer offline-user'},body:form});
     const uploaded=await response.json();assert.equal(uploaded.method,'POST');assert.match(uploaded.body,/name="file"; filename="a.txt"/);
+    const draftBody={appkey:'test-app',secretkey:'test-secret',data:{token:'external+token/==',wordPath:'https://files.test/download/a.docx',zdName:'测试制度'}};
+    const saved=await fetch(base+'/contract-draft-api/saveZDSingle',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(draftBody)});
+    const draftEcho=await saved.json();assert.equal(draftEcho.path,'/exchangeAuthCenter/exchangeContractInfo/saveZDSingle');assert.deepEqual(JSON.parse(draftEcho.body),draftBody);
   }finally{
     await vite?.close();await new Promise(resolve=>upstream.close(resolve));names.forEach((name,i)=>{if(prior[i]===undefined)delete process.env[name];else process.env[name]=prior[i];});
   }

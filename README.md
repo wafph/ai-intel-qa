@@ -1,8 +1,8 @@
 # 规章制度智能体前端工程交付版
 
-本版基于 `regulatory-ai-assistant_v1.0.0_202610221623` 最小升级新增起草页：流式完成后自动转换并获取真实 DOCX、按后台原名展示附件，再由用户点击保存到第三方草稿箱。开发代理恢复显式 IP 写法。自建后端为 `10.210.101.117:8000`（端口沿用原 8000，可配置）；后端代码继续使用 `regulation_ai_backend_v1.0.0_202610221019`。原问答、检索、起草、审核及上版修复保留。新增页独立校验主系统 token，第三方草稿入库暂用父页面模拟，不新增自建后端草稿接口。
+本版基于 `regulatory-ai-assistant_v1.0.0_202610221813` 仅升级新增页的真实合同草稿保存、message 弹窗、操作按钮和 Markdown 局部样式。原 DOCX 生成/获取/命名和 ID 规则保留。自建后端为 `10.210.101.117:8000`（端口沿用原 8000，可配置）；后端代码继续使用 `regulation_ai_backend_v1.0.0_202610221019`。原问答、检索、起草、审核及上版修复保留。新增页独立校验主系统 token，草稿保存默认调用合同中台 saveZDSingle；按本次要求临时在前端写入应用凭据，原父页面模拟以 parent 模式兼容保留。自建后端不增加草稿接口。
 
-应用版本 1.0.0；发布目录 `regulatory-ai-assistant_v1.0.0_202610221813`。包内包含源码、环境配置、锁文件、测试、文档和本次构建的 dist。
+应用版本 1.0.0；发布目录 `regulatory-ai-assistant_v1.0.0_202610221921`。包内包含源码、环境配置、锁文件、测试、文档和本次构建的 dist。
 
 完整对接见 [统一上传及问答 URL 刷新](docs/AGENT_UPLOAD_BACKEND_INTEGRATION.md)，变更见 [UPGRADE_NOTES.md](UPGRADE_NOTES.md)。
 
@@ -14,7 +14,7 @@
 http://localhost:5100/examples/external-draft-host.html
 ```
 
-输入现有后端认可的用户 token，可验证 URL/消息两种授权、流式起草、每轮 DOCX、第三方模拟入库及成功/失败/超时回执。模拟记录只在父页面内存，刷新清空；鉴权、起草和文件生成不模拟。
+输入现有后端认可的用户 token，可验证 URL/消息两种授权、流式起草和每轮 DOCX。默认 api 模式点击保存会请求真实合同接口；需要原父页面模拟时，将 .env.development 的 VITE_EXTERNAL_DRAFT_SAVE_MODE 改为 parent 并重启 Vite。模拟记录仅在父页面内存，刷新清空；鉴权、起草和文件生成仍为真实服务。
 
 单独入口为 `/external-draft?token=...`，正常登录后原菜单不增加该入口。同一页面会话内多轮共用 session_id，每轮 qaId/taskId 独立；不展示新建会话按钮，重新进入或更换授权时初始化独立会话。输入区不展示合同长度、强弱势及选项。完整协议和 ID 示例见 [外部起草对接](docs/EXTERNAL_DRAFT_INTEGRATION.md)。
 
@@ -46,7 +46,7 @@ npm run build
 
 标准构建保留严格类型检查。部署前运行上述测试与构建；本版检查结果见 docs/RELEASE_ACCEPTANCE.md。开发代理目标直接在 vite.config.ts 各 target 中修改，当前均为 http://10.210.101.117:8000；历史 DEV_* 环境值不再读取。
 
-构建产物位于 `dist/`，部署时将 `dist` 内容挂载或复制到 Nginx 静态目录。
+构建产物位于 `dist/`，部署时整体发布其内容。本次必须将 [合同保存代理片段](deploy/contract-draft-save.location.conf) 合入现有 Nginx server；原业务、文件和流式 location 保留。详见 [合同保存接入说明](docs/CONTRACT_DRAFT_SAVE.md)。
 
 ## 重要环境变量
 
@@ -79,7 +79,8 @@ ${VITE_CONVERT_API_BASE_URL}/convert
 
 ## 文档入口
 
-- `docs/EXTERNAL_DRAFT_ATTACHMENT_FIX.md`：本次附件获取、状态刷新、页面布局和验收。
+- `docs/CONTRACT_DRAFT_SAVE.md`：本次真实保存、参数/返回、临时凭据、代理和现场检查。
+- `docs/EXTERNAL_DRAFT_ATTACHMENT_FIX.md`：1813 版附件获取与状态修复历史。
 - `docs/EXTERNAL_DRAFT_INTEGRATION.md`：新增页、独立授权、会话 ID、文件与第三方入库模拟。
 - `docs/REGENERATE_FIX.md`：本次定位、变更范围、流式契约与现场验收。
 - `docs/AGENT_UPLOAD_BACKEND_INTEGRATION.md`：统一上传、URL 刷新和平台切换。

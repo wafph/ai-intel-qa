@@ -1,6 +1,6 @@
 # 后端统一上传与问答 URL 刷新接入
 
-本前端配套后端 `regulation_ai_backend_v1.0.0_202610221019.zip`。发布目录为 `regulatory-ai-assistant_v1.0.0_202610221813`，应用版本保持 1.0.0。本次以 `regulatory-ai-assistant_v1.0.0_202610221623` 为基线升级外部页附件与布局、恢复显式开发代理，保留前版消息附件隔离和流式最终正文校准；上传接口和凭证契约不变，原四项功能与上传契约保留；外部起草独立入口和开发代理按本次要求升级。
+本前端配套后端 `regulation_ai_backend_v1.0.0_202610221019.zip`。发布目录为 `regulatory-ai-assistant_v1.0.0_202610221921`，应用版本保持 1.0.0。本次以 `regulatory-ai-assistant_v1.0.0_202610221813` 为基线接入外部页真实合同保存及局部样式，保留前版消息附件隔离和流式最终正文校准；上传接口和凭证契约不变，原四项功能与上传契约保留；外部起草独立入口和开发代理按本次要求升级。
 
 ## 1. 接口与凭证
 
@@ -90,3 +90,5 @@ Node.js 使用 22.12+ 或满足现有 Vite 8 要求的版本。本次未新增�
 ## 本次外部起草入口
 
 新增页不改变 qa/review 上传或刷新 API，也不增加后端草稿接口。开发代理已默认指向 10.210.101.117:8000，PDF/文件工具可独立配置。外部授权和第三方保存协议见 [EXTERNAL_DRAFT_INTEGRATION.md](EXTERNAL_DRAFT_INTEGRATION.md)。
+
+当前新增页草稿保存仅增加独立合同代理，不改上传接口或平台切换。默认 api，原 parent 方式保留；详见 [CONTRACT_DRAFT_SAVE.md](CONTRACT_DRAFT_SAVE.md)。

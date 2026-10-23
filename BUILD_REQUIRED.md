@@ -1,6 +1,6 @@
 # 构建与静态发布
 
-应用版本 1.0.0，发布目录 `regulatory-ai-assistant_v1.0.0_202610221813`。包内包含本次源码构建的 dist。
+应用版本 1.0.0，发布目录 `regulatory-ai-assistant_v1.0.0_202610221921`。包内包含本次源码构建的 dist。
 
 ```bash
 npm ci --include=dev --no-audit --no-fund
@@ -14,6 +14,6 @@ Node.js 使用 22.12+，本次验证为 24.19.0 / npm 11.9.0。没有新增或�
 
 本地开发目标在 vite.config.ts 中逐项显式填写，当前为 http://10.210.101.117:8000。更换 IP/端口时修改相应 target，并重启开发服务器。DEV_BACKEND_TARGET、DEV_FILE_TOOL_TARGET、DEV_REVIEW_PDF_TARGET 仅保留历史值，本版不读取。生产仍使用 .env.production 的同源前缀和现场 Nginx 代理。
 
-生产业务 API 仍走同源。部署整体替换 dist，并将现有 Nginx 业务、PDF 和文件下载路由指向相应服务；不要混用旧资源。后端保持 regulation_ai_backend_v1.0.0_202610221019，无需重打后端镜像。第三方草稿服务不属于该后端。
+生产业务 API 仍走同源。部署整体替换 dist，并把 deploy/contract-draft-save.location.conf 合入现有 Nginx server，为 /contract-draft-api/saveZDSingle 转发到合同中台。该片段不能作为完整 nginx.conf，原业务、PDF、文件下载与 iframe 路由保持不变；不要混用旧资源。后端保持 regulation_ai_backend_v1.0.0_202610221019，无需重打后端镜像。第三方草稿服务不属于该后端。
 
-联调页位于 examples/external-draft-host.html，只作为源码包开发示例，不复制进生产 dist。正式父页面可复用其协议，替换模拟保存实现。详见 [docs/EXTERNAL_DRAFT_INTEGRATION.md](docs/EXTERNAL_DRAFT_INTEGRATION.md)。
+联调页位于 examples/external-draft-host.html，只作为源码包开发示例，不复制进生产 dist。默认 api 模式由新增页直接请求同源合同代理，不依赖父页面保存回执；原父页面协议保留用于 VITE_EXTERNAL_DRAFT_SAVE_MODE=parent。详见 [docs/EXTERNAL_DRAFT_INTEGRATION.md](docs/EXTERNAL_DRAFT_INTEGRATION.md)。

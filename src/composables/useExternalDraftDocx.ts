@@ -1,10 +1,11 @@
-/** 每轮 DOCX 独立生成；第三方草稿入库经父页面消息完成，与自建业务后端无关。 */
+/** 每轮 DOCX 独立生成；草稿保存走合同接口，原父页面方式兼容保留。 */
 import { reactive } from 'vue';
 import { ElMessage } from 'element-plus';
 import { API } from '@/api/api';
 import { isSuccessStatus, request } from '@/services/http';
 import { getApiData, getApiMessage, isApiSuccessCode } from '@/services/response';
 import { DOCX_MIME, sendDraftToParent, type DraftIdentity } from '@/services/externalDraftBridge';
+import { externalDraftSaveMode, saveContractDraft, type ExternalDraftSaveMode } from '@/services/contractDraft';
 
 const MAX_INLINE_FILE_SIZE = 8 * 1024 * 1024;
 export type DocxSaveStatus = 'idle' | 'saving' | 'done' | 'error';
@@ -40,7 +41,7 @@ const asDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
   const reader = new FileReader(); reader.onload = () => resolve(String(reader.result || '')); reader.onerror = () => reject(new Error('文件读取失败')); reader.readAsDataURL(blob);
 });
 
-export const useExternalDraftDocx = () => {
+export const useExternalDraftDocx = (options: { saveMode?: ExternalDraftSaveMode } = {}) => {
   const records = reactive<Record<string, DraftDocxRecord>>({});
   // 每轮只读取一次文件；附件下载和第三方保存复用同一份真实文件流。
   const files = new Map<string, Blob>();
@@ -94,19 +95,27 @@ export const useExternalDraftDocx = () => {
     const controller = new AbortController(), currentEpoch = epoch; pending.set(key, controller);
     record.sending = true; record.boxError = '';
     try {
-      // 文件已在流式结束后读取并校验；大于 8MiB 才仅传 URL，由父系统下载入库。
+      // 附件已获取并校验；api 仅传下载 URL，parent 模式保留原文件传递规则。
       const blob = files.get(key);
       if (!blob) throw new Error('本轮附件尚未就绪，请重新获取文件');
-      const fileBase64 = blob.size > MAX_INLINE_FILE_SIZE ? '' : await asDataUrl(blob);
+      const mode = options.saveMode || externalDraftSaveMode;
+      let receipt;
+      if (mode === 'parent') {
+        const fileBase64 = blob.size > MAX_INLINE_FILE_SIZE ? '' : await asDataUrl(blob);
+        if (epoch !== currentEpoch || controller.signal.aborted) return;
+        receipt = await sendDraftToParent({ sessionId: record.sessionId, qaId: record.qaId, taskId: record.taskId,
+          fileName: record.attachment.fileName, downloadUrl: record.attachment.downloadUrl, content, fileBase64 }, { signal: controller.signal });
+      } else {
+        receipt = await saveContractDraft(record.attachment.fileName, record.attachment.downloadUrl, controller.signal);
+      }
       if (epoch !== currentEpoch || controller.signal.aborted) return;
-      const receipt = await sendDraftToParent({ sessionId: record.sessionId, qaId: record.qaId, taskId: record.taskId,
-        fileName: record.attachment.fileName, downloadUrl: record.attachment.downloadUrl, content, fileBase64 }, { signal: controller.signal });
-      if (epoch !== currentEpoch || controller.signal.aborted) return;
+      if (!receipt.success) { record.boxError = receipt.message || '草稿保存失败'; ElMessage.error(record.boxError); return; }
       record.sentToBox = true; record.draftId = receipt.draftId || ''; record.simulated = receipt.simulated === true;
-      ElMessage.success(record.simulated ? '第三方草稿入库模拟成功' : '已保存到主系统草稿箱');
+      ElMessage.success(receipt.message || (record.simulated ? '第三方草稿入库模拟成功' : '已保存到草稿箱'));
     } catch (error: any) {
       if (epoch !== currentEpoch || controller.signal.aborted) return;
-      record.boxError = error?.message || '草稿保存失败'; ElMessage.error(record.boxError);
+      record.boxError = error?.code === 'ECONNABORTED' || error?.code === 'ETIMEDOUT'
+        ? '草稿保存请求超时，结果尚未确认，请先在合同平台核对' : error?.message || '草稿保存失败'; ElMessage.error(record.boxError);
     } finally { if (pending.get(key) === controller) pending.delete(key); if (epoch === currentEpoch) record.sending = false; }
   };
   const reset = () => { epoch++; pending.forEach(controller => controller.abort()); pending.clear(); files.clear(); Object.keys(records).forEach(key => delete records[key]); };

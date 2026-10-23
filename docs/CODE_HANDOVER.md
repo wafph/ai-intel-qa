@@ -66,3 +66,8 @@ externalDraftBridge.ts 等待父系统 SAVE_DRAFT_RESULT，成功且含 draftId 
 useExternalDraftDocx.ts 先初始化 records[key] 再单独读取 Vue 代理，禁止把 ||= 首次赋值返回的原始对象作为后续状态写入入口。转换成功后继续 GET 并校验真实 DOCX，文件缓存按 qaId 隔离；done 代表已获取有效文件。文件读取重试复用转换结果，附件下载与父页面保存复用缓存 Blob；退出时清理，不写入浏览器持久存储。
 
 ExternalDraftResult.vue 按生成/获取/就绪/错误显示，附件、保存、重新起草纵向排列；ExternalDraftForm.vue 不展示合同长度/强弱势，保留原描述提交。页面隐藏新建会话按钮，但原授权变更的会话初始化逻辑保留。Vite 目标在 vite.config.ts 显式维护；旧 DEV_* 环境项不再读取。回归使用真实 Vue 编译和组件更新，不能只读取最终对象值判断界面正常。详见 [EXTERNAL_DRAFT_ATTACHMENT_FIX.md](EXTERNAL_DRAFT_ATTACHMENT_FIX.md)。
+
+
+## 当前合同接口适配
+
+contractDraft.ts 封装 wordPath/zdName、同一外部 token、临时前端应用凭据和独立响应判断；useExternalDraftDocx.ts 默认调用它，仅在 parent 模式沿用原消息。message 仅 ElMessage 弹窗，ExternalDraftResult.vue 不渲染 boxError，组件只展示保存状态。不要将合同业务码判断扩散到其他智能体接口。新同源 /contract-draft-api 仅连合同中台，原 117 路由不变。凭据硬编码为本次用户明确要求，后续迁移服务端时仅替换适配边界，避免重复迁移业务。详见 [CONTRACT_DRAFT_SAVE.md](CONTRACT_DRAFT_SAVE.md)。
