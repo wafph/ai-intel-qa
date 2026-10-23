@@ -12,6 +12,7 @@ import App from './App.vue';
 import router from './router';
 import './style.less';
 import { useUserStore } from './stores/user';
+import { isExternalDraftLocation } from './services/externalDraftAccess';
 
 /** 封装当前模块内的业务逻辑：bootstrap。 */
 const bootstrap = async () => {
@@ -29,7 +30,8 @@ const bootstrap = async () => {
   // 注意：必须先初始化认证上下文，再安装 router。
   // 否则首次访问带 agentToken 的业务 URL 时，路由守卫可能先判定未登录并跳到 /login。
   const userStore = useUserStore();
-  await userStore.initializeAuth();
+  // 外部页由页面独立校验 token，不读取或覆盖内部登录缓存。
+  if (!isExternalDraftLocation()) await userStore.initializeAuth();
 
   app.use(router);
   await router.isReady();

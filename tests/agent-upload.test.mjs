@@ -1,5 +1,6 @@
 /** 离线上传契约测试：使用真实前端模块与 Axios 替身，不连接内网。 */
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import { after, before, beforeEach, test } from 'node:test';
 import { createServer } from 'vite';
 import { ref, computed } from 'vue';
@@ -17,7 +18,9 @@ const attachment = (upload_ref = refA) => ({ uid: upload_ref, name: 'document.tx
 
 before(async () => {
   server = await createServer({
-    server: { middlewareMode: true, watch: null }, appType: 'custom',
+    configFile: false,
+    resolve: { alias: { '@': path.join(process.cwd(), 'src') } },
+    server: { middlewareMode: true, watch: null, hmr: false }, appType: 'custom',
     ssr: { noExternal: ['element-plus'] },
     plugins: [{ name: 'offline-element-plus', enforce: 'pre',
       resolveId(id) { if (id === 'element-plus') return '\0offline-element-plus'; },
@@ -161,26 +164,71 @@ test('首次发送先刷新再保存引用，最后创建一次问答任务', as
   assert.equal(deps.qaUploadedFileList.value.length,0);
 });
 
-test('追问恢复当前会话最近附件并刷新，不把原 File 写入历史', async () => {
+test('普通文字追问不继承历史附件，不刷新旧 URL，也不写附件 metadata', async () => {
   const old = {role:'user',metadata:{uploadedFiles:[attachment()]}};
   const {sender,calls,session} = depsFor([], [old]);
   await sender.handleSendMessage('follow-up');
-  assert.deepEqual(calls.find((c)=>c[0]==='create')[2].file_url,[signed]);
-  assert.equal(session.messages[0].metadata.uploadedFiles[0].fileUrl,signed);
+  assert.equal(requests.length,0);
+  assert.equal(calls.find((c)=>c[0]==='create')[2].file_url,undefined);
+  assert.equal(session.messages[0].metadata.uploadedFiles[0].fileUrl,'https://old.test/a');
+  assert.equal(session.messages[1].metadata,undefined);
+  assert.equal(session.messages[2].metadata,undefined);
   assert.equal(Object.hasOwn(service.snapshotQAFile({...attachment(),raw:new File(['x'],'x')}),'raw'),false);
 });
 
-test('重新生成使用该轮引用并强制刷新，不混入新选附件', async () => {
-  const {sender,calls} = depsFor([attachment(refB)]);
+test('重新生成使用该轮引用并强制刷新，保留输入区新文字和附件', async () => {
+  const {sender,calls,deps} = depsFor([attachment(refB)]);
+  const draft=JSON.parse(JSON.stringify(deps.qaUploadedFileList.value));
   await sender.handleRegenerate({content:'again',uploadedFiles:[attachment()]});
   assert.deepEqual(JSON.parse(requests[0].data),{upload_ref:refA,force:true});
   assert.deepEqual(calls.find((c)=>c[0]==='create')[2].file_url,[signed]);
+  assert.deepEqual(deps.qaUploadedFileList.value,draft);
+  assert.equal(deps.inputText.value,'问题');
 });
 
 test('重新生成无附件轮次不误继承其他轮次或当前选中文件', async () => {
-  const {sender,calls} = depsFor([attachment()], [{role:'user',metadata:{uploadedFiles:[attachment(refB)]}}]);
+  const {sender,calls,deps} = depsFor([attachment()], [{role:'user',metadata:{uploadedFiles:[attachment(refB)]}}]);
   await sender.handleRegenerate({content:'no file',uploadedFiles:[]});
   assert.equal(requests.length,0); assert.equal(calls.find((c)=>c[0]==='create')[2].file_url,undefined);
+  assert.equal(deps.qaUploadedFileList.value.length,1);
+  assert.equal(deps.inputText.value,'问题');
+});
+
+test('旧字符串重新生成入口不取当前待发附件，也不清空草稿', async () => {
+  const {sender,calls,deps}=depsFor([attachment(refB)]);
+  await sender.handleRegenerate('legacy text');
+  assert.equal(requests.length,0);
+  assert.equal(calls.find((c)=>c[0]==='create')[2].file_url,undefined);
+  assert.equal(deps.qaUploadedFileList.value[0].upload_ref,refB);
+  assert.equal(deps.inputText.value,'问题');
+});
+
+test('历史旧附件已失效且无引用时，普通文字仍可发送', async () => {
+  const {sender,calls}=depsFor([], [{role:'user',metadata:{uploadedFiles:[{...attachment(),upload_ref:undefined}]}}]);
+  await sender.handleSendMessage('text');
+  assert.equal(requests.length,0);
+  assert.equal(calls.filter((c)=>c[0]==='create').length,1);
+});
+
+test('问答重新生成后再发送纯文字，不重传上一轮文档', async () => {
+  const {sender,calls,deps}=depsFor();
+  await sender.handleRegenerate({content:'again',uploadedFiles:[attachment()]});
+  // 本测试的订阅替身不自动完成流，显式模拟完成状态。
+  deps.isStreaming.value=false; deps.currentStreamingMessageId.value=null;
+  await sender.handleSendMessage('new text');
+  assert.equal(requests.length,1);
+  const created=calls.filter((c)=>c[0]==='create');
+  assert.deepEqual(created[0][2].file_url,[signed]);
+  assert.equal(created[1][2].file_url,undefined);
+});
+
+test('重新生成刷新失败仍保留下一条草稿和新附件', async () => {
+  responses.push({status:410,data:{}});
+  const {sender,calls,deps}=depsFor([attachment(refB)]);
+  await sender.handleRegenerate({content:'again',uploadedFiles:[attachment()]});
+  assert.equal(calls.length,0);
+  assert.equal(deps.qaUploadedFileList.value[0].upload_ref,refB);
+  assert.equal(deps.inputText.value,'问题');
 });
 
 test('刷新失败保留输入和待发文件，不插入空消息或创建任务', async () => {

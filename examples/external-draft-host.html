@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>外部起草第三方接入联调</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font:14px/1.6 system-ui,sans-serif;color:#263247;background:#f2f5f9}main{max-width:1440px;margin:20px auto;padding:0 20px}h1{font-size:22px}section{padding:18px;background:#fff;border:1px solid #dfe5ed;border-radius:8px;margin-bottom:16px}.controls{display:flex;gap:12px;flex-wrap:wrap;align-items:end}label{display:grid;gap:5px}input,select,button{font:inherit;padding:8px;border:1px solid #cbd4df;border-radius:5px}input[type=password]{width:350px}button{cursor:pointer;background:#2468ca;color:#fff}iframe{width:100%;height:740px;border:0}p{margin:8px 0}.muted{color:#64748b}.record{padding:12px 0;border-top:1px solid #eee;overflow-wrap:anywhere}pre{white-space:pre-wrap;max-height:180px;overflow:auto}.status{color:#175b39}a{color:#2468ca}input[type=number]{width:100px}
+</style></head>
+<body><main>
+<h1>外部起草 · 第三方平台联调页</h1>
+<section><p>本页模拟第三方草稿入库接口。用户授权、流式起草和 DOCX 生成仍调用真实自建后端。</p>
+<p class="muted">模拟记录及文件只保留在本页内存，刷新后清空。这里不新增或调用自建后端草稿接口。</p>
+<div class="controls">
+<label>智能体前端地址<input id="frontend" aria-label="智能体前端地址"></label>
+<label>主系统有效用户 token<input id="token" type="password" autocomplete="off" placeholder="输入现有后端认可的用户 token"></label>
+<label>授权方式<select id="mode"><option value="url">URL token</option><option value="message">READY 后通过消息传入</option></select></label>
+<button id="open">进入外部起草</button>
+<label>回执延迟（毫秒）<input id="delay" type="number" min="0" max="60000" value="300"></label>
+<label><span>模拟保存失败</span><input id="failure" type="checkbox"></label>
+<label><span>不返回回执</span><input id="noack" type="checkbox"></label>
+</div><p id="status" class="status" role="status">等待接入</p></section>
+<section><iframe id="frame" title="外部起草页面" referrerpolicy="strict-origin-when-cross-origin"></iframe></section>
+<section><h2>模拟入库记录</h2><p class="muted">每条记录显示所属会话 ID 与独立问答 ID；下载按钮使用父页面实际收到的文件。</p><div id="records"></div></section>
+</main><script type="module">
+import {createMockDraftStore} from './mock-draft-store.mjs';
+const $=id=>document.getElementById(id), store=createMockDraftStore(), pending=new Map();
+let childOrigin='', currentToken='';
+$('frontend').value=location.origin;
+const status=text=>{$('status').textContent=text;};
+function render(record){
+ const row=document.createElement('div');row.className='record';
+ const text=document.createElement('p');text.textContent=`草稿 ${record.draftId} ｜会话 ${record.sessionId} ｜问答 ${record.qaId}`;
+ const download=document.createElement('a');download.textContent=`下载 ${record.fileName}`;download.href=URL.createObjectURL(record.blob);download.download=record.fileName;
+ const content=document.createElement('pre');content.textContent=record.content;row.append(text,download,content);$('records').append(row);
+}
+$('open').onclick=()=>{
+ try{
+  currentToken=$('token').value.trim();if(!currentToken)throw new Error('请输入有效用户 token，模拟不绕过后端授权');
+  const url=new URL('/external-draft',$('frontend').value);if(!/^https?:$/.test(url.protocol))throw new Error('前端地址应为 HTTP 或 HTTPS');
+  childOrigin=url.origin;if($('mode').value==='url')url.searchParams.set('token',currentToken);
+  $('frame').src=url.href;$('token').value='';status('正在加载独立起草页');
+ }catch(error){status(error.message);}
+};
+window.addEventListener('message',async event=>{
+ if(event.source!==$('frame').contentWindow||event.origin!==childOrigin)return;
+ const message=event.data?.data||event.data;
+ if(message?.type==='READY'){
+  if($('mode').value==='message'&&currentToken)event.source.postMessage({data:{type:'SET_AGENTTOKEN',value:currentToken}},childOrigin);
+  status('起草页已连接，等待后端校验授权');return;
+ }
+ if(message?.type!=='SAVE_DRAFT_TO_BOX')return;
+ const value=message.value;if(!value?.requestId)return;
+ const source=event.source, origin=event.origin;
+ let receipt={requestId:value.requestId,sessionId:value.sessionId,qaId:value.qaId,taskId:value.taskId,simulated:true};
+ try{
+  const key=`${value.sessionId}:${value.qaId}`;
+  const existed=store.records.has(key);
+  if(!pending.has(key))pending.set(key,store.save(value,{fail:$('failure').checked}));
+  let record;try{record=await pending.get(key);}finally{pending.delete(key);}
+  if(!existed&&!document.getElementById(record.draftId)){render(record);$('records').lastElementChild.id=record.draftId;}
+  receipt={...receipt,success:true,draftId:record.draftId,message:'第三方模拟入库成功'};status(`模拟草稿已保存：${record.draftId}`);
+ }catch(error){receipt={...receipt,success:false,message:error.message};status(error.message);}
+ if($('noack').checked){status('模拟接口已处理，本次不返回回执，用于验证超时与重试');return;}
+ const delay=Math.min(60000,Math.max(0,Number($('delay').value)||0));
+ setTimeout(()=>source.postMessage({platform:'第三方业务平台',timestamp:Date.now(),data:{type:'SAVE_DRAFT_RESULT',value:receipt}},origin),delay);
+});
+// 接入真实平台时：仅将 store.save(value) 替换为父平台自己的草稿入库请求，成功后再回执。
+</script></body></html>

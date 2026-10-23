@@ -1,31 +1,22 @@
-# 后端统一上传前端最小升级记录
+# 前端升级记录
 
-配套后端：`regulation_ai_backend_v1.0.0_202610211516.zip`。
+交付 `regulatory-ai-assistant_v1.0.0_202610221813.zip`，应用版本仍为 1.0.0；基线 `regulatory-ai-assistant_v1.0.0_202610221623`。配套后端仍为 regulation_ai_backend_v1.0.0_202610221019，地址 10.210.101.117:8000。
 
-## 本次变更
+## 本次最小升级
 
-- 问答/审核由浏览器外部直传改为请求后端各自的 upload-file 接口，复用用户 Bearer Token。
-- 页面初始化不再获取 IAM Token；平台上传凭证由后端持有。旧实现与旧配置保留并标记停用。
-- 问答附件新增 upload_ref/expires_at，发送前刷新 URL，创建任务前通过原历史接口保存引用，本地任务快照同步携带引用。
-- 追问沿用最近一组附件；重新生成使用原轮次附件并强制刷新。刷新失败保留待发内容，不自动重复问答任务。
-- `.env.development`、`.env.production` 注释停用原直传配置；开发 IAM 配置不参与编译；更新必要代理注释。
-- 修正 package-lock.json 缺少已声明 @types/dompurify 的问题，没有升级已锁定依赖版本。
-- 新增 npm test，同步说明、部署、接口、交接和发布文件；重建 dist 及完整性清单。
+- 修复文件记录首次初始化保留原始对象引用的问题：先写入 records，再读取 Vue 代理，确保完成、失败和重试触发真实组件刷新。
+- 流式完成后自动执行原辅助起草的文件链路：POST /v1/markdown-word/convert（qa_id=本轮 qaId）→ GET download_url → 校验有效文件 → 展示附件。仅有链接时不显示准备完成。
+- 文件名直接沿用后台 file_name，保留“标题_年月日时分秒毫秒.docx”命名。按 qaId 缓存文件，点击附件下载、保存第三方草稿及保存重试复用同一份 Blob。
+- 转换成功但 GET 失败时保留文件信息；重试只重新获取文件，不重新起草或转换。转换 120 秒、文件读取 60 秒、父页面回执默认 30 秒的既有限制保留，失败明确结束等待。
+- 按确认的界面流程纵向显示完成提示、Word 附件卡片、保存到草稿箱、重新起草。文件名可换行；去掉右上角新建会话按钮，隐藏合同长度/强弱势全部标签和选项，描述框与开始按钮间距 24px。
+- 第三方真实草稿接口尚未提供，保留现有父页面消息协议及 examples 模拟。仅在点击保存后发送消息，成功回执且有 draftId 才确认保存；模拟成功明确标记，失败保留本轮附件。
+- Vite 代理恢复 target: 'http://10.210.101.117:8000' 显式写法，保留路径重写；DEV_* 历史值保留但不再读取。环境变量实际值及生产配置前缀不变，更新相关注释。
+- 增加真实 Vue 组件更新回归，同步相关文档、生产 dist 和逐文件校验清单。
 
 ## 保留范围
 
-四功能页布局、认证登录、检索/起草输入、原流式正文与停止/恢复机制、收藏/置顶/重命名、PDF 解析及定位、审核上下文绑定、文件工具预览/下载/导出、用户问题反馈保持原有实现。
+原四项业务页面、主流式/发送/上传实现、内部与外部授权、外部 SSE、父窗口协议和模拟存储实现、路由、API、依赖和锁文件均沿用基线。sessionId 是会话 ID，qaId 是轮次 ID，taskId 是后台任务 ID；继续提问/重新起草仍在同一会话，每轮独立生成 qaId/taskId。隐藏按钮不修改这些身份规则。
 
-## 构建与发布
+后端、数据库、平台切换和 Nginx 配置未修改，无需重建后端镜像。部署时整体替换本次 dist，保持现场已可用的下载与 iframe 路由。
 
-```bash
-npm ci --no-audit --no-fund
-npm test
-npm run build
-```
-
-交付包含本次源码构建的 dist。上传、刷新契约和阶段边界见 [docs/AGENT_UPLOAD_BACKEND_INTEGRATION.md](docs/AGENT_UPLOAD_BACKEND_INTEGRATION.md)，验证记录见 [docs/RELEASE_ACCEPTANCE.md](docs/RELEASE_ACCEPTANCE.md)。
-
-## 原问题反馈功能
-
-原用户菜单问题反馈、模块选择、最多 5 张截图及联系方式逻辑保留。功能说明继续见 [docs/USER_FEEDBACK_FRONTEND.md](docs/USER_FEEDBACK_FRONTEND.md)。
+详见 [附件修复](docs/EXTERNAL_DRAFT_ATTACHMENT_FIX.md)、[完整集成协议](docs/EXTERNAL_DRAFT_INTEGRATION.md)和[验收记录](docs/RELEASE_ACCEPTANCE.md)。

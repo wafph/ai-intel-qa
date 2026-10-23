@@ -8,7 +8,7 @@ import { type Ref, type ComputedRef } from 'vue';
 import { ElLoading, ElMessage } from 'element-plus';
 import { getWorkflowCodeByTab } from '@/api/api';
 import type { ChatMessage } from '@/types/chat';
-import { AgentUploadError, latestQAUploadedFiles, refreshQAUploadedFiles, snapshotQAFile, updateQAUploadedFileMetadata } from '@/services/agentUpload';
+import { AgentUploadError, refreshQAUploadedFiles, snapshotQAFile, updateQAUploadedFileMetadata } from '@/services/agentUpload';
 import { getFrontendFallbackErrorMessage, toUserSafeAgentErrorMessage } from '@/services/errorSanitizer';
 import type { ResumableStreamTask } from './useStreamTask';
 import type { ComplianceReviewParams } from './useComplianceReview';
@@ -31,7 +31,7 @@ export type RegeneratePayload =
   | {
       content: string;
       complianceParams?: ComplianceReviewParams | null;
-      /** 智能问答 Tab：重新生成时携带的已上传文件列表，恢复到输入区后随消息一起发送。 */
+      /** 智能问答重新生成时使用该轮附件快照，不写入当前输入区。 */
       uploadedFiles?: RegenerateUploadedFile[];
     };
 
@@ -153,7 +153,9 @@ export const useMessageSender = (deps: UseMessageSenderDeps) => {
     if (activeTab.value === '智能问答') {
       const selected = qaUploadedFileList?.value || [];
       const session = chatStore.getChatSession(activeChatId.value);
-      const files = qaFilesOverride ?? (selected.length ? selected.map(snapshotQAFile) : latestQAUploadedFiles(session?.messages || []));
+      // 普通发送只使用输入区附件；重新生成显式传入该轮快照（包含空数组）。
+      // 不再从历史补回附件，历史信息继续保留供查看与重新生成。
+      const files = qaFilesOverride ?? selected.map(snapshotQAFile);
       if (files.length) {
         const originalSessionId = activeChatId.value;
         const originalConversationId = currentConversationUuid.value;
@@ -165,7 +167,7 @@ export const useMessageSender = (deps: UseMessageSenderDeps) => {
           // 更新期间切换了会话/功能，不向新的页面误发原问题。
           if (activeTab.value !== '智能问答' || activeChatId.value !== originalSessionId || currentConversationUuid.value !== originalConversationId) return;
           updateQAUploadedFileMetadata(session?.messages || [], qaFilesSnapshot);
-          if (selected.length && qaUploadedFileList) {
+          if (qaFilesOverride === undefined && selected.length && qaUploadedFileList) {
             const byUid = new Map(qaFilesSnapshot.map((file) => [file.uid, file]));
             qaUploadedFileList.value = qaUploadedFileList.value.map((file) => ({ ...file, ...byUid.get(file.uid) }));
           }
@@ -223,9 +225,10 @@ export const useMessageSender = (deps: UseMessageSenderDeps) => {
       const cb = document.querySelector('.el-checkbox-group .el-checkbox:first-child input') as HTMLInputElement;
       if (cb) cb.checked = false;
     } else {
-      inputText.value = '';
+      // 重新生成不修改用户正在准备的下一条文字和附件。
+      if (qaFilesOverride === undefined) inputText.value = '';
       // 仅智能问答 Tab：消息入栈后清空上传文件卡片
-      if (isQATab && hasQAFiles && clearQAUploadeFileList) clearQAUploadeFileList();
+      if (isQATab && qaFilesOverride === undefined && hasQAFiles && clearQAUploadeFileList) clearQAUploadeFileList();
     }
 
     const aiMessageId = qaId;
@@ -449,10 +452,9 @@ export const useMessageSender = (deps: UseMessageSenderDeps) => {
       if (params) { lastComplianceParams.value = params; await handleComplianceReview(); }
       else ElMessage.error('没有找到审核参数，无法重新审核');
     } else {
-      if (activeTab.value === '智能问答' && typeof payload !== 'string') {
+      if (activeTab.value === '智能问答') {
         // 明确使用被重新生成那一轮的附件，包括空数组；不混用当前输入或后续轮次附件。
-        const files = (payload.uploadedFiles || []).map(snapshotQAFile);
-        if (qaUploadedFileList) qaUploadedFileList.value = files.map((file) => ({ ...file, status: 'success' as const, originalText: '' }));
+        const files = (typeof payload === 'string' ? [] : payload.uploadedFiles || []).map(snapshotQAFile);
         await handleSendMessage(content, files, true);
       } else {
         await handleSendMessage(content);

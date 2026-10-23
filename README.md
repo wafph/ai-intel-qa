@@ -1,14 +1,26 @@
 # 规章制度智能体前端工程交付版
 
-本版基于原版 regulatory-ai-assistant-1021-origin 做前端最小升级，配套后端 `regulation_ai_backend_v1.0.0_202610211516.zip`。问答与审核统一请求自建后端上传，问答支持 URL 过期后重传；平台切换只修改后端 AGENT_PROVIDER 并重启，前端不再先获取 IAM Token。原页面布局及其他功能保留。
+本版基于 `regulatory-ai-assistant_v1.0.0_202610221623` 最小升级新增起草页：流式完成后自动转换并获取真实 DOCX、按后台原名展示附件，再由用户点击保存到第三方草稿箱。开发代理恢复显式 IP 写法。自建后端为 `10.210.101.117:8000`（端口沿用原 8000，可配置）；后端代码继续使用 `regulation_ai_backend_v1.0.0_202610221019`。原问答、检索、起草、审核及上版修复保留。新增页独立校验主系统 token，第三方草稿入库暂用父页面模拟，不新增自建后端草稿接口。
 
-应用版本 1.0.0；发布目录 `regulatory-ai-assistant_v1.0.0_202610211601`。包内包含源码、环境配置、锁文件、测试、文档和本次构建的 dist。
+应用版本 1.0.0；发布目录 `regulatory-ai-assistant_v1.0.0_202610221813`。包内包含源码、环境配置、锁文件、测试、文档和本次构建的 dist。
 
 完整对接见 [统一上传及问答 URL 刷新](docs/AGENT_UPLOAD_BACKEND_INTEGRATION.md)，变更见 [UPGRADE_NOTES.md](UPGRADE_NOTES.md)。
 
+## 外部页面本地联调
+
+安装依赖并运行 `npm run dev` 后打开：
+
+```text
+http://localhost:5100/examples/external-draft-host.html
+```
+
+输入现有后端认可的用户 token，可验证 URL/消息两种授权、流式起草、每轮 DOCX、第三方模拟入库及成功/失败/超时回执。模拟记录只在父页面内存，刷新清空；鉴权、起草和文件生成不模拟。
+
+单独入口为 `/external-draft?token=...`，正常登录后原菜单不增加该入口。同一页面会话内多轮共用 session_id，每轮 qaId/taskId 独立；不展示新建会话按钮，重新进入或更换授权时初始化独立会话。输入区不展示合同长度、强弱势及选项。完整协议和 ID 示例见 [外部起草对接](docs/EXTERNAL_DRAFT_INTEGRATION.md)。
+
 ## 核心能力
 
-- 后端统一问答/审核上传，用户凭证鉴权；问答提交、追问和重新生成前刷新附件 URL。
+- 后端统一问答/审核上传，用户凭证鉴权；带附件的普通发送在提交前刷新 URL；重新生成只刷新被点击轮次的附件。普通纯文字不继承历史附件。
 - 四类智能体功能：智能问答、智能检索、辅助起草、合规审核。
 - 用户问题反馈：从左侧用户菜单提交问题描述、截图和联系方式，由独立管理端统一处理。
 - V12.2 任务化流式接口：创建任务、订阅 taskId、刷新/切换后恢复输出。
@@ -21,7 +33,7 @@
 ## 快速启动
 
 ```bash
-npm ci --no-audit --no-fund
+npm ci --include=dev --no-audit --no-fund
 npm run dev
 ```
 
@@ -31,6 +43,8 @@ npm run dev
 npm test
 npm run build
 ```
+
+标准构建保留严格类型检查。部署前运行上述测试与构建；本版检查结果见 docs/RELEASE_ACCEPTANCE.md。开发代理目标直接在 vite.config.ts 各 target 中修改，当前均为 http://10.210.101.117:8000；历史 DEV_* 环境值不再读取。
 
 构建产物位于 `dist/`，部署时将 `dist` 内容挂载或复制到 Nginx 静态目录。
 
@@ -65,6 +79,9 @@ ${VITE_CONVERT_API_BASE_URL}/convert
 
 ## 文档入口
 
+- `docs/EXTERNAL_DRAFT_ATTACHMENT_FIX.md`：本次附件获取、状态刷新、页面布局和验收。
+- `docs/EXTERNAL_DRAFT_INTEGRATION.md`：新增页、独立授权、会话 ID、文件与第三方入库模拟。
+- `docs/REGENERATE_FIX.md`：本次定位、变更范围、流式契约与现场验收。
 - `docs/AGENT_UPLOAD_BACKEND_INTEGRATION.md`：统一上传、URL 刷新和平台切换。
 - `docs/RELEASE_ACCEPTANCE.md`：本次验收与现场联调边界。
 - `docs/PROJECT_STRUCTURE.md`：工程目录和核心文件职责。
@@ -76,6 +93,6 @@ ${VITE_CONVERT_API_BASE_URL}/convert
 ## 维护原则
 
 1. 不在页面组件里硬编码大量接口地址，优先走 `src/api/api.ts` 和 `src/services/config.ts`。
-2. 文档预览和导出是独立服务逻辑，不走 8000 后端业务代码。
-3. 可恢复流式相关逻辑集中在 `src/composables/useAppShell.ts`，修改时需要同时考虑 `taskId / lastEventId / answerEventId / qaId / sessionId`。
+2. 文档预览和导出由文件工具模块处理，当前集成在自建后端 8000，与智能体工作流分开。
+3. 可恢复流式由 `src/composables/useAppShell.ts` 组装，具体逻辑在 `useStreamTask.ts`、`useStreamChunk.ts`，修改时需要同时考虑 `taskId / lastEventId / answerEventId / qaId / sessionId`。
 4. 合规审核原文恢复依赖前端上下文传递和后端 `/v1/chat/review-context`，不要删除相关 metadata 字段。

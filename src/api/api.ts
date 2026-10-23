@@ -102,8 +102,8 @@ export const API = {
       `${REVIEW_PDF_PREPARE_API_BASE_URL}/context/by-session/${encodeURIComponent(sessionId)}?include_content=${includeContent ? 'true' : 'false'}&limit=${limit}`,
   },
   document: {
-    // 文档转换/水印预览沿用早期逻辑：前端调用独立文档服务接口，不走 8000 后端业务接口。
-    // 当前统一走 8005 文件服务：/v1/files/watermark/download、/v1/markdown-word/convert。
+    // 文档转换/水印预览沿用早期逻辑：前端调用独立文档服务接口，由文件工具模块处理，不经智能体工作流。
+    // 当前统一走自建后端集成文件服务：/v1/files/watermark/download、/v1/markdown-word/convert。
     convert: `${CONVERT_API_BASE_URL.replace(/\/$/, '')}/convert`,
     watermarkBase: WATERMARK_API_BASE_URL.replace(/\/$/, ''),
     watermarkDownload: `${WATERMARK_API_BASE_URL.replace(/\/$/, '')}/watermark/download`,

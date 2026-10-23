@@ -18,6 +18,7 @@
         type="button"
         class="edc-action"
         :class="{ 'is-streaming': streaming }"
+        :disabled="disabled"
         :title="streaming ? '停止输出' : '发送'"
         @click="handleAction"
       >
@@ -40,12 +41,15 @@ import { nextTick, ref } from 'vue';
 interface Props {
   /** 是否正在起草（按钮切换为停止态，输入不拦截以免影响阅读时继续输入）。 */
   streaming?: boolean;
+  /** 文件生成或未授权时禁止提交，保留输入草稿。 */
+  disabled?: boolean;
   /** 输入框占位文案。 */
   placeholder?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   streaming: false,
+  disabled: false,
   placeholder: '请输入您的起草需求，AI 将为您生成文件内容…',
 });
 
@@ -61,6 +65,7 @@ const text = ref('');
 
 /** 发送：空内容拦截，合法则清空并上抛。 */
 const handleSend = () => {
+  if (props.streaming || props.disabled) return;
   const question = text.value.trim();
   if (!question) return;
   text.value = '';
@@ -69,6 +74,7 @@ const handleSend = () => {
 
 /** 按钮点击：起草中为停止，否则为发送。 */
 const handleAction = () => {
+  if (props.disabled) return;
   if (props.streaming) {
     emit('stop');
     return;

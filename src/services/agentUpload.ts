@@ -113,7 +113,7 @@ export const snapshotQAFile = (file: Partial<QAFileSnapshot>): QAFileSnapshot =>
   upload_ref: file.upload_ref, expires_at: file.expires_at ?? null,
 });
 
-/** 未选择新附件时，追问沿用当前会话最近一组问答附件；重新生成使用该轮的明确快照。 */
+/** 保留历史附件查询工具；普通发送不再调用，重新生成使用被点击轮次的明确快照。 */
 export const latestQAUploadedFiles = (messages: Array<{ role: string; metadata?: any }>): QAFileSnapshot[] => {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];

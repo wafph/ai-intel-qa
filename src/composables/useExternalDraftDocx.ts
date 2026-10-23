@@ -1,221 +1,114 @@
-/**
- * 外部嵌套起草页的起草结果文件处理封装（主系统 iframe 场景专用）。
- *
- * 按"轮次"管理 docx 结果：每一轮起草各自持有状态、失败原因、附件与发送标记，互不覆盖，
- * 从而支持多轮对话下每轮文档都能单独下载、单独保存到主系统草稿箱。
- *
- * 两段职责：
- * 1. 起草结束后自动调 8005 文件服务 markdown-word convert 生成 docx（对应"自动保存结果文件"）；
- * 2. 点击"保存到草稿箱"时通过 postMessage 把正文与 docx 一并通知主系统。
- */
+/** 每轮 DOCX 独立生成；第三方草稿入库经父页面消息完成，与自建业务后端无关。 */
 import { reactive } from 'vue';
 import { ElMessage } from 'element-plus';
 import { API } from '@/api/api';
 import { isSuccessStatus, request } from '@/services/http';
+import { getApiData, getApiMessage, isApiSuccessCode } from '@/services/response';
+import { DOCX_MIME, sendDraftToParent, type DraftIdentity } from '@/services/externalDraftBridge';
 
-/** 解析允许的父域白名单（与 agentAccess 共用 VITE_ALLOWED_PARENT_ORIGINS；空数组表示未配置）。 */
-const ALLOWED_PARENT_ORIGINS = (import.meta.env.VITE_ALLOWED_PARENT_ORIGINS || '')
-  .split(',')
-  .map((s: string) => s.trim())
-  .filter(Boolean);
-
-/** docx 的 MIME 类型，供主系统按类型落库。 */
-const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-
-/** 内联传输文件本体的体积上限：超过 8MB 仅传下载链接，避免 postMessage 卡顿。 */
 const MAX_INLINE_FILE_SIZE = 8 * 1024 * 1024;
-
-/** 结果文件生成状态。 */
 export type DocxSaveStatus = 'idle' | 'saving' | 'done' | 'error';
-
-/** 起草结果附件信息。 */
-export interface DraftAttachment {
-  fileName: string;
-  downloadUrl: string;
+export interface DraftAttachment { fileName: string; downloadUrl: string; fetchUrl: string }
+export interface DraftDocxRecord extends DraftIdentity {
+  status: DocxSaveStatus; error: string; attachment: DraftAttachment | null;
+  phase: 'converting' | 'downloading' | '';
+  sentToBox: boolean; sending: boolean; boxError: string; draftId: string; simulated: boolean;
 }
 
-/** 单轮起草的 docx 状态。 */
-export interface DraftDocxRecord {
-  /** docx 生成状态机。 */
-  status: DocxSaveStatus;
-  /** 生成失败的具体原因（后端响应或异常文案）。 */
-  error: string;
-  /** 生成成功后的附件信息。 */
-  attachment: DraftAttachment | null;
-  /** 是否已发送过保存到草稿箱通知。 */
-  sentToBox: boolean;
-  /** 是否正在发送通知（防止重复点击）。 */
-  sending: boolean;
-}
+/** 公共下载地址供父系统使用，开发代理地址只用于当前浏览器取文件。 */
+export const resolveExternalFileUrls = (raw: string) => {
+  const endpoint = new URL(API.document.convert, window.location.origin);
+  const url = new URL(raw, endpoint);
+  if (!/^https?:$/.test(url.protocol) || url.username || url.password) throw new Error('文件服务返回了无效下载地址');
+  const prefix = import.meta.env.DEV ? String(import.meta.env.VITE_EXTERNAL_DOWNLOAD_PROXY || '').replace(/\/$/, '') : '';
+  const downloadUrl = /^https?:\/\//i.test(raw) ? raw : url.href;
+  const fetchUrl = prefix && url.pathname.startsWith('/download/') ? `${prefix}${url.pathname}${url.search}` : downloadUrl;
+  return { downloadUrl, fetchUrl };
+};
 
-/** 组织各轮 docx 生成、附件下载与草稿箱通知能力。 */
+/** 防止 HTML 错误页被当成 DOCX 下载或传给父平台。 */
+export const fetchExternalDocx = async (url: string, signal?: AbortSignal): Promise<Blob> => {
+  const response = await request<Blob>({ url, method: 'GET', headers: { Accept: DOCX_MIME }, responseType: 'blob', signal, timeout: 60000 });
+  if (!isSuccessStatus(response.status)) throw new Error(`文件下载失败（HTTP ${response.status}）`);
+  const blob = response.data;
+  if (!(blob instanceof Blob) || !blob.size) throw new Error('文件服务未返回有效 DOCX');
+  const bytes = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+  if (bytes[0] !== 0x50 || bytes[1] !== 0x4b || bytes[2] !== 0x03 || bytes[3] !== 0x04) throw new Error('下载内容不是有效 DOCX，请检查文件服务或下载代理');
+  return blob;
+};
+const asDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader(); reader.onload = () => resolve(String(reader.result || '')); reader.onerror = () => reject(new Error('文件读取失败')); reader.readAsDataURL(blob);
+});
+
 export const useExternalDraftDocx = () => {
-  /** 每轮 docx 状态：key 为轮次标识，轮次之间互不影响。 */
   const records = reactive<Record<string, DraftDocxRecord>>({});
-
-  /** 取轮次状态（不存在时返回 undefined，供模板判空）。 */
+  // 每轮只读取一次文件；附件下载和第三方保存复用同一份真实文件流。
+  const files = new Map<string, Blob>();
+  const pending = new Map<string, AbortController>();
+  let epoch = 0;
   const getRecord = (key: string) => records[key];
-
-  /** 取轮次状态，不存在则初始化一份。 */
-  const ensureRecord = (key: string) => {
-    if (!records[key]) {
-      records[key] = { status: 'idle', error: '', attachment: null, sentToBox: false, sending: false };
-    }
-    return records[key];
-  };
-
-  /** 计算 postMessage 目标源：优先白名单，其次 document.referrer，兜底 '*'。 */
-  const resolveTargetOrigins = (): string[] => {
-    if (ALLOWED_PARENT_ORIGINS.length) return ALLOWED_PARENT_ORIGINS;
-    try {
-      if (document.referrer) return [new URL(document.referrer).origin];
-    } catch {
-      /* referrer 解析失败时兜底广播 */
-    }
-    return ['*'];
-  };
-
-  /**
-   * 把 docx 下载地址读成 data URL（内嵌 base64），供主系统直接拿到文件本体。
-   * 超过体积上限或读取失败时返回空串，由主系统回退使用 downloadUrl 自行拉取。
-   */
-  const fetchAttachmentDataUrl = async (url: string): Promise<string> => {
-    try {
-      const response = await request<Blob>({
-        url,
-        method: 'GET',
-        headers: { Accept: '*/*' },
-        responseType: 'blob',
-      });
-      const blob = response.data;
-      if (!blob || !blob.size || blob.size > MAX_INLINE_FILE_SIZE) return '';
-      return await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result || ''));
-        reader.onerror = () => resolve('');
-        reader.readAsDataURL(blob);
-      });
-    } catch {
-      return '';
-    }
-  };
-
-  /** 某一轮流式结束后自动调用：markdown 转 docx 并记录该轮附件信息（不触发浏览器下载）。 */
-  const saveDraftDocx = async (key: string, markdown: string, qaId: string) => {
-    const record = ensureRecord(key);
-    if (!markdown.trim()) {
-      record.status = 'error';
-      record.error = '没有可保存的起草内容';
-      ElMessage.warning('没有可保存的起草内容');
-      return;
-    }
-    record.status = 'saving';
-    record.error = '';
-    try {
-      const convertResponse = await request({
-        url: API.document.convert,
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        data: { markdown, qa_id: qaId },
-      });
-      if (!isSuccessStatus(convertResponse.status)) {
-        throw new Error(`转换失败: ${convertResponse.status}`);
-      }
-      const convertResult: any = convertResponse.data;
-      if (!convertResult?.download_url) {
-        throw new Error('转换结果中没有下载链接');
-      }
-      record.attachment = {
-        fileName: convertResult.file_name || 'draft.docx',
-        downloadUrl: convertResult.download_url,
-      };
-      record.status = 'done';
-    } catch (error) {
-      record.status = 'error';
-      record.error = error instanceof Error ? error.message : '未知错误';
-      ElMessage.error(`起草文件保存失败: ${record.error}`);
-    }
-  };
-
-  /** 点击某一轮附件卡片：按 download_url 拉取文件流并触发浏览器下载。 */
-  const downloadAttachment = async (key: string) => {
-    const attachment = records[key]?.attachment;
-    if (!attachment) return;
-    try {
-      const response = await request<Blob>({
-        url: attachment.downloadUrl,
-        method: 'GET',
-        headers: { Accept: '*/*' },
-        responseType: 'blob',
-      });
-      const blobUrl = URL.createObjectURL(response.data);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = attachment.fileName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(blobUrl);
-    } catch {
-      ElMessage.error('附件下载失败，请稍后重试');
-    }
-  };
-
-  /**
-   * 点击某一轮"保存到草稿箱"：postMessage 通知主系统保存（跨系统数据传输，无需调主系统接口）。
-   * 消息协议：
-   * {
-   *   platform: '制度智能体',
-   *   timestamp,
-   *   data: {
-   *     type: 'SAVE_DRAFT_TO_BOX',
-   *     value: {
-   *       fileName,     // docx 文件名
-   *       downloadUrl,  // docx 下载地址（主系统后端可直接拉取转存）
-   *       content,      // 该轮起草正文 Markdown 原文
-   *       fileBase64,   // docx 文件本体（data URL，含 base64；超大/读取失败时为 ''）
-   *       mimeType,     // docx 的 MIME 类型
-   *     }
-   *   }
-   * }
-   * 主系统收到后自行决定入库或转存（它自己的草稿箱接口仍由它自己调）。
-   */
-  const saveToDraftBox = async (key: string, content = '') => {
+  const saveDraftDocx = async (key: string, markdown: string, identity: DraftIdentity) => {
+    if (key !== identity.qaId || !identity.sessionId || !identity.qaId || !identity.taskId) throw new Error('文件所属会话或问答 ID 不完整');
+    if (records[key]?.status === 'saving' || records[key]?.sending) return;
+    records[key] ||= { ...identity, status: 'idle', phase: '', error: '', attachment: null, sentToBox: false, sending: false, boxError: '', draftId: '', simulated: false };
+    // 首次赋值表达式返回原始对象，必须重新读取以取得 Vue 代理，确保完成/失败会刷新界面。
     const record = records[key];
-    if (!record?.attachment || record.sentToBox || record.sending) return;
-    record.sending = true;
+    if (record.status === 'done' && files.has(key)) return;
+    if (!markdown.trim()) { record.status = 'error'; record.error = '没有可保存的起草内容'; return; }
+    const currentEpoch = epoch, controller = new AbortController(); pending.set(key, controller);
+    record.status = 'saving'; record.error = ''; record.phase = record.attachment ? 'downloading' : 'converting';
     try {
-      const fileDataUrl = await fetchAttachmentDataUrl(record.attachment.downloadUrl);
-      const message = {
-        platform: '制度智能体',
-        timestamp: Date.now(),
-        data: {
-          type: 'SAVE_DRAFT_TO_BOX',
-          value: {
-            fileName: record.attachment.fileName,
-            downloadUrl: record.attachment.downloadUrl,
-            content,
-            fileBase64: fileDataUrl,
-            mimeType: DOCX_MIME,
-          },
-        },
-      };
-      resolveTargetOrigins().forEach((origin) => {
-        window.parent?.postMessage(message, origin);
-      });
-      record.sentToBox = true;
-      ElMessage.success(fileDataUrl ? '已发送至主系统草稿箱' : '已发送至主系统草稿箱（文件较大，仅传下载链接）');
-    } finally {
-      record.sending = false;
-    }
+      if (!record.attachment) {
+        const response = await request({ url: API.document.convert, method: 'POST', headers: { 'Content-Type': 'application/json' },
+          data: { markdown, qa_id: identity.qaId }, signal: controller.signal, timeout: 120000 });
+        if (!isSuccessStatus(response.status) || !isApiSuccessCode(response.data?.code)) throw new Error(String(getApiMessage(response.data, `转换失败（HTTP ${response.status}）`)));
+        const result = getApiData(response.data) || {};
+        if (!result.download_url) throw new Error('转换结果中没有下载链接');
+        if (epoch !== currentEpoch || controller.signal.aborted) return;
+        record.attachment = { fileName: result.file_name || 'draft.docx', ...resolveExternalFileUrls(result.download_url) };
+      }
+      record.phase = 'downloading';
+      const blob = await fetchExternalDocx(record.attachment.fetchUrl, controller.signal);
+      if (epoch !== currentEpoch || controller.signal.aborted) return;
+      files.set(key, blob);
+      record.phase = ''; record.status = 'done';
+    } catch (error: any) {
+      if (epoch !== currentEpoch || controller.signal.aborted) return;
+      const timedOut = error?.code === 'ECONNABORTED' || error?.code === 'ETIMEDOUT';
+      record.error = timedOut ? (record.phase === 'converting' ? '文件生成超时，请重试' : '文件获取超时，请重试') : error?.message || '文件准备失败';
+      record.phase = ''; record.status = 'error'; ElMessage.error(`起草附件准备失败：${record.error}`);
+    } finally { if (pending.get(key) === controller) pending.delete(key); }
   };
-
-  /** 清空全部轮次的文件状态（重新起草时调用）。 */
-  const reset = () => {
-    Object.keys(records).forEach((key) => {
-      delete records[key];
-    });
+  const downloadAttachment = async (key: string) => {
+    const record = records[key], attachment = record?.attachment; if (record?.status !== 'done' || !attachment) return;
+    try {
+      const blob = files.get(key);
+      if (!blob) throw new Error('本轮附件尚未就绪，请重新获取文件');
+      const url = URL.createObjectURL(blob), link = document.createElement('a');
+      link.href = url; link.download = attachment.fileName; document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error: any) { ElMessage.error(error?.message || '附件下载失败，请稍后重试'); }
   };
-
+  const saveToDraftBox = async (key: string, content = '') => {
+    const record = records[key]; if (record?.status !== 'done' || !record.attachment || record.sentToBox || record.sending) return;
+    const controller = new AbortController(), currentEpoch = epoch; pending.set(key, controller);
+    record.sending = true; record.boxError = '';
+    try {
+      // 文件已在流式结束后读取并校验；大于 8MiB 才仅传 URL，由父系统下载入库。
+      const blob = files.get(key);
+      if (!blob) throw new Error('本轮附件尚未就绪，请重新获取文件');
+      const fileBase64 = blob.size > MAX_INLINE_FILE_SIZE ? '' : await asDataUrl(blob);
+      if (epoch !== currentEpoch || controller.signal.aborted) return;
+      const receipt = await sendDraftToParent({ sessionId: record.sessionId, qaId: record.qaId, taskId: record.taskId,
+        fileName: record.attachment.fileName, downloadUrl: record.attachment.downloadUrl, content, fileBase64 }, { signal: controller.signal });
+      if (epoch !== currentEpoch || controller.signal.aborted) return;
+      record.sentToBox = true; record.draftId = receipt.draftId || ''; record.simulated = receipt.simulated === true;
+      ElMessage.success(record.simulated ? '第三方草稿入库模拟成功' : '已保存到主系统草稿箱');
+    } catch (error: any) {
+      if (epoch !== currentEpoch || controller.signal.aborted) return;
+      record.boxError = error?.message || '草稿保存失败'; ElMessage.error(record.boxError);
+    } finally { if (pending.get(key) === controller) pending.delete(key); if (epoch === currentEpoch) record.sending = false; }
+  };
+  const reset = () => { epoch++; pending.forEach(controller => controller.abort()); pending.clear(); files.clear(); Object.keys(records).forEach(key => delete records[key]); };
   return { records, getRecord, saveDraftDocx, downloadAttachment, saveToDraftBox, reset };
 };

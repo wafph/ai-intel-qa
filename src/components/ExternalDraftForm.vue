@@ -1,8 +1,8 @@
 <!--
   外部嵌套起草页的表单区。
 
-  文件要求描述为唯一必填业务字段；合同长度/强弱势按产品约定为禁用态纯展示，
-  不参与起草参数。提交时仅透传描述文本给父页面。
+  文件要求描述为唯一必填业务字段；合同长度/强弱势不展示，
+  兼容旧展示属性但不参与起草参数。提交时仅透传描述文本给父页面。
 -->
 <template>
   <div class="edf-form">
@@ -17,31 +17,6 @@
       ></textarea>
       <p v-if="descriptionError" class="edf-error-text">请填写文件描述</p>
     </div>
-    <div class="edf-field">
-      <label class="edf-label">合同长度</label>
-      <div class="edf-radios">
-        <span class="edf-radio" :class="{ checked: length === 'detailed' }">
-          <span class="edf-radio-dot"></span>详细版
-        </span>
-        <span class="edf-radio" :class="{ checked: length === 'simple' }">
-          <span class="edf-radio-dot"></span>简洁版
-        </span>
-      </div>
-    </div>
-    <div class="edf-field">
-      <label class="edf-label">强弱势</label>
-      <div class="edf-radios">
-        <span class="edf-radio" :class="{ checked: strength === 'strong' }">
-          <span class="edf-radio-dot"></span>强势
-        </span>
-        <span class="edf-radio" :class="{ checked: strength === 'neutral' }">
-          <span class="edf-radio-dot"></span>中立
-        </span>
-        <span class="edf-radio" :class="{ checked: strength === 'weak' }">
-          <span class="edf-radio-dot"></span>弱势
-        </span>
-      </div>
-    </div>
     <button type="button" class="edf-submit" :disabled="submitting" @click="handleSubmit">开始起草</button>
   </div>
 </template>
@@ -53,9 +28,9 @@
 import { ref } from 'vue';
 
 interface Props {
-  /** 合同长度展示值（禁用态）。 */
+  /** 兼容原传入属性，当前不展示、不参与起草参数。 */
   length?: string;
-  /** 强弱势展示值（禁用态）。 */
+  /** 兼容原传入属性，当前不展示、不参与起草参数。 */
   strength?: string;
   /** 父级起草进行中，禁用提交按钮。 */
   submitting?: boolean;
@@ -95,12 +70,12 @@ defineExpose({ submit: handleSubmit });
 </script>
 
 <style scoped>
-/* 外部起草表单：位于页面左栏，宽度由父级栏宽决定 */
+/* 外部起草表单：描述框与开始按钮间隔 24px，隐藏的旧选项不占位。 */
 .edf-form {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 24px;
 
   .edf-label {
     display: block;
@@ -163,7 +138,7 @@ defineExpose({ submit: handleSubmit });
   }
 
   .edf-submit {
-    margin-top: 8px;
+    margin-top: 0;
     padding: 13px 0;
     border: none;
     border-radius: 6px;

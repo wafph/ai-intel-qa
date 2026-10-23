@@ -1,0 +1,601 @@
+{
+  "application_version": "1.0.0",
+  "release_name": "regulatory-ai-assistant_v1.0.0_202610221813",
+  "timezone": "Asia/Shanghai",
+  "created_at": "2026-10-22T18:13:05.381246+08:00",
+  "packaged_at": "2026-10-22T18:23:48.486380+08:00",
+  "baseline_archive": "regulatory-ai-assistant_v1.0.0_202610221623.zip",
+  "baseline_archive_sha256": "8bb1cf0b53607bed125718abc1e84b36fe2044ad48a6edf68c8aced54d2f5921",
+  "backend_version": "regulation_ai_backend_v1.0.0_202610221019",
+  "backend_code_changed": false,
+  "nginx_configuration_changed": false,
+  "development_backend": "http://10.210.101.117:8000",
+  "development_target_configuration": "explicit targets in vite.config.ts; historical DEV_* values retained but unused",
+  "third_party_draft_api": "not supplied; original parent messaging and examples mock retained unchanged; only confirm successful matching receipt",
+  "changes": [
+    "fix initial raw-object mutations that did not update Vue UI",
+    "after final SSE: convert then GET and validate DOCX before readiness",
+    "preserve backend filename and reuse per-qaId Blob for download and parent transfer",
+    "retry GET without reconverting; clear old file cache on reset",
+    "vertical attachment/save/redraft layout; hide new-session and contract length/strength controls",
+    "restore explicit IP development proxy targets"
+  ],
+  "id_contract": {
+    "sessionId": "stable for all rounds in a page conversation; initialize on entry or credential change",
+    "qaId": "new per round; passed as qa_id and used for attachment cache",
+    "taskId": "backend execution ID per round",
+    "requestId": "unique parent-save message ID, checked with sessionId/qaId/taskId in receipt"
+  },
+  "modified_original_files": [
+    {
+      "path": ".env.production",
+      "before_sha256": "a98572bbd11cdc506ea7ed25a39bd8987d2933421da167a4bc4ca7e5bf46d953",
+      "after_sha256": "a8858e8fffd9907d07f65b1499f96c82b7b2ebbb4edef51d05bdf25aa2a43fe3"
+    },
+    {
+      "path": "UPGRADE_NOTES.md",
+      "before_sha256": "4b67ff20e25ec73d14abb85799fb7ae31d33e7a0fe75a997a18ac9398e79a252",
+      "after_sha256": "77199f701413c85d7135ee39bd9c141518ebe9fac41da0d2ff418f6ac411adea"
+    },
+    {
+      "path": "vite.config.ts",
+      "before_sha256": "c3740f4aaaf1c9301e57c13ad540f1bf7407846712580df375247ca4d29f5578",
+      "after_sha256": "68dcd576884b7fab6720b474d99f3b8706f644a308cc272adc0f00cae1a79a66"
+    },
+    {
+      "path": "README.md",
+      "before_sha256": "a4ee07cdc7f844f0087f572dfcb4f509766a48b673d839db506b0e54814960d2",
+      "after_sha256": "87f260a48d290317d0787848bd24a9d686321ec567e901eda0263e7c705bff65"
+    },
+    {
+      "path": "BUILD_REQUIRED.md",
+      "before_sha256": "509673f087e145b5b29d0de6f8a4626fd3b1cd37c621b14de9cd5acd14d8a6cf",
+      "after_sha256": "84084090d1bc305670b279e07f4a8da583199097b6b04777a89d016397a1595d"
+    },
+    {
+      "path": ".env.development",
+      "before_sha256": "d36aebffee6a7e7ad0196a1982664cfa2f3c1bce89c32372df6f334d1a4fdd2f",
+      "after_sha256": "b4d34860e4ad8858d6ac9784b514e40b6d032e10ca64e8bf2e5499dd62fe0cf6"
+    },
+    {
+      "path": "docs/DEPLOYMENT_AND_CONFIG.md",
+      "before_sha256": "15c4000fb4e19eb78fdcc3a146589af6dbe48926f605d72efacdd6a89313374c",
+      "after_sha256": "d11b5a2c38845ff400b4840f0cc5abfd3d59e624ebf464f47917e10f40d8a64e"
+    },
+    {
+      "path": "docs/CALL_FLOW.md",
+      "before_sha256": "8cd35796c6b2e50fd0c0ef5c27e236519eb74c4133d021a47989f5c27b50a4d0",
+      "after_sha256": "76914258f037babd8f91773d828f154190d80987b919742ee967e3c2ba55b5a8"
+    },
+    {
+      "path": "docs/EXTERNAL_DRAFT_INTEGRATION.md",
+      "before_sha256": "5f6d0ec7047b2314b6791ec55bb2592135b53408a14443cd60f359bade5ea59b",
+      "after_sha256": "27b635decd533ee694a053eb8fd0ce85c5f18b306390078d57917b5fef8ac1ae"
+    },
+    {
+      "path": "docs/CODE_HANDOVER.md",
+      "before_sha256": "0e0fb34218f1dfbe15b0816fb9aaa525056459fd3ac08caefd2875efaf622865",
+      "after_sha256": "5da8f65c4884c53b1f46b1de1d446fad5ffd8a29ffd34df631d35170aab4c685"
+    },
+    {
+      "path": "docs/RELEASE_ACCEPTANCE.md",
+      "before_sha256": "45e5799dd45397c2436956b4a32e9e84d29ae062d4ee1fb50eed03a96a2bd8d5",
+      "after_sha256": "edfdac0dd0b01fae5989ac585d749ec44b904133f150adacbcbbfc48a7458ddd"
+    },
+    {
+      "path": "docs/AGENT_UPLOAD_BACKEND_INTEGRATION.md",
+      "before_sha256": "d78a1d6e5d18b106922ac10c1b1e2e97ec5dfa492ea0d5191986813f5a4d6433",
+      "after_sha256": "c904686e5abb9ebeabebd46653e8187b8f610631761133c67997445ccb7f8f7e"
+    },
+    {
+      "path": "docs/PROJECT_STRUCTURE.md",
+      "before_sha256": "ba552ce1271ead8c1d99359a77950b3b2cd2784cfb93b20f90409ef5be7e3993",
+      "after_sha256": "806635cdcabcd31d1f0890d2138c2eb07a63a93176c58d5a96de6c6356ff7573"
+    },
+    {
+      "path": "tests/dev-proxy.test.mjs",
+      "before_sha256": "a10acf97245f08a44935adf0822c478caa84849baa549f41b15383ca8fffa802",
+      "after_sha256": "2cf937254d35b9653524592e445733b565942905085610ad71ba735dfb0411ab"
+    },
+    {
+      "path": "tests/README.md",
+      "before_sha256": "2b875937af7773c9c3ee091bdc218d9ddce6639279ad9a89a61c39fc613a8390",
+      "after_sha256": "8818e2a19c6dff77974c06a725982a279844425f54c15ee1435885d18da26c40"
+    },
+    {
+      "path": "tests/external-draft.test.mjs",
+      "before_sha256": "7f4273a5215df029c47c28a2881e25cc921c1663d5e993937f9b955c812bbb8f",
+      "after_sha256": "50dd439c0cb51849a551523ee52d14511128a6b9d579b2e4b52be23377514518"
+    },
+    {
+      "path": "src/composables/useExternalDraftDocx.ts",
+      "before_sha256": "e6fdfcf6ee6c1031db3503d02189d089be7343c82167cc4f9df08efd4da110e2",
+      "after_sha256": "5cded24abbd81fa085d822ed8beba9eb40ec785f0355d34e0d6444b9a235b1c8"
+    },
+    {
+      "path": "src/views/ExternalDraft.vue",
+      "before_sha256": "1dd4f4c601617f3714eb87b781260a010f616d88618a08e6e8a0643c79a3560b",
+      "after_sha256": "bf4289510444dbab1a9d1130772ec98948d609eda268a3afbd4327aa54941cb6"
+    },
+    {
+      "path": "src/components/ExternalDraftResult.vue",
+      "before_sha256": "5bccf385c5ffca90da156f869eabf5bdb305d4675667366fb9eb56211a986815",
+      "after_sha256": "df266761ddfc5d05d1d07d663cd707e84ded8653ba2db22021adb4cc35fc8b45"
+    },
+    {
+      "path": "src/components/ExternalDraftForm.vue",
+      "before_sha256": "bb8664e059081a487adbf25e1ee6d3536c6b1af1ab9d27220d979e0056fc79ed",
+      "after_sha256": "4ab3f692183b821562460727961a6d9fd4eda34490e12fb05ae2fe2ef00258cd"
+    }
+  ],
+  "unchanged_original_files": [
+    "package-lock.json",
+    "auto-imports.d.ts",
+    "tsconfig.app.json",
+    "tsconfig.tsbuildinfo",
+    "tsconfig.json",
+    ".gitignore",
+    ".prettierrc",
+    "components.d.ts",
+    "index.html",
+    "pnpm-lock.yaml",
+    "package.json",
+    "tsconfig.node.json",
+    "public/pdf.worker.min.js",
+    "public/pdf.worker.min.mjs",
+    "examples/mock-draft-store.mjs",
+    "examples/external-draft-host.html",
+    "docs/v12_2_20_frontend_history_keyup_type_fix.md",
+    "docs/REGENERATE_FIX.md",
+    "docs/v12_2_16_frontend_task_recoverable_cleanup.md",
+    "docs/PDF_REVIEW_FRONTEND_UPGRADE.md",
+    "docs/v12_2_15_frontend_review_pdf_top_align_fix.md",
+    "docs/v12_2_13_frontend_question_fold_copy_fix.md",
+    "docs/v12_2_12_frontend_input_style_type_fix.md",
+    "docs/v12_2_19_frontend_copy_close_button_unify.md",
+    "docs/pdf_worker_static_fix.md",
+    "docs/v12_2_7_frontend_minimal_preview_layout_fix.md",
+    "docs/pdf_worker_mjs_arraybuffer_fix.md",
+    "docs/USER_FEEDBACK_FRONTEND.md",
+    "docs/v12_2_8_frontend_upload_remove_type_fix.md",
+    "docs/v12_2_22_frontend_iframe_clipboard_fix.md",
+    "docs/v12_2_10_frontend_panel_align_scroll_fix.md",
+    "docs/v12_2_11_frontend_input_align_question_fold_fix.md",
+    "docs/v12_2_21_frontend_stream_stop_render_fix.md",
+    "docs/v12_2_17_frontend_stream_export_pdf_tip_sidebar_fix.md",
+    "docs/v12_2_9_frontend_search_recover_layout_align_fix.md",
+    "docs/v12_2_14_frontend_question_fold_height_fix.md",
+    "docs/v12_2_18_frontend_pdf_tip_text_only_fix.md",
+    "docs/v12_2_6_frontend_review_error_pdf_layout_fix.md",
+    "docs/ENGINEERING_CLEANUP.md",
+    "docs/FRONTEND_REVIEW_BACKEND_V18_SYNC.md",
+    "scripts/copy-pdf-worker.mjs",
+    "src/main.ts",
+    "src/global.d.ts",
+    "src/env.d.ts",
+    "src/style.less",
+    "src/App.vue",
+    "tests/stream-results.test.mjs",
+    "tests/agent-upload.test.mjs",
+    "public/images/logos.png",
+    "public/images/favicon.svg",
+    "public/images/user.png",
+    "public/images/chats.png",
+    "public/images/cai.svg",
+    "public/images/user.svg",
+    "public/images/copy.svg",
+    "public/images/icons.svg",
+    "public/images/bottom.svg",
+    "public/images/logo.png",
+    "public/images/default-avatar.svg",
+    "public/images/bg.png",
+    "public/images/top.svg",
+    "public/images/踩.png",
+    "public/images/zhan-active.svg",
+    "public/images/赞.svg",
+    "public/images/menu2.png",
+    "public/images/cai2.svg",
+    "public/images/#U8d5e.svg",
+    "public/images/#U8e29.png",
+    "public/images/zhan.svg",
+    "public/images/avatar.png",
+    "src/assets/vue.svg",
+    "src/api/api.ts",
+    "src/composables/useScrollToBottom.ts",
+    "src/composables/useStreamTask.ts",
+    "src/composables/useExternalDraftStream.ts",
+    "src/composables/useStreamChunk.ts",
+    "src/composables/useMessageSender.ts",
+    "src/composables/useFileParsing.ts",
+    "src/composables/useAppShell.ts",
+    "src/composables/useSessionManager.ts",
+    "src/composables/useComplianceReview.ts",
+    "src/types/chat.ts",
+    "src/utils/messageCollapse.ts",
+    "src/utils/markdown.ts",
+    "src/utils/clipboard.ts",
+    "src/views/NotFond.vue",
+    "src/views/AuxiliaryDraft.vue",
+    "src/views/ComplianceReview.vue",
+    "src/views/Login.vue",
+    "src/views/IntelligentRetrieval.vue",
+    "src/views/MyCollections.vue",
+    "src/views/IntelligentQA.vue",
+    "src/services/config.ts",
+    "src/services/sourceUtils.ts",
+    "src/services/crypto.ts",
+    "src/services/exportDocument.ts",
+    "src/services/http.ts",
+    "src/services/agentUpload.ts",
+    "src/services/errorSanitizer.ts",
+    "src/services/reviewProgress.ts",
+    "src/services/error.ts",
+    "src/services/agentAccess.ts",
+    "src/services/authStorage.ts",
+    "src/services/userFeedback.ts",
+    "src/services/response.ts",
+    "src/services/externalDraftBridge.ts",
+    "src/services/documentDownload.ts",
+    "src/services/externalDraftAccess.ts",
+    "src/services/reviewPdfPrepare.ts",
+    "src/router/index.ts",
+    "src/styles/app-shell.less",
+    "src/components/ExternalDraftChat.vue",
+    "src/components/FeedbackDialog.vue",
+    "src/components/ComplianceReviewExtras.vue",
+    "src/components/AppLayout.vue",
+    "src/components/ChatInput.vue",
+    "src/components/HeaderMenu.vue",
+    "src/components/ExternalDraftComposer.vue",
+    "src/components/HistoryPanel.vue",
+    "src/stores/chat.ts",
+    "src/stores/user.ts",
+    "src/stores/app.ts",
+    "tests/fixtures/external-draft.docx"
+  ],
+  "new_source_files": [
+    "docs/EXTERNAL_DRAFT_ATTACHMENT_FIX.md",
+    "tests/helpers/external-component-renderer.mjs"
+  ],
+  "protected_original_files": [
+    {
+      "path": "package-lock.json",
+      "sha256": "256a4faed594325beabe87d544fc910f0633f01e64c8b49fd40c1deaefebb2c3",
+      "unchanged": true
+    },
+    {
+      "path": "tsconfig.json",
+      "sha256": "fbf2a4325eaf75c57910f6a8d618790bcef511f3d1ab3b3836010fb0e0609f0a",
+      "unchanged": true
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "sha256": "50c32ff25a52002a289de5960d8802f5791137b9b52a4d8a90ba8f9f37a0e972",
+      "unchanged": true
+    },
+    {
+      "path": "package.json",
+      "sha256": "605d43de7bffb19395b8065de3a51dc1e98d19afb899ba809db2c0aa51d1c390",
+      "unchanged": true
+    },
+    {
+      "path": "examples/mock-draft-store.mjs",
+      "sha256": "1285c4969ea2d8935015ff026de34cbc2a3b13d84fd33f11bc1ea33a9c655e8f",
+      "unchanged": true
+    },
+    {
+      "path": "examples/external-draft-host.html",
+      "sha256": "e0a67926963ee0265a74b3410bd03ce4a07b18616be5516de959612d916c5e37",
+      "unchanged": true
+    },
+    {
+      "path": "src/main.ts",
+      "sha256": "d7ccdb00a75a41432cd02b9b39e62ea0991fd5247fe886c1b683d2dcda8bb6f8",
+      "unchanged": true
+    },
+    {
+      "path": "src/global.d.ts",
+      "sha256": "92a6e61d6008fbd095635ec387a20face671a8e9833468025e41ff4d041afa7d",
+      "unchanged": true
+    },
+    {
+      "path": "src/env.d.ts",
+      "sha256": "9c9e9f4cc86a88319dfa68097a6b1d1ebd9fff64cc9c01bedc0897d58d51eba0",
+      "unchanged": true
+    },
+    {
+      "path": "src/style.less",
+      "sha256": "5e2e00f8fe3dbf8c9fb39368e9d1528ea6ef6de579086121f30bf72fcb8b62ae",
+      "unchanged": true
+    },
+    {
+      "path": "src/App.vue",
+      "sha256": "656e64166110b11cc4da47778d5605a4a495f10d30335172102f105d4b8b33a2",
+      "unchanged": true
+    },
+    {
+      "path": "src/assets/vue.svg",
+      "sha256": "5532db34f1c52841881bab8aeca6c3e8d092bd21a689a65f4d8f8cf8041eef9d",
+      "unchanged": true
+    },
+    {
+      "path": "src/api/api.ts",
+      "sha256": "ea7f49282f9221597602c8078bf7fa6b365d39902dc6d9e3a29b151cab998b72",
+      "unchanged": true
+    },
+    {
+      "path": "src/composables/useScrollToBottom.ts",
+      "sha256": "1b7cec72f1a6bd6f651bffa0b9a59b056363e2e55755a3210a5a4837a5ac8750",
+      "unchanged": true
+    },
+    {
+      "path": "src/composables/useStreamTask.ts",
+      "sha256": "4a5ec4c6754220801e6efe4cc71cef0be918a4d556f8bd33b75ba4699c8b8725",
+      "unchanged": true
+    },
+    {
+      "path": "src/composables/useExternalDraftStream.ts",
+      "sha256": "611a40c74c01214ab2d831c608057a790d58976bbf6aa8315f24bab28c22768f",
+      "unchanged": true
+    },
+    {
+      "path": "src/composables/useStreamChunk.ts",
+      "sha256": "115b35aaa5a9b9bd4231bc9eae895e5384c6a0ab51c156b1691352ff0ef837a0",
+      "unchanged": true
+    },
+    {
+      "path": "src/composables/useMessageSender.ts",
+      "sha256": "8957cf10c2e8513f39fdcd8730c82ec32638687350183964275155aa947b39ee",
+      "unchanged": true
+    },
+    {
+      "path": "src/composables/useFileParsing.ts",
+      "sha256": "c45956e69d38e074f185aa24224ab3afff4d3915107fa0328cd1b3aae82f4e3b",
+      "unchanged": true
+    },
+    {
+      "path": "src/composables/useAppShell.ts",
+      "sha256": "b960100ad64bc355d2a6d21d916065e5b6c3e8903e61352b602497efee8419ad",
+      "unchanged": true
+    },
+    {
+      "path": "src/composables/useSessionManager.ts",
+      "sha256": "87048f2face5c8ec3c480ee8ddced8c70bd73dbc50e4029382fda79dea75058e",
+      "unchanged": true
+    },
+    {
+      "path": "src/composables/useComplianceReview.ts",
+      "sha256": "98494d89f6063507d33b7c48bd76312d63ff938c1ef6a6f5c701a8f05e9c2cba",
+      "unchanged": true
+    },
+    {
+      "path": "src/types/chat.ts",
+      "sha256": "fce96cda814de7e7fd919f79270385d5ceb3c7cd520b8da7f0115fe03029fb43",
+      "unchanged": true
+    },
+    {
+      "path": "src/utils/messageCollapse.ts",
+      "sha256": "21f48ef99c734c16bb036d4f03ecea5fac6f25f82dd96ed5a84d59e52e98e79f",
+      "unchanged": true
+    },
+    {
+      "path": "src/utils/markdown.ts",
+      "sha256": "bd0a7dea49184cefa1a7192b7340d2de2907111dd107fd188bdec8f72091163a",
+      "unchanged": true
+    },
+    {
+      "path": "src/utils/clipboard.ts",
+      "sha256": "58da022c7aaa7a151e7e14cd4130aab6ab1d39e9f874cb81b0a8feae4692116f",
+      "unchanged": true
+    },
+    {
+      "path": "src/views/NotFond.vue",
+      "sha256": "24ba226c7873f18fc75bef69d7da9a7a3a63cd8fe53919c1df3145c6e720d028",
+      "unchanged": true
+    },
+    {
+      "path": "src/views/AuxiliaryDraft.vue",
+      "sha256": "ef243c3679a64909f46b7a326d3d3082625131d8f1c9e81b79a277470b60a980",
+      "unchanged": true
+    },
+    {
+      "path": "src/views/ComplianceReview.vue",
+      "sha256": "73b2c7da70d8987452f216a6004c64674025e5633d37cf1fbb78879ca27a5ed9",
+      "unchanged": true
+    },
+    {
+      "path": "src/views/Login.vue",
+      "sha256": "8dd651e9c9c9bd5d1714a3346afd144283be1351b1cc065fd5ceb7da8301403f",
+      "unchanged": true
+    },
+    {
+      "path": "src/views/IntelligentRetrieval.vue",
+      "sha256": "5cd3aa8aeb833a7f697a84f1ff8fd1d66f57cb391025403e1b6c1f15bb34059f",
+      "unchanged": true
+    },
+    {
+      "path": "src/views/MyCollections.vue",
+      "sha256": "0c9238c36fcc920a79ca39bc11f7d5c18534612375b1ba312adb8d877cc0a5c0",
+      "unchanged": true
+    },
+    {
+      "path": "src/views/IntelligentQA.vue",
+      "sha256": "74cb7432b7a3fc39263c360df2cdb82f9ffe04c3bcd95835c4364a731ffc7b7b",
+      "unchanged": true
+    },
+    {
+      "path": "src/services/config.ts",
+      "sha256": "f3ec8897afd1a2d7c6951d7e4e897f88379db3c166f61c85bbe101f5c806d8b2",
+      "unchanged": true
+    },
+    {
+      "path": "src/services/sourceUtils.ts",
+      "sha256": "6384e31ec2a6573bb2f150ec02e585cf3dea2cfdc1f3c4e1de0c1f9f8f75cfbe",
+      "unchanged": true
+    },
+    {
+      "path": "src/services/crypto.ts",
+      "sha256": "ebdf076db54deb6be4605c60a6ff723d426fa48ef5d24bc7b1d60d3ea3855292",
+      "unchanged": true
+    },
+    {
+      "path": "src/services/exportDocument.ts",
+      "sha256": "ff4b9b4bda6bca62f4d6adb8be8c327799f8c7ec50ac559b83042adfd01fbd24",
+      "unchanged": true
+    },
+    {
+      "path": "src/services/http.ts",
+      "sha256": "186b356c2cd133ea8429e402563c869fd70bbdaab92db7fe09637aa66c3ddcb9",
+      "unchanged": true
+    },
+    {
+      "path": "src/services/agentUpload.ts",
+      "sha256": "48729863457a81e5751afccb2e924ee518e7ad1f3681caa30524a7861b7f9987",
+      "unchanged": true
+    },
+    {
+      "path": "src/services/errorSanitizer.ts",
+      "sha256": "880d9092d5e88ccba48e77005a470ea232a6ab9b1da0d456474f050e1c76c4a4",
+      "unchanged": true
+    },
+    {
+      "path": "src/services/reviewProgress.ts",
+      "sha256": "3a916afedd9338984fd5b4002fa9d099343b9827fac9f936e55fe275ec37be92",
+      "unchanged": true
+    },
+    {
+      "path": "src/services/error.ts",
+      "sha256": "2bedfe6a581af874a4e95942992f27c8c63d9f20ba6061c1e9b2dd00b647a47d",
+      "unchanged": true
+    },
+    {
+      "path": "src/services/agentAccess.ts",
+      "sha256": "231c096162f520f808294b857e659036f105b840fa0489e4293987c0d68ba942",
+      "unchanged": true
+    },
+    {
+      "path": "src/services/authStorage.ts",
+      "sha256": "24fdc657629193aaf0d28be6e9b71b0d97a475b60046b354802bb1a887478539",
+      "unchanged": true
+    },
+    {
+      "path": "src/services/userFeedback.ts",
+      "sha256": "9327c89db748629b2e3a1e388045235eb3f2335c6934566abfe63a84e9d8f361",
+      "unchanged": true
+    },
+    {
+      "path": "src/services/response.ts",
+      "sha256": "f936f5d9bd1aad3b8c0d38df7f3b1350e79511cb45677638716d3fd8a493d9ef",
+      "unchanged": true
+    },
+    {
+      "path": "src/services/externalDraftBridge.ts",
+      "sha256": "5607674ecb256062f2dc7684a37ab5e733d4861eec03b3be0fbf1092a54a8269",
+      "unchanged": true
+    },
+    {
+      "path": "src/services/documentDownload.ts",
+      "sha256": "11fa33822c711b8e6f82e2095d9e49d3c8d862a21b9ac13795e06911dfa49d50",
+      "unchanged": true
+    },
+    {
+      "path": "src/services/externalDraftAccess.ts",
+      "sha256": "cdb4267e0baad90ca422b6104501a35b27ceb86048a215ca8fe7568062020d9e",
+      "unchanged": true
+    },
+    {
+      "path": "src/services/reviewPdfPrepare.ts",
+      "sha256": "02d7e8ae37ff210d4caa958abea3377d305bdfaf0fbee685ef9987de6d4cb539",
+      "unchanged": true
+    },
+    {
+      "path": "src/router/index.ts",
+      "sha256": "c2d5f999b194200b80c7603efbbd90881ccb49f02c1e28bd45df656176641e47",
+      "unchanged": true
+    },
+    {
+      "path": "src/styles/app-shell.less",
+      "sha256": "b933dd977e68d6869b7c6f265804584dcbeb4b8fc92ecfa96a0f5ddacb4cb4ed",
+      "unchanged": true
+    },
+    {
+      "path": "src/components/ExternalDraftChat.vue",
+      "sha256": "05721d68ede263e79e7c23123359765b10ac497a851e0e8bcbd04c2dd35d9059",
+      "unchanged": true
+    },
+    {
+      "path": "src/components/FeedbackDialog.vue",
+      "sha256": "8cbedbd3b6120d5fcb6cb5a8ebace81d2ce2b0a57114064dff6abaf61fd266fa",
+      "unchanged": true
+    },
+    {
+      "path": "src/components/ComplianceReviewExtras.vue",
+      "sha256": "e7b53db6cfecfa04beedf1fca24ce79c025d5bd7baeeddb4bfad8b1e604904b0",
+      "unchanged": true
+    },
+    {
+      "path": "src/components/AppLayout.vue",
+      "sha256": "07951bd6af410fdd43484ba25d13f09f344c156fa3ae7973e2367565d8bf58f6",
+      "unchanged": true
+    },
+    {
+      "path": "src/components/ChatInput.vue",
+      "sha256": "ecf9936ad8e2219ceabc401fad677cbcd3163f45e30f214a60bdcfbde95f1654",
+      "unchanged": true
+    },
+    {
+      "path": "src/components/HeaderMenu.vue",
+      "sha256": "6c462f1b83cb24e25c9fbf186b597124771045596609ab34b07a15defa5be387",
+      "unchanged": true
+    },
+    {
+      "path": "src/components/ExternalDraftComposer.vue",
+      "sha256": "d39deba97824f169f381b74001b8026f9ed146416e19bc405e991eb52da3acce",
+      "unchanged": true
+    },
+    {
+      "path": "src/components/HistoryPanel.vue",
+      "sha256": "a097016fe843c32920fcb52f1c508c0354fb19a81db27eb2e8a3af5f1886824a",
+      "unchanged": true
+    },
+    {
+      "path": "src/stores/chat.ts",
+      "sha256": "f19d6270e029e735005f7b942937914d0cc42138df6879cb06ac6a67d5a7f191",
+      "unchanged": true
+    },
+    {
+      "path": "src/stores/user.ts",
+      "sha256": "73fca53731ab5cecfe99b699adbe6303066bd80e503f0604ace91f7655eb0881",
+      "unchanged": true
+    },
+    {
+      "path": "src/stores/app.ts",
+      "sha256": "2470e071ae6c849ccec349fe2c609a7d1563ca483407265c32eac4868806b720",
+      "unchanged": true
+    }
+  ],
+  "active_environment_values_unchanged": true,
+  "verification": {
+    "npm_test": {
+      "passed": 90,
+      "failed": 0,
+      "groups": {
+        "upload_qa": 34,
+        "main_stream": 18,
+        "external_draft": 37,
+        "dev_proxy": 1
+      }
+    },
+    "new_regressions": 10,
+    "npm_run_build": "passed with unchanged strict TypeScript configuration",
+    "component_checks": "actual Vue SFC compiler and runtime on in-memory renderer; not a browser visual test",
+    "local_document_links_checked": 28,
+    "real_intranet_platform_or_third_party_api_validation": false,
+    "zip_and_manifest": "verified during packaging"
+  },
+  "integrity": "FILE_MANIFEST.sha256 covers every regular file except itself; fresh dist replaces old hashed assets",
+  "regenerated_release_files": [
+    "release_manifest.json",
+    "FILE_MANIFEST.sha256"
+  ]
+}

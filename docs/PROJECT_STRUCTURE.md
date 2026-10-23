@@ -85,10 +85,29 @@ POST /v1/markdown-word/convert -> 获取 download_url -> GET download_url -> Blo
 - src/services/agentUpload.ts：后端统一上传、问答刷新、安全错误、附件快照。
 - src/composables/useComplianceReview.ts：沿用函数名，主上传转后端；旧直传函数未调用。
 - src/composables/useAppShell.ts：问答显式 qa 上传，保留引用，发送期间处理状态。
-- src/composables/useMessageSender.ts：提交前刷新、历史预保存、追问及重新生成快照和本地任务 metadata。
+- src/composables/useMessageSender.ts：本轮附件刷新、历史预保存、重新生成独立快照和本地任务 metadata；普通发送不继承历史附件。
 - src/types/chat.ts、src/components/ChatInput.vue：引用/到期字段类型。
 - src/stores/app.ts：停用 IAM 初始化调用，保留旧手动方法。
 - tests/agent-upload.test.mjs：离线契约与真实组合函数测试。
 - dist/：本次生产静态资源。
 
 详细接口见 [AGENT_UPLOAD_BACKEND_INTEGRATION.md](AGENT_UPLOAD_BACKEND_INTEGRATION.md)。
+
+
+## 上一版最小修复（1512 版）
+
+`useStreamChunk.ts` 负责增量去重、最终快照覆盖和 completed/done 顺序；`useStreamTask.ts` 负责订阅隔离、断流收尾与详情恢复校准；`tests/stream-results.test.mjs` 为流式回归。新增 ExternalDraft 文件和用户路由/认证/代理改动均原样保留，本次不调整其实现。详见 [REGENERATE_FIX.md](REGENERATE_FIX.md)。
+
+
+## 外部起草本次升级
+
+- services/externalDraftAccess.ts：独立授权、父窗口来源与外部请求头。
+- services/externalDraftBridge.ts：第三方草稿请求/回执，按四类 ID 关联。
+- composables/useExternalDraftStream.ts：稳定会话 ID、独立问答 ID、任务流及停止。
+- composables/useExternalDraftDocx.ts：逐轮转换、自动获取及校验真实文件、Blob 缓存与第三方保存回执。
+- examples/external-draft-host.html / mock-draft-store.mjs：第三方父页面及草稿接口模拟；不进入生产 dist。
+- tests/external-draft.test.mjs / dev-proxy.test.mjs：外部契约及真实开发代理回归。
+
+前一节关于“新增 ExternalDraft 不修改”的说明属于 1512 版范围；本次已获得授权按上述范围升级，原四项业务页和主业务组合函数仍保留。
+
+本次附件修复增加 tests/helpers/external-component-renderer.mjs，以真实 Vue 编译器及组件更新验证结果区和简化输入表单；没有新增运行或测试依赖。详见 [EXTERNAL_DRAFT_ATTACHMENT_FIX.md](EXTERNAL_DRAFT_ATTACHMENT_FIX.md)。

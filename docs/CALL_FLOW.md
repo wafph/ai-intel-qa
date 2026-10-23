@@ -26,14 +26,16 @@ URL agentToken / postMessage SET_AGENTTOKEN
 ```text
 IntelligentQA.vue
   -> 上传附件时 POST /v1/agentarts/workflows/qa/upload-file
-  -> 提交前 POST /v1/agentarts/workflows/qa/refresh-file-url
-  -> 原历史接口先保存 answer.metadata.uploadedFiles
+  -> 仅本轮有附件时，提交前 POST /v1/agentarts/workflows/qa/refresh-file-url
+  -> 仅本轮有附件时，原历史接口先保存 answer.metadata.uploadedFiles
   -> useAppShell.sendMessage
   -> POST /v1/agentarts/workflows/qa/tasks
   -> 返回 taskId / qaId / sessionId
   -> GET /v1/agentarts/tasks/{taskId}/stream?fromEventId=...
   -> processStreamChunk 追加正文
-  -> workflow_finished / done 后保存历史
+  -> workflow_finished 校准最终正文和来源
+  -> completed 保留任务等待 done
+  -> done 校准并保存最终历史
 ```
 
 引用来源：
@@ -135,17 +137,18 @@ review 场景输出
   -> registerRecoverableTaskFromSession
   -> GET /v1/agentarts/tasks/{taskId}
   -> 如果使用后端 answerContent，则 fromEventId = answerEventId
-  -> 如果本地内容更完整，则 fromEventId = local lastEventId
+  -> 如果后端快照游标更旧，则保留本地正文和 lastEventId
   -> 重新订阅 /stream
 ```
 
 最终校准：
 
 ```text
-done/completed
-  -> 再拉取 task detail
-  -> 如果后端最终 answerContent 更完整，校准页面内容
-  -> 保存历史
+workflow_finished / done
+  -> 读取本轮最终正文，不以字符串长度判断
+  -> completed 状态包不提前移除任务
+  -> done 校准、结束并保存历史
+  -> completed 后直接断流且缺最终正文时才补查 task detail
 ```
 
 ## 7. 新建/切换不中断
@@ -166,6 +169,13 @@ POST /v1/agentarts/tasks/{taskId}/stop
 
 ## 8. 问答 URL 过期和平台切换
 
-普通问答/追问先刷新 upload_ref；后端决定复用或重传，前端用新 URL 数组发起原任务。重新生成明确使用原轮附件并 force 刷新。引用通过现有 metadata 历史和本地任务快照恢复；新选附件优先于最近历史附件。异常时保留待发内容，不重复执行整轮任务。
+普通发送有当前选中文件时才刷新 upload_ref；无文件时不继承历史，不传 file_url。重新生成明确使用被点击轮次的附件并 force 刷新，不修改输入区待发文字/新附件。引用通过原 metadata 历史和任务快照保存。异常时保留待发内容，不重复执行整轮任务。
 
 旧 IAM 自动获取已停用，原实现保留供比对。完整流程见 [AGENT_UPLOAD_BACKEND_INTEGRATION.md](AGENT_UPLOAD_BACKEND_INTEGRATION.md)。
+
+
+## 9. 外部起草独立入口
+
+普通登录后继续原菜单。第三方 iframe 进入 /external-draft → externalDraftAccess 校验用户 token → 同一 session_id 下每轮新 qaId 创建 draft task → SSE 最终结果确认 → 该轮 qaId 转 DOCX → 自动 GET download_url 并校验、缓存文件 → 按后台原名展示附件 → 用户点击保存到草稿箱 → SAVE_DRAFT_TO_BOX 发给父系统 → 第三方自己的草稿接口或模拟存储 → SAVE_DRAFT_RESULT 回执 → 显示已保存。
+
+每轮另有后端 taskId 和请求 request_id；保存消息有独立 requestId，不能以 session_id 代替 qaId。新增页不复用内部登录存储，外部失败不触发原登录循环；后台仍保留既有 draft 历史。详见 [EXTERNAL_DRAFT_INTEGRATION.md](EXTERNAL_DRAFT_INTEGRATION.md)。

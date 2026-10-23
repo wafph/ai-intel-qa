@@ -3,7 +3,7 @@
  *
  * 集中管理 V12 流式任务的状态持久化、生命周期（创建/订阅/恢复/停止）、
  * 任务详情查询、来源合并、本地停止标记和会话消息同步。
- * 从 useAppShell 中拆分而来，保持业务逻辑完全不变。
+ * 完成通知后继续接收最终快照，订阅和恢复均按本轮任务及正文游标校准。
  */
 import { ref, type Ref } from 'vue';
 import type { ChatMessage, ChatSession } from '@/types/chat';
@@ -42,6 +42,10 @@ export type ResumableStreamTask = {
   lastEventId: number;
   /** 当前 answerContent 已覆盖到的后端事件游标；用于刷新/切换恢复时避免旧快照配新游标导致中间内容被跳过。 */
   answerEventId?: number;
+  /** 已收到权威最终正文；即使为空或短于临时文本，也不能再追加增量。 */
+  finalAnswerReceived?: boolean;
+  /** completed 后仍保留输出占用，直到 done/断流补查完成，防止下一轮抢先开始。 */
+  awaitingDone?: boolean;
   updatedAt: number;
   createdAt?: number;
   title?: string;
@@ -398,7 +402,7 @@ export const useStreamTask = (deps: UseStreamTaskDeps) => {
   const getMessageAnswerEventId = (message: any): number =>
     toSafeEventId(message?.answerEventId ?? message?.answer_event_id ?? message?.answerContentEventId ?? message?.answer_content_event_id);
 
-  /** 判断是否应使用后端 answerContent 快照（后端内容更长或本地为空时）。 */
+  /** 无正文事件游标的旧服务，运行中快照保留原长度兜底；终态不使用此门槛。 */
   const shouldUseServerAnswerSnapshot = (serverContent: string, localContent = ''): boolean => {
     if (!serverContent) return false;
     if (!localContent) return true;
@@ -498,7 +502,7 @@ export const useStreamTask = (deps: UseStreamTaskDeps) => {
     (message as any).taskRecoverable = updates.recoverable ?? task.recoverable ?? isTaskRecoverable(task);
     message.streamEventId = updates.eventId ?? task.lastEventId;
     (message as any).answerEventId = updates.answerEventId ?? task.answerEventId ?? (message as any).answerEventId ?? 0;
-    message.streaming = isTaskRecoverable({ ...task, status: message.taskStatus, recoverable: (message as any).taskRecoverable });
+    message.streaming = Boolean(task.awaitingDone) || isTaskRecoverable({ ...task, status: message.taskStatus, recoverable: (message as any).taskRecoverable });
 
     if (typeof updates.content === 'string') {
       message.content = stripReviewProgressText(updates.content, { functionId: task.functionId, tabName: task.tabName });
@@ -507,7 +511,8 @@ export const useStreamTask = (deps: UseStreamTaskDeps) => {
     if (Object.prototype.hasOwnProperty.call(updates, 'sources')) message.sources = updates.sources as any;
     if (task.metadata && !message.metadata) message.metadata = task.metadata as any;
 
-    if (activeChatId.value === task.sessionId) {
+    if (activeChatId.value === task.sessionId &&
+        (!currentStreamingMessageId.value || currentStreamingMessageId.value === task.messageId)) {
       currentStreamingMessageId.value = message.streaming ? task.messageId : null;
       isStreaming.value = Boolean(message.streaming);
       currentAnswer.value = message.content || '';
@@ -740,13 +745,54 @@ export const useStreamTask = (deps: UseStreamTaskDeps) => {
         throw new Error(`任务流订阅失败: ${response.status}`);
       }
 
-      await consumeEventStream(response.data, (payload) =>
-        processStreamChunkCallback
+      await consumeEventStream(response.data, (payload) => {
+        // 已停止/被替换的订阅即使还有缓冲包，也不能写入新一轮回答。
+        if (controller.signal.aborted || abortController !== controller || !activeStreamTasks.value[taskId]) {
+          return Promise.resolve();
+        }
+        return processStreamChunkCallback
           ? processStreamChunkCallback(payload, task.messageId, task.taskId)
-          : Promise.resolve(),
-      );
+          : Promise.resolve();
+      });
+
+      // 当前后端先发 completed 再发含快照的 done。旧服务若在 completed 后关闭，
+      // 优先使用已确认的最终快照，否则补查任务详情，避免无限等待或保存临时拼接文本。
+      const remaining = activeStreamTasks.value[taskId];
+      if (!controller.signal.aborted && abortController === controller && remaining?.status === 'completed') {
+        const releaseFinalWait = () => {
+          const current = activeStreamTasks.value[taskId];
+          if (!controller.signal.aborted && abortController === controller && current) {
+            const released = { ...current, awaitingDone: false };
+            upsertStreamTask(released);
+            updateTaskMessage(released);
+          }
+        };
+        let finalData: any = { status: 'completed', sources: remaining.sources || [] };
+        if (remaining.finalAnswerReceived) {
+          finalData.answerContent = remaining.answerContent ?? '';
+          finalData.answerEventId = remaining.answerEventId || remaining.lastEventId;
+        } else {
+          try {
+            const detail = await queryStreamTaskDetail(taskId);
+            if (!isTerminalTaskStatus(detail.status) || typeof detail.answerContent !== 'string') {
+              releaseFinalWait();
+              if (!options.silent) ElMessage.warning('最终结果暂未同步，请重新进入会话查看');
+              return;
+            }
+            finalData = detail;
+          } catch {
+            releaseFinalWait();
+            if (!options.silent) ElMessage.warning('最终结果暂未同步，请重新进入会话查看');
+            return;
+          }
+        }
+        if (!controller.signal.aborted && abortController === controller && activeStreamTasks.value[taskId]) {
+          await processStreamChunkCallback?.({ ...finalData, taskId, eventType: 'done' }, task.messageId, taskId);
+        }
+      }
     } catch (error: any) {
-      if (error?.name !== 'AbortError' && activeStreamTasks.value[taskId]) {
+      if (error?.name !== 'AbortError' && abortController === controller &&
+          activeChatId.value === task.sessionId && activeStreamTasks.value[taskId]) {
         syncCurrentStreamUi();
         if (!options.silent) {
           ElMessage.warning('当前流式订阅连接中断，任务仍在后台生成，可重新进入会话或刷新后继续恢复');
@@ -786,7 +832,13 @@ export const useStreamTask = (deps: UseStreamTaskDeps) => {
       }));
       const detailAnswerEventId = getDetailAnswerEventId(detail);
       const detailLastEventId = getDetailLastEventId(detail);
-      const useServerSnapshot = shouldUseServerAnswerSnapshot(detailAnswerContent, localAnswerContent);
+      // 终态快照按事件游标判断新旧，不能以字符串长度阻止最终修正或空检索结果。
+      const hasServerAnswer = typeof detail.answerContent === 'string';
+      const useServerSnapshot = hasServerAnswer && (terminal
+        ? (!detailAnswerEventId || detailAnswerEventId >= localAnswerEventId)
+        : (detailAnswerEventId && localAnswerEventId
+          ? detailAnswerEventId >= localAnswerEventId
+          : shouldUseServerAnswerSnapshot(detailAnswerContent, localAnswerContent)));
       const resumeEventId = useServerSnapshot
         ? (detailAnswerEventId || detailLastEventId || localLastEventId)
         : localLastEventId;
@@ -830,7 +882,7 @@ export const useStreamTask = (deps: UseStreamTaskDeps) => {
         answerEventId: mergedAnswerEventId,
       });
 
-      if (terminal && sourcesWereEnriched) {
+      if (terminal && (sourcesWereEnriched || useServerSnapshot && mergedAnswerContent !== localAnswerContent)) {
         void persistCompletedConversationForTask(mergedTask);
       }
 

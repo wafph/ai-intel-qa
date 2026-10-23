@@ -3,7 +3,7 @@
  *
  * 负责 SSE 流式数据块的解析、think 标签过滤、文本追加、
  * 流完成/错误处理和用户主动停止逻辑。
- * 从 useAppShell 中拆分而来，保持业务逻辑完全不变。
+ * 最终正文以服务端快照为准，增量按任务事件游标去重。
  */
 import { nextTick, type Ref } from 'vue';
 import { stripReviewProgressText } from '@/services/reviewProgress';
@@ -80,6 +80,17 @@ const getSafeAgentErrorMessage = () => getFrontendFallbackErrorMessage();
 const toUserSafeErrorMessage = (errorOrMessage: any, fallback = getSafeAgentErrorMessage()) =>
   toUserSafeAgentErrorMessage(errorOrMessage, fallback);
 
+/** 区分“没有正文快照”和“正文为空”；空检索结果也可以是合法最终结果。 */
+const readAnswerSnapshot = (chunk: any, payload: any, data: any): string | undefined => {
+  const candidates = [
+    chunk.answerContent, payload.answerContent, data.answerContent,
+    data.outputs?.responseContent, data.outputs?.answer,
+    payload.outputs?.responseContent, payload.outputs?.answer,
+    data.responseContent, data.answer, payload.responseContent, payload.answer,
+  ];
+  return candidates.find((value) => typeof value === 'string');
+};
+
 /** useStreamChunk 组合函数。 */
 export const useStreamChunk = (deps: UseStreamChunkDeps) => {
   const {
@@ -126,13 +137,18 @@ export const useStreamChunk = (deps: UseStreamChunkDeps) => {
     setPendingStopSyncPromise,
   } = streamTask;
 
+  /** 旧任务只能更新自己的消息，不能操作另一轮回答的全局缓冲区。 */
+  const ownsDisplay = (messageId: string, task?: ResumableStreamTask) =>
+    (!task || task.sessionId === activeChatId.value) &&
+    (!currentStreamingMessageId.value || currentStreamingMessageId.value === messageId);
+
   // ---- Think 标签处理 ----
 
   /**
    * 将流式文本追加到当前回答中，处理 think 标签过滤和审查进度文本清理。
    * 首次输出前会缓冲等待 think 标签闭合，确保用户只看到正式回答内容。
    */
-  const appendModelOutputText = async (
+  const appendModelOutputText = (
     text: string,
     messageId: string,
     context?: { functionId?: string; tabName?: string },
@@ -173,8 +189,7 @@ export const useStreamChunk = (deps: UseStreamChunkDeps) => {
       if (msg) msg.content = currentAnswer.value;
     }
 
-    await nextTick();
-    scrollToBottom();
+    void nextTick().then(() => { if (ownsDisplay(messageId)) scrollToBottom(); });
   };
 
   /**
@@ -208,6 +223,7 @@ export const useStreamChunk = (deps: UseStreamChunkDeps) => {
    * 处理任务状态更新、推理内容、正式回答、来源提取和完成事件。
    */
   const processStreamChunk = async (chunk: any, messageId: string, taskId?: string) => {
+    if (taskId && (!activeStreamTasks.value[taskId] || activeStreamTasks.value[taskId].messageId !== messageId)) return;
     // V12 后端会将每条 SSE data 包装为 { code,msg,request_id,trace_id,data }；
     // 这里先解包，兼容旧 AgentArts 原始 event 格式。
     if (chunk && Object.prototype.hasOwnProperty.call(chunk, 'code')) {
@@ -222,129 +238,97 @@ export const useStreamChunk = (deps: UseStreamChunkDeps) => {
     if (taskId) {
       if (isTaskLocallyStopped(taskId) || isMessageLocallyStopped(messageId)) return;
       const task = activeStreamTasks.value[taskId];
-      if (!task) return;
+      if (!task || task.messageId !== messageId || (chunk.taskId && chunk.taskId !== taskId)) return;
+      if (!ownsDisplay(messageId, task)) return;
 
       const payload = chunk.payload || {};
       const payloadData = payload.data || {};
-      const eventId = Number(chunk.eventId || task.lastEventId || 0);
+      const eventId = toSafeEventId(chunk.eventId);
       const incomingAnswerEventId = toSafeEventId(
-        chunk.answerEventId ??
-          chunk.answer_event_id ??
-          payload.answerEventId ??
-          payload.answer_event_id ??
-          payloadData.answerEventId ??
-          payloadData.answer_event_id,
+        chunk.answerEventId ?? chunk.answer_event_id ?? payload.answerEventId ??
+          payload.answer_event_id ?? payloadData.answerEventId ?? payloadData.answer_event_id,
       );
       const payloadEvent = payload.event || payload.event_type || '';
       const eventType = chunk.eventType || payloadEvent || '';
-      const normalizedStatus = chunk.status || payload.status || task.status;
-      const normalizedIncomingStatus = normalizeTaskStatus(normalizedStatus || eventType);
+      const workflowFinished = isWorkflowFinishedEvent(eventType, payloadEvent, payload);
+      const incomingStatus = normalizeTaskStatus(chunk.status || payload.status || eventType);
       const chunkStopRequested = isStopRequestedFlag(chunk) || isStopRequestedFlag(payload) || isStopRequestedFlag(payloadData);
-      if (normalizedIncomingStatus === 'stopped' || normalizeTaskStatus(eventType) === 'stopped' || chunkStopRequested) {
+      if (incomingStatus === 'stopped' || chunkStopRequested) {
         markTaskLocallyStopped(taskId);
-        const stoppedTask: ResumableStreamTask = {
-          ...task,
-          status: 'stopped',
-          recoverable: false,
-          lastEventId: Number(chunk.eventId || task.lastEventId || 0),
-          answerEventId: task.answerEventId || 0,
-          updatedAt: Date.now(),
-        };
-        updateTaskMessage(stoppedTask, { status: 'stopped', recoverable: false, eventId: stoppedTask.lastEventId, answerEventId: stoppedTask.answerEventId });
+        updateTaskMessage({ ...task, status: 'stopped', recoverable: false }, { status: 'stopped', recoverable: false });
         removeStreamTask(taskId);
         isStreaming.value = false;
         currentStreamingMessageId.value = null;
         resetStreamState();
         return;
       }
+
+      // 只按游标去重，不能按文本内容去重（正文中允许相同句子）。
+      // 在任何异步操作前提交游标，重放/并发到达的相同事件不会重复追加。
+      const isNewEvent = !eventId || eventId > toSafeEventId(task.lastEventId);
       const chunkRecoverableFlag = getRecoverableFlag(chunk) ?? getRecoverableFlag(payload) ?? getRecoverableFlag(payloadData);
-      const nextTaskRecoverable = chunkRecoverableFlag ?? task.recoverable ?? isRecoverableTaskStatus(normalizedStatus);
+      const status = chunk.status || payload.status || (eventType === 'completed' ? 'completed' : task.status);
       let nextTask: ResumableStreamTask = {
         ...task,
-        status: eventType === 'done' ? normalizedStatus : normalizedStatus || task.status,
-        recoverable: nextTaskRecoverable,
-        lastEventId: eventId || task.lastEventId,
-        answerEventId: incomingAnswerEventId || task.answerEventId || 0,
+        status,
+        recoverable: chunkRecoverableFlag ?? task.recoverable ?? isRecoverableTaskStatus(status),
+        awaitingDone: eventType === 'completed' || Boolean(task.awaitingDone && eventType !== 'done'),
+        lastEventId: Math.max(eventId, toSafeEventId(task.lastEventId)),
         updatedAt: Date.now(),
       };
+      upsertStreamTask(nextTask);
 
       const reasoningText = payloadData.reasoning_content || payload.reasoning_content || '';
-      if (reasoningText) {
-        currentReasoning.value += reasoningText;
-        nextTask = { ...nextTask, reasoningContent: currentReasoning.value };
-        updateTaskMessage(nextTask, { reasoning: currentReasoning.value });
-        await nextTick();
-        scrollToBottom();
+      if (reasoningText && isNewEvent && !task.finalAnswerReceived && !sourceOnlyReplayTaskIds.has(taskId)) {
+        nextTask = { ...nextTask, reasoningContent: (task.reasoningContent || '') + reasoningText };
       }
-
-      const text =
-        typeof chunk.content === 'string'
-          ? chunk.content
-          : payloadData.text || payloadData.content || payload.text || payload.content || '';
-      if (text && containsUpstreamErrorText(text)) {
-        console.error('智能体任务输出命中上游原始错误，已使用统一兜底文案展示:', text, payload);
-        handleStreamError(messageId, getSafeAgentErrorMessage(), taskId);
-        return;
-      }
-
-      if (text && !sourceOnlyReplayTaskIds.has(taskId)) {
-        await appendModelOutputText(text, messageId, { functionId: task.functionId, tabName: task.tabName });
-        nextTask = { ...nextTask, answerContent: currentAnswer.value, answerEventId: eventId || nextTask.answerEventId || task.answerEventId || 0 };
-      }
-
-      upsertStreamTask(nextTask);
-      updateTaskMessage(nextTask, {
-        status: nextTask.status,
-        recoverable: nextTask.recoverable,
-        eventId: nextTask.lastEventId,
-        answerEventId: nextTask.answerEventId,
-        content: nextTask.answerContent,
-        reasoning: nextTask.reasoningContent,
-      });
-
-      if (isWorkflowFinishedEvent(eventType, payloadEvent, payload)) {
-        const sources = extractSourcesFromWorkflowPayload(payload, payloadData, chunk);
-        if (sources.length > 0) {
-          nextTask = { ...nextTask, sources };
-          updateTaskMessage(nextTask, { sources });
-          upsertStreamTask(nextTask, true);
-        }
-        void persistCompletedConversationForTask(nextTask);
-      }
-
-      if (eventType === 'error') {
-        const rawMessage = payload.message || payload.error_msg || payload.error_reason || '工作流执行失败';
-        console.error('智能体任务事件返回错误:', rawMessage, payload);
-        handleStreamError(messageId, getSafeAgentErrorMessage(), taskId);
-        return;
-      }
-
-      if (eventType === 'done' || isTerminalTaskStatus(chunk.status || eventType)) {
-        const rawFinalAnswerContent = typeof chunk.answerContent === 'string' ? chunk.answerContent : '';
-        if (rawFinalAnswerContent && containsUpstreamErrorText(rawFinalAnswerContent)) {
-          console.error('智能体最终快照命中上游原始错误，已使用统一兜底文案展示:', rawFinalAnswerContent, chunk);
+      const text = typeof chunk.content === 'string'
+        ? chunk.content : payloadData.text || payloadData.content || payload.text || payload.content || '';
+      if (text && isNewEvent && !task.finalAnswerReceived && !sourceOnlyReplayTaskIds.has(taskId)) {
+        if (containsUpstreamErrorText(text)) {
           handleStreamError(messageId, getSafeAgentErrorMessage(), taskId);
           return;
         }
-        const finalAnswerContent = sanitizeAgentText(stripReviewProgressText(
-          rawFinalAnswerContent,
-          { functionId: task.functionId, tabName: task.tabName },
-        ));
-        const finalAnswerEventId = incomingAnswerEventId || nextTask.answerEventId || eventId || task.lastEventId || 0;
-        const finalSources = extractSourcesFromWorkflowPayload(payload, payloadData, chunk);
-        if (finalSources.length > 0) {
-          nextTask = { ...nextTask, sources: finalSources };
-          updateTaskMessage(nextTask, { sources: finalSources });
+        currentAnswer.value = task.answerContent || '';
+        appendModelOutputText(text, messageId, { functionId: task.functionId, tabName: task.tabName });
+        nextTask = { ...nextTask, answerContent: currentAnswer.value, answerEventId: eventId || task.answerEventId || 0 };
+      }
+
+      const terminal = eventType === 'done' || isTerminalTaskStatus(chunk.status || eventType);
+      if (workflowFinished || terminal) {
+        // 来源补放可以经过旧游标，因此不要因文本去重而丢弃 data_json 等结构化结果。
+        const sources = extractSourcesFromWorkflowPayload(payload, payloadData, chunk);
+        if (sources.length) nextTask = { ...nextTask, sources };
+        const snapshot = readAnswerSnapshot(chunk, payload, payloadData);
+        const snapshotEventId = incomingAnswerEventId || eventId;
+        const snapshotIsCurrent = !snapshotEventId || snapshotEventId >= toSafeEventId(task.answerEventId);
+        if (snapshot !== undefined && snapshotIsCurrent && !sourceOnlyReplayTaskIds.has(taskId)) {
+          if (containsUpstreamErrorText(snapshot)) {
+            handleStreamError(messageId, getSafeAgentErrorMessage(), taskId);
+            return;
+          }
+          const content = sanitizeAgentText(stripReviewProgressText(snapshot, { functionId: task.functionId, tabName: task.tabName }));
+          nextTask = { ...nextTask, answerContent: content, answerEventId: snapshotEventId || nextTask.answerEventId || 0, finalAnswerReceived: true };
+          // 最终快照可比临时正文短、不同或为空，不能用长度作为覆盖条件。
+          setStreamDisplayState(true, '');
         }
-        if (!sourceOnlyReplayTaskIds.has(taskId) && finalAnswerContent && finalAnswerContent.length >= (currentAnswer.value || '').length) {
-          currentAnswer.value = finalAnswerContent;
-          nextTask = { ...nextTask, answerContent: finalAnswerContent, answerEventId: finalAnswerEventId };
-          upsertStreamTask(nextTask, true);
-          updateTaskMessage(nextTask, { content: finalAnswerContent, eventId: nextTask.lastEventId, answerEventId: finalAnswerEventId, sources: nextTask.sources });
-        } else if (finalSources.length > 0) {
-          upsertStreamTask(nextTask, true);
-        }
-        finishStream(messageId, taskId, chunk.status || eventType);
+      }
+      upsertStreamTask(nextTask, workflowFinished || terminal);
+      updateTaskMessage(nextTask, {
+        status: nextTask.status, recoverable: nextTask.recoverable,
+        eventId: nextTask.lastEventId, answerEventId: nextTask.answerEventId,
+        content: nextTask.answerContent, reasoning: nextTask.reasoningContent, sources: nextTask.sources,
+      });
+      if (reasoningText) void nextTick().then(() => { if (ownsDisplay(messageId, task)) scrollToBottom(); });
+
+      if (eventType === 'error' || incomingStatus === 'error') {
+        handleStreamError(messageId, getSafeAgentErrorMessage(), taskId);
+        return;
+      }
+      // completed 是状态通知；done 才携带本轮最终快照，不能提前移除任务。
+      // completed 后关闭连接的旧服务，由订阅层补查详情后合成 done。
+      if (terminal && eventType !== 'completed') {
+        await finishStream(messageId, taskId, eventType === 'done' ? (chunk.status || 'completed') : (chunk.status || eventType));
       }
       return;
     }
@@ -414,10 +398,12 @@ export const useStreamChunk = (deps: UseStreamChunkDeps) => {
    * 标记流式输出完成，更新消息状态并清理任务。
    * 同步会话历史预览、持久化最终内容、清理本地停止标记。
    */
-  const finishStream = (messageId: string, taskId?: string, status = 'completed') => {
+  const finishStream = async (messageId: string, taskId?: string, status = 'completed') => {
     if ((taskId && isTaskLocallyStopped(taskId)) || isMessageLocallyStopped(messageId)) return;
     const task = taskId ? activeStreamTasks.value[taskId] : getTaskByMessageId(messageId);
-    flushPendingModelOutput(messageId, { functionId: task?.functionId, tabName: task?.tabName });
+    if (ownsDisplay(messageId, task) && !task?.finalAnswerReceived) {
+      flushPendingModelOutput(messageId, { functionId: task?.functionId, tabName: task?.tabName });
+    }
     const sessionId = task?.sessionId || activeChatId.value;
     const chat = chatStore.getChatSession(sessionId);
     if (chat) {
@@ -442,15 +428,16 @@ export const useStreamChunk = (deps: UseStreamChunkDeps) => {
       }
     }
 
-    if (task) {
-      void persistCompletedConversationForTask({ ...task, status, answerContent: chat?.messages.find((m: any) => m.id === messageId || m.taskId === taskId)?.content || task.answerContent || '', reasoningContent: chat?.messages.find((m: any) => m.id === messageId || m.taskId === taskId)?.reasoning || task.reasoningContent || '', sources: (chat?.messages.find((m: any) => m.id === messageId || m.taskId === taskId) as any)?.sources || task.sources || [] });
-    }
+    const savePromise = task ? persistCompletedConversationForTask({ ...task, status, answerContent: chat?.messages.find((m: any) => m.id === messageId || m.taskId === taskId)?.content || task.answerContent || '', reasoningContent: chat?.messages.find((m: any) => m.id === messageId || m.taskId === taskId)?.reasoning || task.reasoningContent || '', sources: (chat?.messages.find((m: any) => m.id === messageId || m.taskId === taskId) as any)?.sources || task.sources || [] }) : Promise.resolve();
     if (taskId) removeStreamTask(taskId);
     if (normalizeTaskStatus(status) !== 'stopped') clearMessageLocallyStopped(messageId);
-    isStreaming.value = false;
-    currentStreamingMessageId.value = null;
-    resetStreamState();
-    scrollToBottom();
+    if (ownsDisplay(messageId, task)) {
+      isStreaming.value = false;
+      currentStreamingMessageId.value = null;
+      resetStreamState();
+      scrollToBottom();
+    }
+    await savePromise;
   };
 
   /**
@@ -477,9 +464,11 @@ export const useStreamChunk = (deps: UseStreamChunkDeps) => {
       void persistCompletedConversationForTask({ ...task, status: 'error', answerContent: chat?.messages.find((m: any) => m.id === messageId || m.taskId === taskId)?.content || task.answerContent || '', reasoningContent: chat?.messages.find((m: any) => m.id === messageId || m.taskId === taskId)?.reasoning || task.reasoningContent || '', sources: (chat?.messages.find((m: any) => m.id === messageId || m.taskId === taskId) as any)?.sources || task.sources || [] });
     }
     if (taskId) removeStreamTask(taskId);
-    isStreaming.value = false;
-    currentStreamingMessageId.value = null;
-    resetStreamState();
+    if (ownsDisplay(messageId, task)) {
+      isStreaming.value = false;
+      currentStreamingMessageId.value = null;
+      resetStreamState();
+    }
   };
 
   /**

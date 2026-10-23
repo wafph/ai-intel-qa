@@ -2,31 +2,32 @@
   外部嵌套起草页的结果文件区（挂在每一轮 AI 回复下）。
 
   按该轮 docx 状态机渲染三态：
-  saving（正在保存起草文件）→ done（附件卡片 + 保存到草稿箱）→ error（失败重试，含具体原因）。
+  saving（转换/获取真实文件）→ done（附件卡片 + 保存到草稿箱）→ error（失败重试，含具体原因）。
   "重新起草"只在最后一轮展示，由父级通过 showBack 控制。
   所有动作通过 emit 上抛给父页面执行，本组件不直接触碰接口。
 -->
 <template>
   <div v-if="record && record.status !== 'idle'" class="edr-docx">
     <p v-if="record.status === 'saving'" class="edr-status">
-      <span class="edr-spinner"></span>正在保存起草文件，请等待。
+      <span class="edr-spinner"></span>{{ record.phase === 'downloading' ? '正在获取起草附件，请等待。' : '正在生成起草附件，请等待。' }}
     </p>
     <template v-else-if="record.status === 'done' && record.attachment">
       <p class="edr-status ok">起草完成，已保存为docx格式文件，具体内容可查看附件。</p>
-      <div class="edr-attachment" @click="emit('downloadAttachment')">
+      <button type="button" class="edr-attachment" @click="emit('downloadAttachment')">
         <span class="edr-attachment-icon">W</span>
         <span class="edr-attachment-name">{{ record.attachment.fileName }}</span>
-      </div>
-      <!-- 操作行：保存到草稿箱与重新起草同行排列 -->
+      </button>
+      <p v-if="record.boxError" class="edr-error">{{ record.boxError }}</p>
+      <!-- 与确认的流程图一致：附件、保存按钮、重新起草依次纵向排列。 -->
       <div class="edr-actions">
-        <button type="button" class="edr-save-box" :disabled="record.sentToBox" @click="emit('saveToBox')">
-          {{ record.sentToBox ? '已保存到草稿箱' : '保存到草稿箱' }}
+        <button type="button" class="edr-save-box" :disabled="record.sentToBox || record.sending" @click="emit('saveToBox')">
+          {{ record.sending ? '正在等待保存结果…' : record.sentToBox ? (record.simulated ? '已模拟保存到草稿箱' : '已保存到草稿箱') : '保存到草稿箱' }}
         </button>
         <button v-if="showBack" type="button" class="edr-back" @click="emit('back')">重新起草</button>
       </div>
     </template>
     <p v-else-if="record.status === 'error'" class="edr-error">
-      起草文件保存失败<span v-if="record.error">：{{ record.error }}</span>
+      起草附件准备失败<span v-if="record.error">：{{ record.error }}</span>
       <button type="button" class="edr-retry" @click="emit('retry')">重试</button>
     </p>
   </div>
@@ -85,6 +86,10 @@ const emit = defineEmits<{
     display: inline-flex;
     align-items: center;
     gap: 10px;
+    max-width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+    text-align: left;
     padding: 10px 14px;
     border: 1px solid #e4e7ed;
     border-radius: 6px;
@@ -96,6 +101,7 @@ const emit = defineEmits<{
     }
 
     .edr-attachment-icon {
+      flex-shrink: 0;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -110,13 +116,16 @@ const emit = defineEmits<{
 
     .edr-attachment-name {
       color: #303133;
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
   }
 
-  /* 操作行：保存到草稿箱与重新起草同一行 */
+  /* 保存为主要操作，重新起草在下方展示；窄 iframe 内按钮不溢出。 */
   .edr-actions {
     display: flex;
-    align-items: stretch;
+    flex-direction: column;
+    align-items: flex-start;
     gap: 12px;
     margin-top: 14px;
   }
@@ -124,6 +133,7 @@ const emit = defineEmits<{
   .edr-save-box {
     padding: 10px 0;
     width: 220px;
+    max-width: 100%;
     border: 1px solid transparent;
     border-radius: 6px;
     background: #3b8cff;

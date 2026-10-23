@@ -1,6 +1,9 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
+  readonly VITE_ALLOWED_PARENT_ORIGINS?: string;
+  readonly VITE_EXTERNAL_DRAFT_ACK_TIMEOUT_MS?: string;
+  readonly VITE_EXTERNAL_DOWNLOAD_PROXY?: string;
   readonly VITE_API_BASE_URL?: string;
   readonly VITE_AUTH_MODE?: string;
   readonly VITE_SM2_PUBLIC_KEY?: string;

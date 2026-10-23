@@ -1,17 +1,19 @@
 # 构建与静态发布
 
-本包包含当前统一后端上传及问答 URL 刷新对应的 `dist/`，可发布其内容到原 Nginx 静态目录。先部署配套后端 `regulation_ai_backend_v1.0.0_202610211516.zip`，保证 `/v1/agentarts/` 转发到该后端。
-
-本次构建使用 `.env.production`：业务接口同源，PDF 和文件工具保留原现场配置；不需要前端 IAM 密码或平台密钥。后续仅切换后端 AGENT_PROVIDER 时无需重新构建。
-
-源码或前端环境配置改变后执行：
+应用版本 1.0.0，发布目录 `regulatory-ai-assistant_v1.0.0_202610221813`。包内包含本次源码构建的 dist。
 
 ```bash
-npm ci --no-audit --no-fund
+npm ci --include=dev --no-audit --no-fund
 npm test
 npm run build
 ```
 
-使用 Node.js 22.12+。构建包含 TypeScript 检查、PDF worker 静态复制和 Vite 生产打包。部署应整体替换 dist 内容，避免 index.html 与资源哈希混用；原 Nginx 路由配置按现场保留。
+Node.js 使用 22.12+，本次验证为 24.19.0 / npm 11.9.0。没有新增或升级依赖，两个锁文件保留。代码包不包含 node_modules，首次运行 npm run dev 前必须先安装依赖，避免 vite: command not found。
 
-本次说明见 [docs/AGENT_UPLOAD_BACKEND_INTEGRATION.md](docs/AGENT_UPLOAD_BACKEND_INTEGRATION.md)，验收见 [docs/RELEASE_ACCEPTANCE.md](docs/RELEASE_ACCEPTANCE.md)。
+标准构建执行 PDF worker 复制、`vue-tsc -b` 严格类型检查和 Vite 生产构建。前版 ExternalDraft 未使用变量问题已修复，tsconfig 的 strict/noUnusedLocals/noUnusedParameters 未关闭。旧 build:compat 命令保留供比对，本版默认使用标准 build。
+
+本地开发目标在 vite.config.ts 中逐项显式填写，当前为 http://10.210.101.117:8000。更换 IP/端口时修改相应 target，并重启开发服务器。DEV_BACKEND_TARGET、DEV_FILE_TOOL_TARGET、DEV_REVIEW_PDF_TARGET 仅保留历史值，本版不读取。生产仍使用 .env.production 的同源前缀和现场 Nginx 代理。
+
+生产业务 API 仍走同源。部署整体替换 dist，并将现有 Nginx 业务、PDF 和文件下载路由指向相应服务；不要混用旧资源。后端保持 regulation_ai_backend_v1.0.0_202610221019，无需重打后端镜像。第三方草稿服务不属于该后端。
+
+联调页位于 examples/external-draft-host.html，只作为源码包开发示例，不复制进生产 dist。正式父页面可复用其协议，替换模拟保存实现。详见 [docs/EXTERNAL_DRAFT_INTEGRATION.md](docs/EXTERNAL_DRAFT_INTEGRATION.md)。
