@@ -204,8 +204,8 @@ watch(
 
         .edc-bubble.user {
           max-width: 64%;
-          background: #f2f3f5;
-          color: #303133;
+          background: #1c73eb;
+          color: #ffffff;
           border-radius: 8px;
           padding: 12px 16px;
           line-height: 1.7;
@@ -220,7 +220,7 @@ watch(
           flex: 1;
           min-width: 0;
           background: #f5f6f8;
-          border-radius: 8px;
+          border-radius: 15px;
           padding: 18px 24px;
           line-height: 1.8;
           color: #303133;

@@ -7,13 +7,13 @@
 <template>
   <div class="edf-form">
     <div class="edf-field">
-      <label class="edf-label required">文件要求描述</label>
+      <label class="edf-label required">制度起草要求</label>
       <textarea
         ref="textareaRef"
         v-model="description"
         class="edf-textarea"
         rows="5"
-        placeholder="请尽量详细地描述您的文件生成需求，包括文件名称、业务背景和核心诉求等，信息越详细，生成效果越好哦！"
+        placeholder="您好，请描述你的制度要求，包括使用范围、制度等级、核心条款、特殊要求等..."
       ></textarea>
       <p v-if="descriptionError" class="edf-error-text">请填写文件描述</p>
     </div>

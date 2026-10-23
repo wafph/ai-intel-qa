@@ -11,7 +11,7 @@
 <template>
   <div class="external-draft">
     <header v-if="hasStarted" class="ed-title">
-      <span>文件起草</span>
+      <span>制度起草</span>
     </header>
 
     <!-- 首次进入：智能起草入口（居中标题 + AI起草按钮） -->
@@ -65,11 +65,10 @@
       />
     </div>
 
-    <div v-if="!authed" class="ed-auth-mask" role="status" aria-live="polite">
-      <p class="ed-auth-title">{{ access.status === 'validating' ? '正在校验访问授权' : '等待主系统授权' }}</p>
-      <p class="ed-auth-reason">{{ access.message }}</p>
-      <p class="ed-auth-tip">请从主系统进入本页面。主系统授权到达后会自动继续。</p>
-      <button v-if="access.status === 'error'" type="button" class="ed-auth-retry" @click="initializeExternalDraftAccess">重新校验</button>
+    <!-- 授权兜底：校验中/等待 token 仅显示 loading；校验失败只提示 token 失效，无其他文案。 -->
+    <div v-if="!authed" class="ed-auth-mask">
+      <span v-if="access.status !== 'error'" class="ed-auth-loading" role="status" aria-label="加载中"></span>
+      <p v-else class="ed-auth-invalid">Token错误或已失效</p>
     </div>
   </div>
 </template>
@@ -110,7 +109,7 @@ const handleSubmit = async (question: string) => {
     const result = await startDraft(question);
     if (version !== pageVersion) return;
     if (result.status === 'stopped') {
-      turns.value.push({ key: result.qaId, ...result, question, answer: (result.content || '本次起草已停止') + '\n\n（已停止，本轮未生成结果文件）' });
+      turns.value.push({ key: result.qaId, ...result, question, answer: (result.content || '本次起草已停止') + ',未生成结果文件' });
       return;
     }
     if (!result.content.trim()) { draftError.value = '起草未生成内容，请调整描述后重试'; return; }
@@ -165,8 +164,8 @@ onUnmounted(() => { pageVersion++; detach(); resetFiles(); disposeExternalDraftA
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 18px;
-    padding: 44px 24px 20px;
+    gap: 30px;
+    padding: 44px 24px 30px;
 
     .ed-hero-title {
       margin: 0;
@@ -204,7 +203,7 @@ onUnmounted(() => { pageVersion++; detach(); resetFiles(); disposeExternalDraftA
   /* 首次表单卡片：居中、宽度随内容区 */
   .ed-form-wrap {
     width: 100%;
-    max-width: 880px;
+    max-width: 1120px;
     margin: 0 auto 24px;
     padding: 24px;
     background: #fff;
@@ -222,45 +221,37 @@ onUnmounted(() => { pageVersion++; detach(); resetFiles(); disposeExternalDraftA
     padding: 16px 28px 0;
   }
 
-  /* 授权兜底遮罩 */
+  /* 授权兜底遮罩：无文案，校验中/等待 token 仅 loading，失败仅提示 token 失效。 */
   .ed-auth-mask {
     position: fixed;
     inset: 0;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    padding: 24px;
-    text-align: center;
     background: rgba(255, 255, 255, 0.97);
-    color: #606266;
     z-index: 10;
 
-    .ed-auth-title {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 600;
-      color: #303133;
+    .ed-auth-loading {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 3px solid #e4e7ed;
+      border-top-color: #1c73eb;
+      animation: ed-auth-spin 0.9s linear infinite;
     }
 
-    .ed-auth-reason {
+    .ed-auth-invalid {
       margin: 0;
-      font-size: 15px;
+      font-size: 16px;
       color: #f56c6c;
-    }
-
-    .ed-auth-tip {
-      margin: 0;
-      max-width: 520px;
-      font-size: 14px;
-      color: #909399;
-      line-height: 1.7;
     }
   }
 }
-</style>
 
-<style scoped>
-.ed-auth-retry { border: 1px solid #dcdfe6; border-radius: 6px; background: #fff; color: #303133; padding: 8px 16px; cursor: pointer; }
+/* loading 旋转动画（原生 CSS 嵌套要求 @keyframes 置于顶层） */
+@keyframes ed-auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 </style>

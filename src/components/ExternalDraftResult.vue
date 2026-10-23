@@ -20,15 +20,22 @@
       <!-- 合同接口 message 仅弹窗；按钮区只呈现保存状态。 -->
       <div class="edr-actions">
         <button type="button" class="edr-save-box" :disabled="record.sentToBox || record.sending" @click="emit('saveToBox')">
-          <span v-if="record.sending" class="edr-spinner" aria-hidden="true"></span>
+          <Loading v-if="record.sending" class="edr-action-icon is-loading" aria-hidden="true" />
+          <Collection v-else class="edr-action-icon" aria-hidden="true" />
           {{ record.sending ? '保存中…' : record.sentToBox ? (record.simulated ? '已模拟保存到草稿箱' : '已保存到草稿箱') : '保存到草稿箱' }}
         </button>
-        <button v-if="showBack" type="button" class="edr-back" :disabled="actionsBusy || record.sending" @click="emit('back')">重新起草</button>
+        <button v-if="showBack" type="button" class="edr-back" :disabled="actionsBusy || record.sending" @click="emit('back')">
+          <EditPen class="edr-action-icon" aria-hidden="true" />
+          重新起草
+        </button>
       </div>
     </template>
     <p v-else-if="record.status === 'error'" class="edr-error">
       起草附件准备失败<span v-if="record.error">：{{ record.error }}</span>
-      <button type="button" class="edr-retry" @click="emit('retry')">重试</button>
+      <button type="button" class="edr-retry" @click="emit('retry')">
+        <RefreshRight class="edr-action-icon" aria-hidden="true" />
+        重试
+      </button>
     </p>
   </div>
 </template>
@@ -37,6 +44,7 @@
 /**
  * 外部起草结果区脚本：纯展示组件，只接收本轮的 docx 状态对象，动作全部 emit 给父页面。
  */
+import { Collection, EditPen, Loading, RefreshRight } from '@element-plus/icons-vue';
 import type { DraftDocxRecord } from '@/composables/useExternalDraftDocx';
 
 interface Props {
@@ -124,6 +132,18 @@ const emit = defineEmits<{
     }
   }
 
+  /* 操作按钮图标：与文字同排统一 16px；is-loading 复用 edr-spin 旋转动画。 */
+  .edr-action-icon {
+    flex-shrink: 0;
+    width: 1em;
+    height: 1em;
+    font-size: 16px;
+  }
+
+  .is-loading {
+    animation: edr-spin 0.8s linear infinite;
+  }
+
   /* 统一按钮高度，宽屏并排，窄 iframe 自适应换行。 */
   .edr-actions {
     display: flex;
@@ -137,7 +157,7 @@ const emit = defineEmits<{
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 6px;
     min-height: 42px;
     max-width: 100%;
     padding: 10px 22px;
@@ -150,32 +170,25 @@ const emit = defineEmits<{
   }
 
   .edr-save-box {
-    min-width: min(180px, 100%);
+    min-width: min(130px, 100%);
     border: 1px solid transparent;
-    background: #3b8cff;
-    color: #fff;
+    background: transparent;
+    color: #1c73eb;
     cursor: pointer;
-    box-shadow: 0 2px 5px rgba(59, 140, 255, .16);
-    &:hover:not(:disabled) { background: #2878ed; }
 
-    &:disabled {
-      background: #a0cfff;
-      box-shadow: none;
-    }
+    &:hover:not(:disabled) { background: rgba(28, 115, 235, 0.08); }
+
+    &:disabled { color: #a0cfff; }
   }
 
   .edr-back {
-    border: 1px solid #dcdfe6;
-    background: #fff;
-    color: #606266;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #1c73eb;
     cursor: pointer;
 
-    &:hover:not(:disabled) {
-      color: #3b8cff;
-      border-color: #3b8cff;
-      background: #f5f9ff;
-    }
-    &:disabled { color: #a8abb2; background: #f5f7fa; }
+    &:hover:not(:disabled) { background: rgba(28, 115, 235, 0.08); }
+    &:disabled { color: #a0cfff; }
   }
 
   .edr-error {
@@ -183,12 +196,17 @@ const emit = defineEmits<{
     color: #f56c6c;
 
     .edr-retry {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
       margin-left: 8px;
       border: none;
       background: none;
-      color: #3b8cff;
+      color: #1c73eb;
       cursor: pointer;
       font-size: 12px;
+
+      .edr-action-icon { font-size: 13px; }
     }
   }
 }
