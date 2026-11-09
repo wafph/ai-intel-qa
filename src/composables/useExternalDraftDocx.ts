@@ -95,7 +95,7 @@ export const useExternalDraftDocx = (options: { saveMode?: ExternalDraftSaveMode
     const controller = new AbortController(), currentEpoch = epoch; pending.set(key, controller);
     record.sending = true; record.boxError = '';
     try {
-      // 附件已获取并校验；api 仅传下载 URL，parent 模式保留原文件传递规则。
+      // 附件已获取并校验；api 仅传本轮标识，后端查找文件；parent 模式保留原文件传递规则。
       const blob = files.get(key);
       if (!blob) throw new Error('本轮附件尚未就绪，请重新获取文件');
       const mode = options.saveMode || externalDraftSaveMode;
@@ -106,7 +106,7 @@ export const useExternalDraftDocx = (options: { saveMode?: ExternalDraftSaveMode
         receipt = await sendDraftToParent({ sessionId: record.sessionId, qaId: record.qaId, taskId: record.taskId,
           fileName: record.attachment.fileName, downloadUrl: record.attachment.downloadUrl, content, fileBase64 }, { signal: controller.signal });
       } else {
-        receipt = await saveContractDraft(record.attachment.fileName, record.attachment.downloadUrl, controller.signal);
+        receipt = await saveContractDraft(record.attachment.fileName, record, controller.signal);
       }
       if (epoch !== currentEpoch || controller.signal.aborted) return;
       if (!receipt.success) { record.boxError = receipt.message || '草稿保存失败'; ElMessage.error(record.boxError); return; }

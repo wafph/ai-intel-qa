@@ -4,7 +4,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import {before,after,beforeEach,test} from 'node:test';
 import {createServer} from 'vite';
-import {createMockDraftStore} from '../examples/mock-draft-store.mjs';
+import {createMockDraftStore} from './helpers/mock-draft-store.mjs';
 import {nextTick} from 'vue';
 import {mountExternalComponent} from './helpers/external-component-renderer.mjs';
 
@@ -79,14 +79,12 @@ test('toekn 拼写不被误认，hash 路由不被识别为当前独立入口',a
   window.location=new URL('http://localhost:5100/external-draft?toekn=x');await access.initializeExternalDraftAccess();assert.equal(requests.length,0);
   window.location=new URL('http://localhost:5100/#/external-draft?token=x');assert.equal(access.isExternalDraftLocation(),false);
 });
-test('父页面延迟传 token 仍可授权；其他窗口和其他父源消息被丢弃',async()=>{
-  await access.initializeExternalDraftAccess();
-  responses.push(json({allowed:true}));
-  emit({data:{type:'SET_AGENTTOKEN',value:'wrong'}},{source:{}});
-  emit({data:{type:'SET_AGENTTOKEN',value:'wrong'}},{origin:'https://other.test'});
-  assert.equal(requests.length,0);
-  emit({data:{type:'SET_AGENTTOKEN',value:'late'}});await settle();assert.equal(access.externalDraftAccess.status,'ready');
+test('无 URL token 时父消息不能补充身份，也不读取内部登录',async()=>{
+  storage.set('ai_intel_auth_session','internal');await access.initializeExternalDraftAccess();
+  emit({data:{type:'SET_AGENTTOKEN',value:'message-token'}});await settle();
+  assert.equal(requests.length,0);assert.equal(access.externalDraftAccess.status,'error');assert.throws(()=>access.getExternalCredential());
 });
+
 test('URL 和 READY 消息传相同 token，校验中去重',async()=>{
   window.location=new URL('http://localhost:5100/external-draft?token=x');
   let release;responses.push(()=>new Promise(resolve=>{release=()=>resolve(json({allowed:true}));}));
@@ -104,13 +102,13 @@ test('授权服务连接错误与 token 缺失区分，不使用原缓存回退'
   window.location=new URL('http://localhost:5100/external-draft?token=x');await access.initializeExternalDraftAccess();
   assert.match(access.externalDraftAccess.message,/连接失败/);assert.throws(()=>access.getExternalCredential());
 });
-test('晚返回的旧授权不能覆盖新 token',async()=>{
-  await access.initializeExternalDraftAccess();let release;
-  responses.push(()=>new Promise(resolve=>{release=()=>resolve(json({allowed:true,userId:'old'}));}));
-  emit({data:{type:'SET_AGENTTOKEN',value:'old'}});await settle();
-  responses.push(json({allowed:true,userId:'new'}));emit({data:{type:'SET_AGENTTOKEN',value:'new'}});await settle();
-  release();await settle();assert.equal(access.getExternalCredential().token,'new');
+test('URL token 固定，父窗口另一份 token 不能覆盖；重新跳转才切换身份',async()=>{
+  await authorize('url-A');emit({data:{type:'SET_AGENTTOKEN',value:'parent-B'}});await settle();
+  assert.equal(access.getExternalCredential().token,'url-A');assert.equal(requests.length,1);
+  window.location=new URL('http://localhost:5100/external-draft?token=url-C');responses.push(json({allowed:true}));
+  await access.initializeExternalDraftAccess();assert.equal(access.getExternalCredential().token,'url-C');
 });
+
 test('同一会话两轮 session_id 不变，qaId/request_id 各自唯一，头与正文使用同一外部 token',async()=>{
   await authorize();const stream=streamModule.useExternalDraftStream();enqueueRun();const a=await stream.startDraft('第一轮');enqueueRun();const b=await stream.startDraft('第二轮');
   assert.equal(a.sessionId,b.sessionId);assert.notEqual(a.qaId,b.qaId);assert.notEqual(a.taskId,b.taskId);
@@ -139,11 +137,19 @@ test('创建任务网络异常后释放状态，可再次提交',async()=>{
   await authorize();responses.push(new Error('offline'));const s=streamModule.useExternalDraftStream();await assert.rejects(s.startDraft('q'));assert.equal(s.isDrafting.value,false);
   enqueueRun();assert.equal((await s.startDraft('again')).status,'completed');
 });
-test('创建期间点击停止，收到 taskId 后调用 stop，结果不标记完成',async()=>{
-  await authorize();let release;responses.push(c=>new Promise(resolve=>{release=()=>{const b=JSON.parse(c.data);resolve(json({taskId:'stopped-task',qaId:b.biz_params.inputs.qaId,sessionId:b.session_id}));};}));
-  const s=streamModule.useExternalDraftStream(), pending=s.startDraft('q');await settle();await s.stop();responses.push(json({status:'stopped'}));release();
-  const r=await pending;assert.equal(r.status,'stopped');assert.ok(requests.some(c=>c.url.endsWith('/stopped-task/stop')));assert.equal(s.isDone.value,false);
+test('创建期间停止，保留迟到 taskId，确认释放前禁止新轮次',async()=>{
+  await authorize();let releaseCreate,releaseStop;
+  responses.push(c=>new Promise(resolve=>{releaseCreate=()=>{const b=JSON.parse(c.data);resolve(json({taskId:'stopped-task',qaId:b.biz_params.inputs.qaId,sessionId:b.session_id}));};}));
+  const s=streamModule.useExternalDraftStream(),pending=s.startDraft('q');await settle();const stopping=s.stop();
+  assert.equal(s.isDrafting.value,false);assert.equal(s.isStopping.value,true);await assert.rejects(s.startDraft('too early'),/停止尚未结束/);
+  responses.push(()=>new Promise(resolve=>{releaseStop=()=>resolve(json({status:'stopped',stopAcknowledged:true,workerReleased:true}));}));
+  releaseCreate();await settle();assert.equal(s.isStopping.value,true);await assert.rejects(s.startDraft('still early'),/停止尚未结束/);
+  releaseStop();await stopping;const result=await pending;
+  assert.equal(result.status,'stopped');assert.equal(s.isDone.value,false);assert.equal(s.isStopping.value,false);
+  assert.equal(requests.filter(c=>c.url.endsWith('/stop')).length,1);
+  assert.equal(requests.at(-1).headers.get('Authorization'),'Bearer external+token');
 });
+
 test('生成 DOCX 使用 qaId 缓存键，不将 sessionId 混作 qa_id',async()=>{
   const d=docxModule.useExternalDraftDocx({saveMode:'parent'});responses.push(json({download_url:'http://10.210.101.117:8000/download/a.docx',file_name:'a.docx'}),{status:200,data:new Blob([docx])});
   await d.saveDraftDocx('qa-A','# 内容',{sessionId:'session-A',qaId:'qa-A',taskId:'task-A'});
@@ -196,13 +202,15 @@ test('空最终快照可以清空临时正文，不把临时文本送文件转�
   await authorize();enqueueRun([delta(1,'临时正文'),completed,done('')]);
   const result=await streamModule.useExternalDraftStream().startDraft('q');assert.equal(result.content,'');
 });
-test('已停止旧创建请求晚返回，不影响正在生成的新一轮',async()=>{
+test('已停止旧创建请求晚返回必须先停止，再按同会话新 qaId 发送',async()=>{
   await authorize();let release;
-  responses.push(c=>new Promise(resolve=>{release=()=>{const body=JSON.parse(c.data);resolve(json({taskId:'old-task',qaId:body.biz_params.inputs.qaId,sessionId:body.session_id}));};}));
-  const s=streamModule.useExternalDraftStream(), old=s.startDraft('old');await settle();await s.stop();
-  enqueueRun();const current=await s.startDraft('new');responses.push(json({status:'stopped'}));release();const previous=await old;
-  assert.equal(previous.status,'stopped');assert.equal(current.status,'completed');assert.notEqual(current.qaId,previous.qaId);assert.equal(s.isDone.value,true);
+  responses.push(c=>new Promise(resolve=>{release=()=>{const b=JSON.parse(c.data);resolve(json({taskId:'old-task',qaId:b.biz_params.inputs.qaId,sessionId:b.session_id}));};}));
+  const s=streamModule.useExternalDraftStream(),old=s.startDraft('old');await settle();const stopping=s.stop();
+  await assert.rejects(s.startDraft('new too soon'));responses.push(json({status:'stopped',workerReleased:true}));release();await stopping;const previous=await old;
+  enqueueRun();const current=await s.startDraft('new');assert.equal(previous.status,'stopped');assert.equal(current.status,'completed');
+  assert.equal(current.sessionId,previous.sessionId);assert.notEqual(current.qaId,previous.qaId);assert.notEqual(current.taskId,previous.taskId);
 });
+
 test('第三方保存失败保留本轮文件，可独立重试，不重复执行起草或转换',async()=>{
   await authorize();const d=docxModule.useExternalDraftDocx({saveMode:'parent'});responses.push(json({download_url:'https://files.test/download/a.docx'}),{status:200,data:new Blob([docx])});await d.saveDraftDocx('qa-A','# 内容',identity);
   onPost=sent=>{if(sent.data.type==='SAVE_DRAFT_TO_BOX')acknowledge(sent,{success:false,message:'模拟失败'});};
@@ -302,7 +310,7 @@ test('页面重置后迟到文件不会恢复旧附件，也不会进入新一�
 test('真实输入组件仅展示描述框和开始按钮，保留必填校验与提交内容',async()=>{
   const submissions=[];const view=await mountExternalComponent(path.join(process.cwd(),'src/components/ExternalDraftForm.vue'),()=>({length:'detailed',strength:'strong',onStart:value=>submissions.push(value)}));
   try{
-    assert.match(view.text(),/文件要求描述/);assert.doesNotMatch(view.text(),/合同长度|详细版|简洁版|强弱势|强势|中立|弱势/);
+    assert.match(view.text(),/制度起草要求/);assert.doesNotMatch(view.text(),/合同长度|详细版|简洁版|强弱势|强势|中立|弱势/);
     const button=view.elements('button')[0];assert.equal(button.text,'开始起草');button.props.onClick();await nextTick();assert.match(view.text(),/请填写文件描述/);assert.equal(submissions.length,0);
     view.elements('textarea')[0].props['onUpdate:modelValue']('  起草一份制度  ');button.props.onClick();assert.deepEqual(submissions,['起草一份制度']);
   }finally{view.unmount();}
@@ -322,16 +330,18 @@ test('真实结果组件在点击后等待草稿回执，失败可重试且模�
   }finally{view.unmount();d.reset();}
 });
 
-test('真实合同保存携带跳转同一 token、原始下载地址和制度名，不夹带内部凭证或轮次字段',async()=>{
+test('真实保存仅向自建后端传本轮标识，Authorization 使用 URL token',async()=>{
   await authorize('jump+token/==');storage.set('ai_intel_auth_session','other-internal-session');
-  responses.push({status:200,data:{code:200,message:'制度草稿已接收',data:null}});
-  const result=await contractModule.saveContractDraft('制度标题_20261022174940971.docx','http://10.210.101.117:8000/download/制度.docx?signature=a%2Bb');
+  emit({data:{type:'SET_AGENTTOKEN',value:'parent-token'}});await settle();
+  responses.push(json({success:true,message:'制度草稿已接收',draftId:'2113543647637344256',resultUnknown:false}));
+  const result=await contractModule.saveContractDraft('制度标题_20261022174940971.docx',identity);
   const request=requests.at(-1),body=JSON.parse(request.data);
-  assert.equal(request.url,'/contract-draft-api/saveZDSingle');assert.equal(request.headers.get('Authorization'),undefined);assert.equal(request.headers.get('Content-Type'),'application/json');
-  assert.equal(body.appkey,'f84xQHcL');assert.equal(typeof body.secretkey,'string');assert.ok(body.secretkey.length>10);
-  assert.deepEqual(body.data,{token:'jump+token/==',wordPath:'http://10.210.101.117:8000/download/%E5%88%B6%E5%BA%A6.docx?signature=a%2Bb',zdName:'制度标题'});
-  assert.deepEqual(Object.keys(body).sort(),['appkey','data','secretkey']);assert.equal(result.success,true);assert.equal(result.message,'制度草稿已接收');assert.equal(result.draftId,'');
+  assert.equal(request.url,'/contract-draft-api/saveZDSingle');assert.equal(request.headers.get('Authorization'),'Bearer jump+token/==');
+  assert.deepEqual(body,{...identity,zdName:'制度标题'});assert.equal(request.timeout,50000);
+  assert.equal(result.success,true);assert.equal(result.draftId,'2113543647637344256');assert.equal(result.message,'制度草稿已接收');
+  for(const key of ['appkey','secretkey','token','wordPath','data'])assert.equal(key in body,false);
 });
+
 test('合同 code=201 按失败处理，message 原文仅错误弹窗，界面不显示接口返回文本',async()=>{
   await authorize();const d=docxModule.useExternalDraftDocx({saveMode:'api'});
   responses.push(json({file_name:'制度_20261022174940971.docx',download_url:'https://files.test/download/a.docx'}),validFile());await d.saveDraftDocx('qa-A','# 内容',identity);
@@ -348,7 +358,7 @@ test('合同成功 data=null 不强制草稿编号，原文仅成功弹窗，重
   responses.push(json({file_name:'制度.docx',download_url:'https://files.test/download/a.docx'}),validFile());await d.saveDraftDocx('qa-A','# 内容',identity);
   const view=await mountExternalComponent(resultComponent,()=>({record:d.getRecord('qa-A'),showBack:true}));
   try{
-    responses.push({status:200,data:{code:200,message:'合同平台已接收本轮文件',data:null}});await d.saveToDraftBox('qa-A','# 内容');await nextTick();
+    responses.push({status:200,data:{code:'0000',msg:'合同平台已接收本轮文件',data:{success:true,message:'合同平台已接收本轮文件',draftId:''}}});await d.saveToDraftBox('qa-A','# 内容');await nextTick();
     assert.deepEqual(messageLog.at(-1),{type:'success',message:'合同平台已接收本轮文件'});assert.doesNotMatch(view.text(),/合同平台已接收本轮文件/);assert.match(view.text(),/已保存到草稿箱/);
     assert.equal(d.getRecord('qa-A').draftId,'');const count=requests.length;await d.saveToDraftBox('qa-A','# 内容');assert.equal(requests.length,count);
   }finally{view.unmount();d.reset();}
@@ -357,14 +367,18 @@ test('HTTP 失败、未知码、缺码不冒充成功，均优先采用 message'
   for(const [status,body] of [[500,{code:200,message:'服务失败'}],[401,{code:401,message:'授权失败'}],[200,{code:201,message:'操作失败'}],[200,{code:999,message:'状态待确认'}],[200,{message:'无业务码'}]]){
     const result=contractModule.parseContractDraftResult(status,body);assert.equal(result.success,false);assert.equal(result.message,body.message);
   }
-  for(const code of [200,'200',0,'0','0000'])assert.equal(contractModule.parseContractDraftResult(200,{code,message:'成功'}).success,true);
+  for(const code of [200,'200',0,'0','0000'])assert.equal(contractModule.parseContractDraftResult(200,{code,data:{success:true,message:'成功'}}).success,true);
+  assert.equal(contractModule.parseContractDraftResult(200,{code:'0000',data:{success:false,message:'内层失败'}}).success,false);
+  assert.equal(contractModule.parseContractDraftResult(200,{code:200,data:{code:201,message:'未经后端处理的旧合同响应'}}).success,false);
   assert.equal(contractModule.parseContractDraftResult(201,{code:201,message:'操作失败'}).success,false);
   assert.match(contractModule.parseContractDraftResult(200,'<html>404</html>').message,/未确认/);
 });
-test('合同文件参数保留完整签名，拒绝浏览器本地/临时代理/非 HTTP 地址',()=>{
-  const signed='https://files.test/download/a.docx?signature=a%2Bb%2Fc%3D&name=%E5%88%B6%E5%BA%A6';assert.equal(contractModule.resolveContractWordPath(signed+'#preview'),signed);
-  for(const url of ['blob:https://front.test/1','data:text/plain,test','file:///tmp/a.docx','/download/a.docx','http://localhost:5100/download/a.docx','http://127.0.0.1/a.docx','http://host.docker.internal:8000/a.docx','https://a:b@files.test/a.docx','https://front.test/external-file-download/download/a.docx'])assert.throws(()=>contractModule.resolveContractWordPath(url));
+test('保存请求缺少任一轮次 ID 时不发送，不把任意下载 URL 当作身份',async()=>{
+  await authorize();const count=requests.length;
+  for(const id of [{sessionId:'s',qaId:'q'},{sessionId:'s',taskId:'t'},{qaId:'q',taskId:'t'},'https://files.test/download/a.docx'])await assert.rejects(contractModule.saveContractDraft('a.docx',id),/ID 不完整/);
+  assert.equal(requests.length,count);
 });
+
 test('制度名去掉原时间戳并限制 200 字，附件原名不受影响',()=>{
   assert.equal(contractModule.contractDraftName('投标管理办法_20261022174940971.docx'),'投标管理办法');
   assert.equal(contractModule.contractDraftName('原名.docx'),'原名');assert.equal(Array.from(contractModule.contractDraftName('制'.repeat(230)+'.docx')).length,200);
@@ -372,7 +386,7 @@ test('制度名去掉原时间戳并限制 200 字，附件原名不受影响',(
 test('合同保存失败可重试，只增加保存请求，不重新转换/下载或调用父页面',async()=>{
   await authorize();const d=docxModule.useExternalDraftDocx({saveMode:'api'});responses.push(json({download_url:'https://files.test/download/a.docx',file_name:'原名.docx'}),validFile());await d.saveDraftDocx('qa-A','# 内容',identity);
   const count=requests.length,messages=outbox.length;responses.push({status:200,data:{code:201,message:'保存失败'}});await d.saveToDraftBox('qa-A','# 内容');
-  responses.push({status:200,data:{code:200,message:'重试已成功'}});await d.saveToDraftBox('qa-A','# 内容');assert.equal(requests.length,count+2);assert.equal(outbox.length,messages);assert.equal(d.getRecord('qa-A').sentToBox,true);assert.equal(d.getRecord('qa-A').boxError,'');d.reset();
+  responses.push({status:200,data:{code:'0000',data:{success:true,message:'重试已成功',draftId:'draft-ok'}}});await d.saveToDraftBox('qa-A','# 内容');assert.equal(requests.length,count+2);assert.equal(outbox.length,messages);assert.equal(d.getRecord('qa-A').sentToBox,true);assert.equal(d.getRecord('qa-A').boxError,'');d.reset();
 });
 test('合同保存中禁止重复请求和重新起草，响应后恢复按钮状态',async()=>{
   await authorize();const d=docxModule.useExternalDraftDocx({saveMode:'api'});responses.push(json({download_url:'https://files.test/download/a.docx'}),validFile());await d.saveDraftDocx('qa-A','# 内容',identity);
@@ -389,8 +403,41 @@ test('合同保存超时释放状态并弹窗未确认，保留附件不自动�
   assert.equal(requests.length,count+1);assert.equal(d.getRecord('qa-A').sending,false);assert.equal(d.getRecord('qa-A').sentToBox,false);assert.ok(d.getRecord('qa-A').attachment);assert.match(messageLog.at(-1).message,/超时.*尚未确认/);d.reset();
 });
 test('合同保存需要当前独立授权，不借用内部缓存；旧结果不能污染重置后的记录',async()=>{
-  storage.set('ai_intel_auth_session','internal');await assert.rejects(contractModule.saveContractDraft('a.docx','https://files.test/download/a.docx'),/授权/);assert.equal(requests.length,0);
+  storage.set('ai_intel_auth_session','internal');await assert.rejects(contractModule.saveContractDraft('a.docx',identity),/授权/);assert.equal(requests.length,0);
   await authorize();const d=docxModule.useExternalDraftDocx({saveMode:'api'});responses.push(json({download_url:'https://files.test/download/a.docx'}),validFile());await d.saveDraftDocx('qa-A','# 内容',identity);
   let release;responses.push(()=>new Promise(resolve=>{release=()=>resolve({status:200,data:{code:200,message:'旧成功'}});}));const pending=d.saveToDraftBox('qa-A','# 内容');await settle();d.reset();const count=messageLog.length;release();await pending;
   assert.equal(d.getRecord('qa-A'),undefined);assert.equal(messageLog.length,count);
+});
+
+test('后端先确认停止后仍未释放时补查状态，期间保持发送门禁',async()=>{
+  await authorize();let releaseDetail;responses.push(c=>{const b=JSON.parse(c.data);return json({taskId:'waiting-task',qaId:b.biz_params.inputs.qaId,sessionId:b.session_id});},
+    {status:200,data:new ReadableStream({start(){}})});
+  const s=streamModule.useExternalDraftStream(),pending=s.startDraft('q');await settle();
+  responses.push(json({status:'stopped',stopAcknowledged:true,workerReleased:false}),()=>new Promise(resolve=>{releaseDetail=()=>resolve(json({status:'stopped',workerReleased:true}));}));
+  const stopping=s.stop();await new Promise(resolve=>setTimeout(resolve,280));await settle();
+  assert.equal(s.isStopping.value,true);await assert.rejects(s.startDraft('too soon'));releaseDetail();await stopping;
+  assert.equal((await pending).status,'stopped');assert.equal(s.isStopping.value,false);
+});
+test('停止失败保留门禁，reset 不绕过，可再次点击停止后继续起草',async()=>{
+  await authorize();responses.push(c=>{const b=JSON.parse(c.data);return json({taskId:'retry-stop',qaId:b.biz_params.inputs.qaId,sessionId:b.session_id});},{status:200,data:new ReadableStream({start(){}})});
+  const s=streamModule.useExternalDraftStream(),pending=s.startDraft('q');await settle();
+  responses.push(new Error('停止连接中断'));const rejected=assert.rejects(pending,/停止连接中断/);await assert.rejects(s.stop(),/停止连接中断/);await rejected;
+  assert.equal(s.isStopping.value,true);s.reset();assert.equal(s.isStopping.value,true);await assert.rejects(s.startDraft('new'));
+  responses.push(json({status:'stopped',workerReleased:true}));await s.stop();assert.equal(s.isStopping.value,false);
+  enqueueRun();assert.equal((await s.startDraft('new')).status,'completed');
+});
+test('真实输入组件停止中禁发不清空文本，失败后可重试停止',async()=>{
+  const {reactive}=await import('vue');const props=reactive({streaming:false,stopping:true,stopFailed:false});const sent=[],stops=[];
+  const view=await mountExternalComponent(path.join(process.cwd(),'src/components/ExternalDraftComposer.vue'),()=>({...props,onSubmit:q=>sent.push(q),onStop:()=>stops.push(1)}));
+  try{
+    const input=view.elements('textarea')[0];input.props['onUpdate:modelValue']('下一轮问题');input.props.onKeydown({key:'Enter',preventDefault(){}});await nextTick();
+    assert.equal(sent.length,0);assert.equal(view.elements('textarea')[0].value,'下一轮问题');assert.equal(view.elements('button')[0].props.disabled,true);
+    props.stopFailed=true;await nextTick();assert.equal(view.elements('button')[0].props.disabled,false);view.elements('button')[0].props.onClick();assert.equal(stops.length,1);
+    props.stopping=false;await nextTick();view.elements('button')[0].props.onClick();assert.deepEqual(sent,['下一轮问题']);
+  }finally{view.unmount();}
+});
+test('后端未确认结果只弹错误消息，不标记保存或自动再次发送',async()=>{
+  await authorize();const d=docxModule.useExternalDraftDocx({saveMode:'api'});responses.push(json({file_name:'制度.docx',download_url:'/download/a.docx'}),validFile());await d.saveDraftDocx('qa-A','# 内容',identity);
+  responses.push({status:200,data:{code:'50301',msg:'上次保存尚未确认',data:{success:false,resultUnknown:true,message:'上次保存尚未确认',draftId:''}}});
+  const count=requests.length;await d.saveToDraftBox('qa-A');assert.equal(requests.length,count+1);assert.equal(d.getRecord('qa-A').sentToBox,false);assert.equal(messageLog.at(-1).message,'上次保存尚未确认');d.reset();
 });

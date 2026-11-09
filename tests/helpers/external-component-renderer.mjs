@@ -5,9 +5,12 @@ import {parse,compileScript} from 'vue/compiler-sfc';
 import ts from 'typescript';
 import {createRenderer,h,nextTick} from 'vue';
 
+// Vue v-model 使用宿主文档类型；内存渲染器仅补足这些 DOM 边界。
+globalThis.Document ||= class Document {};
+globalThis.ShadowRoot ||= class ShadowRoot {};
 const require=createRequire(import.meta.url), components=new Map();
 const node=(tag,text='')=>({tag,tagName:tag.toUpperCase(),text,children:[],props:{},parent:null,
-  addEventListener(){},removeEventListener(){},focus(){globalThis.document.activeElement=this;}});
+  getRootNode(){return globalThis.document;},addEventListener(){},removeEventListener(){},focus(){globalThis.document.activeElement=this;}});
 const remove=child=>{if(child.parent){const siblings=child.parent.children,index=siblings.indexOf(child);if(index>=0)siblings.splice(index,1);child.parent=null;}};
 const renderer=createRenderer({
   createElement:tag=>node(tag),createText:text=>node('#text',text),createComment:()=>node('#comment'),

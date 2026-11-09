@@ -17,13 +17,14 @@
       <button
         type="button"
         class="edc-action"
-        :class="{ 'is-streaming': streaming }"
-        :disabled="disabled"
-        :title="streaming ? '停止输出' : '发送'"
+        :class="{ 'is-streaming': streaming || stopping }"
+        :disabled="disabled || (stopping && !stopFailed)"
+        :title="stopping ? (stopFailed ? '重试停止' : '正在停止，请稍候') : streaming ? '停止输出' : '发送'"
+        :aria-label="stopping ? (stopFailed ? '重试停止' : '正在停止，请稍候') : streaming ? '停止输出' : '发送'"
         @click="handleAction"
       >
         <!-- 起草中：白色停止方块；空闲：向上箭头 -->
-        <span v-if="streaming" class="edc-stop"></span>
+        <span v-if="streaming || stopping" class="edc-stop"></span>
         <svg v-else class="edc-arrow" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 19V6M12 6l-6 6M12 6l6 6" />
         </svg>
@@ -41,6 +42,9 @@ import { nextTick, ref } from 'vue';
 interface Props {
   /** 是否正在起草（按钮切换为停止态，输入不拦截以免影响阅读时继续输入）。 */
   streaming?: boolean;
+  /** 释放旧任务期间阻止发送；失败时允许重新点击停止。 */
+  stopping?: boolean;
+  stopFailed?: boolean;
   /** 文件生成或未授权时禁止提交，保留输入草稿。 */
   disabled?: boolean;
   /** 输入框占位文案。 */
@@ -49,6 +53,8 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   streaming: false,
+  stopping: false,
+  stopFailed: false,
   disabled: false,
   placeholder: '请输入您的起草需求，AI 将为您生成文件内容…',
 });
@@ -65,7 +71,7 @@ const text = ref('');
 
 /** 发送：空内容拦截，合法则清空并上抛。 */
 const handleSend = () => {
-  if (props.streaming || props.disabled) return;
+  if (props.streaming || props.stopping || props.disabled) return;
   const question = text.value.trim();
   if (!question) return;
   text.value = '';
@@ -74,8 +80,8 @@ const handleSend = () => {
 
 /** 按钮点击：起草中为停止，否则为发送。 */
 const handleAction = () => {
-  if (props.disabled) return;
-  if (props.streaming) {
+  if (props.disabled || props.stopping && !props.stopFailed) return;
+  if (props.streaming || props.stopping) {
     emit('stop');
     return;
   }
@@ -87,7 +93,7 @@ const handleAction = () => {
  * 先写入输入框让用户看到问题内容，下一帧再提交，避免直提跳过输入框展示。
  */
 const fillAndSend = (question: string) => {
-  if (props.streaming) return;
+  if (props.streaming || props.stopping || props.disabled) return;
   text.value = question;
   void nextTick(() => handleSend());
 };
@@ -159,6 +165,8 @@ defineExpose({ fillAndSend });
         stroke-linecap: round;
         stroke-linejoin: round;
       }
+
+      &:disabled { cursor: wait; opacity: 0.55; }
 
       &:hover {
         color: #3b8cff;

@@ -1,22 +1,10 @@
-# 规章制度智能体前端工程交付版
+# 规章制度智能体前端
 
-本版基于 `regulatory-ai-assistant_v1.0.0_202610221813` 仅升级新增页的真实合同草稿保存、message 弹窗、操作按钮和 Markdown 局部样式。原 DOCX 生成/获取/命名和 ID 规则保留。自建后端为 `10.210.101.117:8000`（端口沿用原 8000，可配置）；后端代码继续使用 `regulation_ai_backend_v1.0.0_202610221019`。原问答、检索、起草、审核及上版修复保留。新增页独立校验主系统 token，草稿保存默认调用合同中台 saveZDSingle；按本次要求临时在前端写入应用凭据，原父页面模拟以 parent 模式兼容保留。自建后端不增加草稿接口。
+本版以用户最新附件 `qa-20261023.zip` 为基线，仅升级新增跳转页 `/external-draft` 的 URL token 独立鉴权、停止确认与草稿保存后端封装。附件中的页面标题、输入文案、布局及按钮样式保留；其它问答、检索、起草、审核逻辑不改。版本号沿用 1.0.0，以包名时间戳区分发布。
 
-应用版本 1.0.0；发布目录 `regulatory-ai-assistant_v1.0.0_202610221921`。包内包含源码、环境配置、锁文件、测试、文档和本次构建的 dist。
+**先部署本次后端，再更新代理和本前端。** 草稿保存浏览器路径 `/contract-draft-api/saveZDSingle` 保持，代理改为自建后端 `/v1/contract-drafts/save`，不再直连合同平台，前端无应用密钥。后端 .env 已补齐新增配置。
 
-完整对接见 [统一上传及问答 URL 刷新](docs/AGENT_UPLOAD_BACKEND_INTEGRATION.md)，变更见 [UPGRADE_NOTES.md](UPGRADE_NOTES.md)。
-
-## 外部页面本地联调
-
-安装依赖并运行 `npm run dev` 后打开：
-
-```text
-http://localhost:5100/examples/external-draft-host.html
-```
-
-输入现有后端认可的用户 token，可验证 URL/消息两种授权、流式起草和每轮 DOCX。默认 api 模式点击保存会请求真实合同接口；需要原父页面模拟时，将 .env.development 的 VITE_EXTERNAL_DRAFT_SAVE_MODE 改为 parent 并重启 Vite。模拟记录仅在父页面内存，刷新清空；鉴权、起草和文件生成仍为真实服务。
-
-单独入口为 `/external-draft?token=...`，正常登录后原菜单不增加该入口。同一页面会话内多轮共用 session_id，每轮 qaId/taskId 独立；不展示新建会话按钮，重新进入或更换授权时初始化独立会话。输入区不展示合同长度、强弱势及选项。完整协议和 ID 示例见 [外部起草对接](docs/EXTERNAL_DRAFT_INTEGRATION.md)。
+单独入口 `/external-draft?token=<编码后的用户token>` 不进入普通登录页、不增加原菜单。只认跳转 URL token，不接受父消息或内部登录凭据替换。每个业务会话 sessionId 稳定，每轮 qaId/taskId 独立。
 
 ## 核心能力
 
@@ -30,70 +18,26 @@ http://localhost:5100/examples/external-draft-host.html
 - 文档预览/下载保留原始逻辑：问答引用、检索详情、范文预览优先通过 `/v1/files/watermark/download` 触发水印服务。
 - 起草/审核导出保留原始逻辑：通过 `/v1/markdown-word/convert` 调用 Markdown 转 Word 服务。
 
-## 快速启动
+## 运行与发布
 
 ```bash
 npm ci --include=dev --no-audit --no-fund
 npm run dev
-```
-
-## 生产构建
-
-```bash
 npm test
 npm run build
 ```
 
-标准构建保留严格类型检查。部署前运行上述测试与构建；本版检查结果见 docs/RELEASE_ACCEPTANCE.md。开发代理目标直接在 vite.config.ts 各 target 中修改，当前均为 http://10.210.101.117:8000；历史 DEV_* 环境值不再读取。
+开发地址 `http://localhost:5100/external-draft?token=...`。vite.config.ts 继续使用显式 IP，业务目标为 `http://10.210.101.117:8000`；旧 DEV_* 变量保留但不读取。无依赖升级，严格类型检查保持，包内含本次构建 dist，部署时整体发布 dist。
 
-构建产物位于 `dist/`，部署时整体发布其内容。本次必须将 [合同保存代理片段](deploy/contract-draft-save.location.conf) 合入现有 Nginx server；原业务、文件和流式 location 保留。详见 [合同保存接入说明](docs/CONTRACT_DRAFT_SAVE.md)。
+将 [合同代理片段](deploy/contract-draft-save.location.conf) 替换原同名 location；其它 Nginx 配置保留，执行 nginx -t 后重载。examples 为测试页面已移除，测试辅助程序移入 tests/helpers；deploy 是生产配置，保留。
 
-## 重要环境变量
+## 说明
 
-生产环境 `.env.production` 推荐：
+- [本次升级记录](UPGRADE_NOTES.md)
+- [跳转身份、ID、停止与 iframe](docs/EXTERNAL_DRAFT_INTEGRATION.md)
+- [后端草稿保存契约](docs/CONTRACT_DRAFT_SAVE.md)
+- [部署与配置](docs/DEPLOYMENT_AND_CONFIG.md)
+- [验证及现场边界](docs/RELEASE_ACCEPTANCE.md)
+- [测试运行](tests/README.md)
 
-```env
-VITE_API_BASE_URL=
-VITE_AUTH_MODE=platform
-VITE_SM2_PUBLIC_KEY=请替换为真实完整公钥
-VITE_AGENT_SESSION_EXPIRE_MINUTES=720
-VITE_WATERMARK_API_BASE_URL=/v1/files
-VITE_CONVERT_API_BASE_URL=/v1/markdown-word
-```
-
-`VITE_WATERMARK_API_BASE_URL` 与 `VITE_CONVERT_API_BASE_URL` 配置的是接口路由前缀，代码会自动追加固定路由：
-
-```text
-${VITE_WATERMARK_API_BASE_URL}/watermark/download
-${VITE_CONVERT_API_BASE_URL}/convert
-```
-
-当前生产请求走同源路径，沿用现场 Nginx 文件工具代理：
-
-```text
-/v1/files/watermark/download
-/v1/markdown-word/convert
-```
-
-后期更换服务器时，只需要在 `.env.production` 中替换协议、IP、端口或前缀。若希望走前端 Nginx 同源转发，可设置为 `/v1/files` 与 `/v1/markdown-word`，并沿用现场文件工具反代目标。
-
-## 文档入口
-
-- `docs/CONTRACT_DRAFT_SAVE.md`：本次真实保存、参数/返回、临时凭据、代理和现场检查。
-- `docs/EXTERNAL_DRAFT_ATTACHMENT_FIX.md`：1813 版附件获取与状态修复历史。
-- `docs/EXTERNAL_DRAFT_INTEGRATION.md`：新增页、独立授权、会话 ID、文件与第三方入库模拟。
-- `docs/REGENERATE_FIX.md`：本次定位、变更范围、流式契约与现场验收。
-- `docs/AGENT_UPLOAD_BACKEND_INTEGRATION.md`：统一上传、URL 刷新和平台切换。
-- `docs/RELEASE_ACCEPTANCE.md`：本次验收与现场联调边界。
-- `docs/PROJECT_STRUCTURE.md`：工程目录和核心文件职责。
-- `docs/DEPLOYMENT_AND_CONFIG.md`：部署、环境变量、Nginx 和验证命令。
-- `docs/CALL_FLOW.md`：四个功能和任务恢复调用流程。
-- `docs/CODE_HANDOVER.md`：代码交接说明和维护边界。
-- `docs/ENGINEERING_CLEANUP.md`：本次工程整理范围。
-
-## 维护原则
-
-1. 不在页面组件里硬编码大量接口地址，优先走 `src/api/api.ts` 和 `src/services/config.ts`。
-2. 文档预览和导出由文件工具模块处理，当前集成在自建后端 8000，与智能体工作流分开。
-3. 可恢复流式由 `src/composables/useAppShell.ts` 组装，具体逻辑在 `useStreamTask.ts`、`useStreamChunk.ts`，修改时需要同时考虑 `taskId / lastEventId / answerEventId / qaId / sessionId`。
-4. 合规审核原文恢复依赖前端上下文传递和后端 `/v1/chat/review-context`，不要删除相关 metadata 字段。
+文件生成、获取、原文件名及 Markdown 展示保持附件版本；message 仅弹窗。公网父页 iframe 直接访问私网被 Chrome 整页拦截，需要父平台/网关配合，子页面无法自行解除。更多现场验收见部署说明。

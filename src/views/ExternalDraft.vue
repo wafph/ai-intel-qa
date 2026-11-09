@@ -5,7 +5,7 @@
   首次进入为“一键开启智能起草”入口 + 仅含文件要求描述的居中表单，
   提交后切换为对话形态；不提供模板起草。
   起草链路：复用辅助起草 draft 流式任务，仅传描述文本；每轮流式结束自动转换并获取真实 docx 附件，
-  每轮的附件都能单独下载、单独保存到主系统草稿箱（postMessage 携带正文与 docx）。
+  每轮的附件都能单独下载、单独经自建后端保存到主系统草稿箱。
   鉴权使用 externalDraftAccess 独立凭证；会话初始化仍保留，页面不展示新建会话按钮。
 -->
 <template>
@@ -38,7 +38,7 @@
     <div v-if="authed" v-show="hasStarted" class="ed-chat">
       <ExternalDraftChat
         :turns="turns"
-        :streaming="isDrafting"
+        :streaming="isDrafting || isStopping"
         :streaming-question="streamingQuestion"
         :streaming-content="draftContent"
         :error="draftError"
@@ -59,7 +59,9 @@
       <ExternalDraftComposer
         ref="composerRef"
         :streaming="isDrafting"
-        :disabled="busy && !isDrafting"
+        :stopping="isStopping"
+        :stop-failed="Boolean(stopError)"
+        :disabled="savingFile"
         @submit="handleSubmit"
         @stop="handleStop"
       />
@@ -92,9 +94,9 @@ const authed = computed(() => access.status === 'ready');
 const params = new URLSearchParams(window.location.search);
 const form = reactive({ length: params.get('length') === 'simple' ? 'simple' : 'detailed', strength: ['strong', 'neutral', 'weak'].includes(params.get('strength') || '') ? params.get('strength')! : 'strong' });
 const hasStarted = ref(false), turns = ref<DraftTurn[]>([]), streamingQuestion = ref(''), draftError = ref(''), savingFile = ref(false);
-const { sessionId, isDrafting, draftContent, startDraft, stop, detach, reset: resetStream, newSession } = useExternalDraftStream();
+const { sessionId, isDrafting, isStopping, stopError, draftContent, startDraft, stop, detach, reset: resetStream, newSession } = useExternalDraftStream();
 const { getRecord, saveDraftDocx, downloadAttachment, saveToDraftBox, reset: resetFiles } = useExternalDraftDocx();
-const busy = computed(() => isDrafting.value || savingFile.value);
+const busy = computed(() => isDrafting.value || isStopping.value || savingFile.value);
 const composerRef = ref<InstanceType<typeof ExternalDraftComposer> | null>(null);
 const formRef = ref<InstanceType<typeof ExternalDraftForm> | null>(null);
 let pageVersion = 0;
@@ -125,7 +127,7 @@ const handleSubmit = async (question: string) => {
     if (version === pageVersion) { streamingQuestion.value = ''; savingFile.value = false; resetStream(); }
   }
 };
-const handleStop = () => { void stop(); };
+const handleStop = async () => { try { await stop(); } catch (error: any) { if (error?.name !== 'AbortError') ElMessage.error(error?.message || '停止失败，请重试'); } };
 const downloadByIndex = (index: number) => { const turn = turns.value[index]; if (turn) void downloadAttachment(turn.qaId); };
 const saveToBoxByIndex = (index: number) => { const turn = turns.value[index]; if (turn) void saveToDraftBox(turn.qaId, turn.answer); };
 const retrySaveDocx = (index: number) => { const turn = turns.value[index]; if (turn) void saveDraftDocx(turn.qaId, turn.answer, turn); };

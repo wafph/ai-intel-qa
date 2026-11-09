@@ -14,7 +14,6 @@ export const externalDraftAccess = readonly(state);
 export interface ExternalCredential { token: string; scopes: Record<string, any>; expiresAt: number; revision: number }
 let credential: ExternalCredential | null = null;
 let validationController: AbortController | null = null;
-let removeListener: (() => void) | null = null;
 let currentToken = '';
 
 const originOf = (value: string) => { try { const u = new URL(value); return /^https?:$/.test(u.protocol) ? u.origin : ''; } catch { return ''; } };
@@ -72,24 +71,16 @@ export const getExternalParentOrigin = () => {
   return state.parentOrigin;
 };
 
-/** 独立入口初始化；监听持续有效，父页面晚于 READY 传 token 也能恢复。 */
+/** 独立入口只接受跳转 URL token；父窗口消息不能覆盖或补充用户身份。 */
 export const initializeExternalDraftAccess = async () => {
   disposeExternalDraftAccess();
-  state.status = 'waiting'; state.message = '未获取到访问授权，请从主系统进入或等待主系统传入 token';
+  state.status = 'waiting'; state.message = '未获取到跳转链接中的访问授权，请从主系统重新进入';
   const referrer = originOf(typeof document === 'undefined' ? '' : document.referrer);
   if (window.parent !== window && referrer) {
     if (!permitted(referrer)) { state.status = 'error'; state.message = '当前主系统来源未被允许，请检查父页面域名配置'; return; }
     state.parentOrigin = referrer;
   } else if (window.parent !== window && allowedOrigins.length === 1) state.parentOrigin = allowedOrigins[0]!;
-  const handler = (event: MessageEvent) => {
-    if (!isExternalParentMessage(event)) return;
-    const data = event.data?.data || event.data;
-    if (data?.type !== 'SET_AGENTTOKEN' || typeof data.value !== 'string' || !data.value.trim()) return;
-    state.parentOrigin = event.origin;
-    void acceptToken(data.value);
-  };
-  window.addEventListener('message', handler);
-  removeListener = () => window.removeEventListener('message', handler);
+  // READY 保留用于父平台握手；SET_AGENTTOKEN 不参与新页面鉴权。
   if (window.parent !== window) {
     // READY 不携带凭证或文件；未获得父源时仅用于发现，实际数据发送始终使用准确 origin。
     window.parent.postMessage({ platform: '制度智能体', timestamp: Date.now(), data: { type: 'READY', value: '' } }, state.parentOrigin || '*');
@@ -99,10 +90,11 @@ export const initializeExternalDraftAccess = async () => {
   const hashParams = new URLSearchParams(hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '');
   const token = params.get('token') || params.get('agentToken') || hashParams.get('token') || hashParams.get('agentToken');
   if (token?.trim()) await acceptToken(token);
+  else state.status = 'error';
 };
 
 /** 只清理外部授权，不影响用户原有登录状态。 */
 export const disposeExternalDraftAccess = () => {
-  validationController?.abort(); validationController = null; removeListener?.(); removeListener = null;
+  validationController?.abort(); validationController = null;
   credential = null; currentToken = ''; state.parentOrigin = ''; state.status = 'waiting'; state.message = '等待主系统提供访问授权'; state.revision++;
 };
